@@ -1,0 +1,4 @@
+Epochs2: 1-60hz, decim to 100hz
+
+
+do not take hte diag but average a few points around it.
