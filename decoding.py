@@ -50,6 +50,8 @@ parser.add_argument('--test-query-2', help='Metadata query for testing classes')
 parser.add_argument('--train-cond', default='localizer', help='localizer, one_object or two_objects')
 parser.add_argument('--test-cond', default=[], action='append', help='localizer, one_object or two_objects')
 
+parser.add_argument('--label', default=None, help='help to identify the result latter')
+
 print(mne.__version__)
 args = parser.parse_args()
 print(args)
@@ -64,15 +66,7 @@ start_time = time.time()
 ###########################
 
 ### GET EPOCHS FILENAMES ###
-train_fn, test_fns, out_fn = get_paths(args)
-
-if op.exists(out_fn + '_AUC.npy'): # warn and stop if args.overwrite is set to False
-    print('\noutput files for training already exist...')
-    if args.overwrite:
-        print('overwrite is set to True ... overwriting\n')
-    else:
-        print('overwrite is set to False ... exiting')
-        exit()
+train_fn, test_fns, out_fn, test_out_fns = get_paths(args)
 
 print('\nStarting training')
 ### LOAD EPOCHS ###
@@ -160,15 +154,8 @@ print(f'Done with saving training plots and data. Elasped time since the script 
 print('\n\nStarting testing')
 
 ### GET TEST DATA ###
-for test_cond, test_fn in zip(args.test_cond, test_fns):
+for test_cond, test_fn, test_out_fn in zip(args.test_cond, test_fns, test_out_fns):
     print(f'testing on {test_cond}')
-
-    if op.exists(out_fn+f"tested_on_{test_cond}" + '_AUC.npy'): # warn and stop if args.overwrite is set to False
-        print('\noutput files for training already exist...')
-        if args.overwrite:
-            print('overwrite is set to True ... overwriting\n')
-        else:
-            print('overwrite is set to False ... loading models and moving on to the next test queries\n')
 
     ### LOAD EPOCHS ###
     epochs, test_split_query_indices = load_data(args, test_fn, args.test_query_1, args.test_query_2)
@@ -186,12 +173,12 @@ for test_cond, test_fn in zip(args.test_cond, test_fns):
     AUC, mean_preds = test_decode(args, X, y, all_models)
 
     ### SAVE RESULTS ###
-    save_results(args, out_fn+f"_tested_on_{test_cond}", AUC)
-    # save_preds(args, out_fn+f"_tested_on_{test_cond}", mean_preds)
+    save_results(args, test_out_fn, AUC)
+    # save_preds(args, test_out_fn, mean_preds)
 
     ### PLOT PERFORMANCE ###
-    plot_perf(args, out_fn+f"_tested_on_{test_cond}", AUC, test_cond, \
-        train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, test_tmax=test_tmax, train_cond=args.train_cond)
+    plot_perf(args, test_out_fn, AUC, args.train_cond, train_tmin=train_tmin, 
+        train_tmax=train_tmax, test_tmin=test_tmin, test_tmax=test_tmax, gen_cond=test_cond)
 
     # # # plot pred
     # plot_perf(args, out_fn+f"_tested_on_{test_cond}", mean_preds, test_cond, ylabel='prediction')

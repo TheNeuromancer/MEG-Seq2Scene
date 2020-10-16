@@ -31,6 +31,11 @@ from scipy.ndimage import gaussian_filter1d
 # local import
 from .params import *
 
+
+short_to_long_cond = {"loc": "localizer", "imgloc": "image_localizer", "one_obj": "one_object", "two_obj": "two_objects",
+                      "localizer": "localizer", "image_localizer":"image_localizer", "one_object":"one_object"}
+
+
 def get_onsets(cond):
     """ get the word and image onsets depending on the condition
     """
@@ -54,14 +59,14 @@ def get_onsets(cond):
 
 
 
-def get_out_fn(args, test_query_1=None, test_query_2=None, dirname='Decoding'):
+def get_out_fn(args, dirname='Decoding'):
     out_dir = f'{args.root_path}/Results/{dirname}_v{args.version}/{args.out_dir}/{args.subject}'
 
     # C_string = f'_{args.C}C'
     # cat_string = '_' + str(args.cat) + "cat" if not args.mean else '_' + str(args.cat) + "mean"
     reduc_dim_str = f"_reduc{args.reduc_dim}comp" if args.reduc_dim else "" # %50 
     baseline_str = "_baseline" if args.baseline else ""
-    smooth_str = f"_{args.smooth}smooth" if args.smooth else ""
+    # smooth_str = f"_{args.smooth}smooth" if args.smooth else ""
     shuffle_str = '_shuffled' if args.shuffle else ''
     fband_str = f'_{args.freq_band}' if args.freq_band else ''
     if args.train_query_1 and args.train_query_2:
@@ -71,71 +76,57 @@ def get_out_fn(args, test_query_1=None, test_query_2=None, dirname='Decoding'):
         train_query_1 = ''
         train_query_2 = ''
 
-    if test_query_1 and test_query_2:
-        test_query_1 = '_'.join(test_query_1.split())
-        test_query_2 = '_'.join(test_query_2.split())
-        test_query_str = f'_tested_on_{test_query_1}_vs_{test_query_2}'
-    else:
-        test_query_str = ''
-
-    cond_str = f"cond-{args.train_cond}-"
-    out_fn = f'{out_dir}/{train_query_1}_vs_{train_query_2}{test_query_str}{smooth_str}{reduc_dim_str}{shuffle_str}{fband_str}{cond_str}'
+    cond_str = f"_cond-{args.train_cond}-"
+    out_fn = f'{out_dir}/{args.label}-{train_query_1}_vs_{train_query_2}{reduc_dim_str}{shuffle_str}{fband_str}{cond_str}'
     out_fn = shorten_filename(out_fn)
 
     print('\noutput file will be in: ' + out_fn)
     print('eg:' + out_fn + '_AUC_diag.npy\n')
-
     return out_fn
 
 
-def shorten_filename(filename):
-    # shorten the output filename because we sometimes go over the 255-characters limit imposed by ubuntu
-    filename = filename.replace("'", "")
-    filename = filename.replace('"', '')
-    filename = filename.replace('[', '')
-    filename = filename.replace(']', '')
-    filename = filename.replace(',', '')
-    filename = filename.replace('condition', 'cond')
-    filename = filename.replace('number', 'nb')
-    filename = filename.replace('gender', 'gd')
-    filename = filename.replace('==', '=')
-    filename = filename.replace('sentence_structure', 'struct')
-    filename = filename.replace('sentence', 'sent')
-    filename = filename.replace('word_position', 'wpos')
-    filename = filename.replace('wordposition', 'wpos')
-    filename = filename.replace('stringlist', 'strl')
-    filename = filename.replace('auxiliary', 'aux')
-    filename = filename.replace('subject_gender', 'subg')
-    filename = filename.replace('subject_number', 'subn')
-    filename = filename.replace('subject', 'sub')
-    filename = filename.replace('object', 'obj')
+def shorten_filename(fn):
+    # shorten the output fn because we sometimes go over the 255-characters limit imposed by ubuntu
+    fn = fn.replace("'", "")
+    fn = fn.replace('"', '')
+    fn = fn.replace('[', '')
+    fn = fn.replace('(', '')
+    fn = fn.replace(')', '')
+    fn = fn.replace(']', '')
+    fn = fn.replace(',', '')
+    fn = fn.replace('Colour', 'C')
+    fn = fn.replace('Shape', 'S')
+    fn = fn.replace('cercle', 'cl')
+    fn = fn.replace('carre', 'ca')
+    fn = fn.replace('triangle', 'tr')
+    fn = fn.replace('bleu', 'bl')
+    fn = fn.replace('vert', 'vr')
+    fn = fn.replace('rouge', 'rg')
+    fn = fn.replace('==', '=')
+    fn = fn.replace('Matching=match', 'match')
+    
+    # if fn is still too long, make some ugly changes
+    # if len(os.path.basename(fn)) > 255:
+    if len(fn) > 255:
+        fn = fn.replace('reduc', '')
+        fn = fn.replace('baseline', 'bl')
+        fn = fn.replace('and_', '')
+        fn = fn.replace('or_', '_')
+        fn = fn.replace('cond', 'cd')
 
-    # if filename is still too long, make some ugly changes
-    # if len(os.path.basename(filename)) > 255:
-    if len(filename) > 255:
-        filename = filename.replace('reduc', '')
-        filename = filename.replace('correct', 'cor')
-        filename = filename.replace('word_type', 'wt')
-        filename = filename.replace('baseline', 'bl')
-        filename = filename.replace('and_', '')
-        filename = filename.replace('sing', 'sg')
-        filename = filename.replace('plur', 'pl')
-        filename = filename.replace('struct', 'st')
-        filename = filename.replace('cond', 'cd')
+    # if fn is still too long, make some even uglier changes
+    # if len(os.path.basename(fn)) > 255:
+    if len(fn) > 255: # remove underscores but only in the fn, not in the path
+        fn = fn.replace(op.basename(fn), op.basename(fn).replace('_', ''))
 
-    # if filename is still too long, make some even uglier changes
-    # if len(os.path.basename(filename)) > 255:
-    if len(filename) > 255: # remove underscores but only in the filename, not in the path
-        filename = filename.replace(op.basename(filename), op.basename(filename).replace('_', ''))
-
-    # if filename is still too long, throw an error
-    # if len(os.path.basename(filename)) > 255:
-    if len(filename) > 255:    
-        print(f'\n\nOutput filename is too long.\n\n{filename}\nis longer than UNIX limit which is 255 characters...cropping brutally')
-        filename = filename[0:255]
+    # if fn is still too long, throw an error
+    # if len(os.path.basename(fn)) > 255:
+    if len(fn) > 255:    
+        print(f'\n\nOutput fn is too long.\n\n{fn}\nis longer than UNIX limit which is 255 characters...cropping brutally')
+        fn = fn[0:255]
         # exit()
 
-    return filename
+    return fn
 
 
 def get_paths(args, dirname='Decoding'):
@@ -154,9 +145,13 @@ def get_paths(args, dirname='Decoding'):
 
     ### SET UP OUTPUT DIRECTORY AND FILENAME
     out_fn = get_out_fn(args, dirname=dirname)
+    test_out_fns = []
+    for test_cond in args.test_cond: 
+        test_query_str = f"{'_'.join(args.test_query_1.split())}_vs_{'_'.join(args.test_query_2.split())}"
+        test_out_fns.append(shorten_filename(f"{out_fn}_tested_on_{test_cond}_{test_query_str}"))
 
     # wait for a random time in order to avoird conflit (parallel jobs that try to construct the same directory)
-    rand_time = float(str(abs(hash(str(args))))[0:8]) / 10000000000
+    rand_time = float(str(abs(hash(str(args))))[0:8]) / 100000000
     print(f'sleeping {rand_time} seconds to desynchronize parallel scripts')
     time.sleep(rand_time)
     
@@ -164,8 +159,14 @@ def get_paths(args, dirname='Decoding'):
     if not op.exists(out_dir):
         print('Constructing output directory')
         os.makedirs(out_dir)
-
-    return train_fn, test_fns, out_fn
+    else:
+        print('output directory already exists')
+        if args.overwrite:
+            print('overwrite is set to True ... overwriting\n')
+        else:
+            print('overwrite is set to False ... exiting smoothly')
+            exit()
+    return train_fn, test_fns, out_fn, test_out_fns
 
 
 def load_data(args, fn, query_1, query_2):
@@ -202,9 +203,8 @@ def load_data(args, fn, query_1, query_2):
         # bandpass filter
         epochs = [epo.filter(fmin, fmax, n_jobs=-1) for epo in epochs]  
 
-    print("starting resampling ... ")
+    print(f"starting resampling from {epochs[0].info['sfreq']} to {args.sfreq} ... ")
     if args.sfreq < epochs[0].info['sfreq']: 
-        print(epochs[0].info['sfreq'])
         epochs = [epo.resample(args.sfreq) for epo in epochs]
     print("finished resampling ... ")
 
@@ -228,6 +228,7 @@ def load_data(args, fn, query_1, query_2):
     # X = np.concatenate([X, np.gradient(X, axis=1)], axis=1)
 
     if args.smooth:
+        print(f"Smoothing the data with a gaussian window of size {args.smooth}")
         for query_data in data:
             for i_trial in range(len(query_data)):
                 for i_ch in range(len(query_data[i_trial])):
@@ -269,7 +270,7 @@ def load_data(args, fn, query_1, query_2):
     # for idx in range(X.shape[0]):
     #     for ch in range(X.shape[1]):
     #         X[idx, ch, :] = (X[idx, ch] - np.mean(X[idx, ch])) / np.std(X[idx, ch])
-    epochs = [mne.EpochsArray(data, old_epo.info, metadata=meta, tmin=old_epo.times[0]) for data, meta, old_epo in zip(data, metadatas, epochs)]
+    epochs = [mne.EpochsArray(data, old_epo.info, metadata=meta, tmin=old_epo.times[0], verbose="warning") for data, meta, old_epo in zip(data, metadatas, epochs)]
 
 
     # crop after getting high gammas and smoothing to avoid border issues
@@ -791,29 +792,31 @@ def save_patterns(args, out_fn, all_models):
     np.save(out_fn + '_patterns.npy', patterns)
 
 
-def plot_perf(args, out_fn, data, cond, train_tmin, train_tmax, test_tmin, test_tmax, ylabel="AUC", contrast=False, train_cond=None):
-    print('Plotting performance')
-    n_times_train = data.shape[0]
-    n_times_test = data.shape[1]
-    # set_trace()
-    # tmin, tmax = get_tmin_tmax(cond)
+def plot_perf(args, out_fn, data_mean, train_cond, train_tmin, train_tmax, test_tmin, test_tmax, ylabel="AUC", contrast=False, gen_cond=None):
+    """ plot performance of individual subject,
+    called during training by decoding.py script
+    """
+    if gen_cond is None:
+        plot_diag(data_mean=data_mean, data_std=None, out_fn=out_fn, train_cond=train_cond, 
+            train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=contrast)
+
+    plot_GAT(data_mean=data_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, 
+             test_tmax=test_tmax, ylabel=ylabel, contrast=contrast, gen_cond=gen_cond, slices=[])
+    return
+
+
+def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", contrast=False):
+    word_onsets, image_onset = get_onsets(train_cond)
+    n_times_train = data_mean.shape[0]
     times_train = np.linspace(train_tmin, train_tmax, n_times_train)
-    times_test = np.linspace(test_tmin, test_tmax, n_times_test)
 
-    word_onsets, image_onset = get_onsets(cond)
-    if train_cond is not None: # if we specify a train_cond, it means that thsi is a generalization and so we should plot different onsets for vertical and horizontal axes
-        train_word_onsets, train_image_onset = get_onsets(train_cond)
-    else: # else use the same 
-        train_word_onsets, train_image_onset = word_onsets, image_onset
-
-    if args.timegen:
-        data_diag = np.diag(data)
-    else:
-        data_diag = data
-
+    # DIAGONAL PLOT
     fig, ax = plt.subplots()
-    plot = plt.plot(times_train, data_diag)
-    # ax.fill_between(times_train, data_mean-AUC_std, AUC_mean+AUC_std, alpha=0.2)
+    data_mean_diag = np.diag(data_mean)
+    plot = plt.plot(times_train, data_mean_diag)
+    if data_std is not None:
+        data_std_diag = np.diag(data_std)
+        ax.fill_between(times_train, data_mean_diag-data_std_diag, data_mean_diag+data_std_diag, alpha=0.2)
     plt.ylabel(ylabel)
     plt.xlabel("Time (s)")
 
@@ -822,133 +825,194 @@ def plot_perf(args, out_fn, data, cond, train_tmin, train_tmax, test_tmin, test_
     for img_onset in image_onset:
          fig.axes[0].axvline(x=img_onset, linestyle='-', color='k')
 
-    if train_cond is not None:
-        for w_onset in train_word_onsets:
-            fig.axes[0].axvline(x=w_onset, linestyle='--', color='purple')
-        for img_onset in train_image_onset:
-            fig.axes[0].axvline(x=img_onset, linestyle='-', color='purple')
-
-    if contrast:
-        plt.axhline(y=0, color='red', linestyle='--')
-
-    plt.savefig(f'{out_fn}_{ylabel}.png')
+    plt.savefig(f'{out_fn}_{ylabel}_diag.png')
     plt.close()
 
 
-    if args.timegen: # timegen matrices
-        if contrast:
-            vmin = np.min(data) if np.min(data) < -0.001 else -0.001 # make the colormap center on the white, whatever the values
-            vcenter=0.
-            vmax = np.max(data) if np.max(data) > 0.001 else 0.001
-        else:
-            vmin = np.min(data) if np.min(data) < 0.499 else 0.499 # make the colormap center on the white, whatever the values
-            vcenter = 0.5
-            vmax = np.max(data) if np.max(data) > .501 else .501
-        print('vmin, vcenter, vmax: ', vmin, vcenter, vmax)
-        divnorm = matplotlib.colors.DivergingNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
+def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, test_tmax, ylabel="AUC", contrast=False, gen_cond=None, gen_color='k', slices=[]):
+    train_word_onsets, train_image_onset = get_onsets(train_cond)
+    if gen_cond is not None: # mean it is a generalization
+        word_onsets, image_onset = get_onsets(gen_cond)
+    else:
+        word_onsets, image_onset = train_word_onsets, train_image_onset
 
-        fig = plt.figure()
-        # set_trace()
-        plt.imshow(data, norm=divnorm, cmap='bwr', origin='lower', extent=[test_tmin, test_tmax, train_tmin, train_tmax])
-        cbar = plt.colorbar()
-        cbar.set_label(ylabel)
-        plt.xlabel("Testing time")
-        plt.ylabel("Training time")
-    
+    n_times_train = data_mean.shape[0]
+    n_times_test = data_mean.shape[1]
+    times_train = np.linspace(train_tmin, train_tmax, n_times_train)
+    times_test = np.linspace(test_tmin, test_tmax, n_times_test)
+
+    if contrast:
+        vmin = np.min(data_mean) if np.min(data_mean) < -0.001 else -0.001 # make the colormap center on the white, whatever the values
+        vcenter=0.
+        vmax = np.max(data_mean) if np.max(data_mean) > 0.001 else 0.001
+    else:
+        vcenter = 0.5
+        vmin = 0.35
+        vmax = 0.7
+    divnorm = matplotlib.colors.DivergingNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
+
+
+    # FULL TIMEGEN PLOT
+    fig, ax = plt.subplots()
+    plt.imshow(data_mean, norm=divnorm, cmap='bwr', origin='lower', extent=[test_tmin, test_tmax, train_tmin, train_tmax])
+    cbar = plt.colorbar()
+    cbar.set_label(ylabel)
+    plt.xlabel("Testing time (s)")
+    plt.ylabel("Training time (s)")
+
+    for w_onset in word_onsets:
+        fig.axes[0].axvline(x=w_onset, color='k', linestyle='--', alpha=.5)
+    for img_onset in image_onset:
+        fig.axes[0].axvline(x=img_onset, color='k', linestyle='-', alpha=.5)
+
+    if gen_cond is not None: # if generalization, then use a different color
+        color = gen_color
+    else:
+        color = "k"
+    for w_onset in train_word_onsets:
+        fig.axes[0].axhline(y=w_onset, color=color, linestyle='--', alpha=.5)
+    for img_onset in train_image_onset:
+        fig.axes[0].axhline(y=img_onset, color=color, linestyle='-', alpha=.5)
+
+    plt.savefig(f'{out_fn}_{ylabel}_timegen.png')
+
+
+    ## ADD SLICES
+    if slices and ylabel=='AUC':
+        cmap = plt.cm.get_cmap('plasma', len(slices))
+        # add colored line to th matrix plot
+        for i_slice, sli in enumerate(slices):
+            plt.axhline(y=sli, linestyle='--', alpha=.9, color=cmap(i_slice))
+        plt.savefig(out_fn + '_wslices.png')
+        plt.close()
+
+        max_auc = np.max(data_mean)
+        all_slices_ave = []
+        fig, ax = plt.subplots()
         for w_onset in word_onsets:
-            fig.axes[0].axvline(x=w_onset, color='k', linestyle='--', alpha=.5)
+             fig.axes[0].axvline(x=w_onset, linestyle='--', color='k')
         for img_onset in image_onset:
-            fig.axes[0].axvline(x=img_onset, color='k', linestyle='-', alpha=.5)
+             fig.axes[0].axvline(x=img_onset, linestyle='-', color='k')
 
-        for w_onset in train_word_onsets:
-            fig.axes[0].axhline(y=w_onset, color='purple', linestyle='--', alpha=.5)
-        for img_onset in train_image_onset:
-            fig.axes[0].axhline(y=img_onset, color='purple', linestyle='-', alpha=.5)
+        for i_slice, sli in enumerate(slices):
+            data_mean_line = data_mean[(np.abs(times_train - sli)).argmin()]
+            
+            # vertical dashed line for time reference
+            if gen_cond is None:
+                plt.axvline(x=sli, color=cmap(i_slice), linestyle='--', alpha=.5)
 
-        # plt.plot(times_train, times_test, color='k', alpha=0.3) # diagonal of the matrix
-        
-        plt.savefig(f'{out_fn}_{ylabel}_timegen.png')
+            # actual trace plot
+            plt.plot(times_test, data_line, label=str(sli)+'s', color=cmap(i_slice))
+            # plt.fill_between(times, data_line-std, data_line+std, color=cmap(i_slice), alpha=0.2)
+
+            # Compute statistic
+            # fvalues, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(all_AUC[:,(np.abs(times_train - sli)).argmin()]-0.5, n_permutations=1000, threshold=None, tail=1, n_jobs=5, verbose=False)
+            # significance hlines
+            # for i_clust, cluster in enumerate(clusters):
+            #     if cluster_p_values[i_clust] < 0.05:
+            #         # with std
+            #         # plt.plot(times[cluster], np.ones_like(times[cluster])*(max_auc+0.1+0.01*i_slice), color=cmap(i_slice))
+            #         # without std, put the hlines closer to the curves
+            #         plt.plot(times_test[cluster], np.ones_like(times[cluster])*(max_auc+0.02+0.01*i_slice), color=cmap(i_slice))
+
+        plt.legend(title='training time')
+        plt.axhline(y=0.5, color='k', linestyle='-', alpha=.3)
+        plt.ylabel(ylabel)
+        plt.xlabel("Time (s)")            
+        plt.savefig(out_fn + '_slices.png')
         plt.close()
 
     return
 
 
-def plot_all_sentence_decoding(args, out_fn, data):
-    t_stat, pval = ttest_1samp(data, 0.5)
-    plt.figure()
-    plt.bar(0, np.mean(data), yerr=np.std(data))
-    plt.savefig(f'{out_fn}_bar.png')
-    # print('save pval??')
-
-def plot_all_sentence_decoding_test(args, out_fn, data):
-    data = np.array(data) # n_subjects * (1 + splits-queries + generalisation)
-    stars = []
-    for dat in data.T:
-        t_stat, pval = ttest_1samp(dat, 0.5)
-        if pval < 0.001:
-            stars.append('***')
-        elif pval < 0.01:
-            stars.append('**')
-        elif pval < 0.05:
-            stars.append('*')
-        else:
-            stars.append('')
-    cmap = plt.cm.get_cmap('cividis', len(data[0]))
-    colors = [cmap(i) for i in range(len(data[0]))]
-    plt.figure()
-    plt.bar(range(len(data[0])), np.mean(data, 0), yerr=np.std(data, 0), color=colors)
-    frame = plt.gca()
-    # frame.axes.get_xaxis().set_visible(False)
-    frame.axes.get_xaxis().set_ticks(range(len(data[0])))
-    frame.axes.get_xaxis().set_ticklabels(stars)    
-    plt.ylabel('AUC')
-    plt.savefig(f'{out_fn}_bar_test.png')
-
-
-
-def save_single_chan_results(args, out_fn, AUC, pvals, ch_names, all_models=None):
-    print('Saving Single channel results')
-    AUC = dict(zip(ch_names, AUC))
-    pickle.dump(AUC, open(out_fn + '_AUC.p', 'wb'))
-    pvals = dict(zip(ch_names, pvals))
-    pickle.dump(pvals, open(out_fn + f'_{args.n_perm}p_pvals.p', 'wb'))
-    if all_models:
-        pickle.dump(all_models, open(out_fn + '_all_models.p', 'wb'))
-    return
-
-
-def plot_single_chan_perf(args, out_fn, data, pvals, ylabel="AUC", contrast=False):
-    print('Plotting single channel performance')
-    nchan = len(data)
-    channels = np.arange(nchan)
-
-    reject, corrected_pvals = mne.stats.fdr_correction(pvals, alpha=0.05)
-
-    fig, ax = plt.subplots()
-    plot = plt.plot(channels, data)
-    plt.ylabel(ylabel)
-    plt.xlabel("channels")
-    if contrast:
-        plt.axhline(y=0, color='k', linestyle='--')
+def get_ylabel_from_fn(fn):
+    # acc or AUC
+    if fn[-7:-4] == 'acc' or fn[-12:-9] == 'acc':
+        ylabel = 'Accuracy'
+    elif fn[-7:-4] == 'AUC' or fn[-12:-9] == 'AUC':
+        ylabel = 'AUC'
+    elif fn[-9:-4] == 'preds': # or fn[-12:-9] == 'AUC':
+        ylabel = 'prediction'
     else:
-        plt.axhline(y=0.5, color='k', linestyle='--')
-    for idx in np.where(reject)[0]: plt.plot(idx, np.max(data)+0.1, 'ro')
-    plt.savefig(f'{out_fn}_{ylabel}.png')
-    plt.close()
+        print('\n\nDid not find a correct label in the filename')
+        set_trace()
+    return ylabel
 
-    fig, ax = plt.subplots()
-    plot = plt.plot(channels, np.sort(data))
-    plt.ylabel(ylabel)
-    plt.xlabel("channels")
-    if contrast:
-        plt.axhline(y=0, color='k', linestyle='--')
-    else:
-        plt.axhline(y=0.5, color='k', linestyle='--')
-    for idx in np.where(np.sort(reject))[0]: plt.plot(idx, np.max(data)+0.1, 'ro')
-    plt.savefig(f'{out_fn}_{ylabel}_sorted.png')
-    plt.close()
 
-    return
+# def plot_all_sentence_decoding(args, out_fn, data):
+#     t_stat, pval = ttest_1samp(data, 0.5)
+#     plt.figure()
+#     plt.bar(0, np.mean(data), yerr=np.std(data))
+#     plt.savefig(f'{out_fn}_bar.png')
+#     # print('save pval??')
+
+# def plot_all_sentence_decoding_test(args, out_fn, data):
+#     data = np.array(data) # n_subjects * (1 + splits-queries + generalisation)
+#     stars = []
+#     for dat in data.T:
+#         t_stat, pval = ttest_1samp(dat, 0.5)
+#         if pval < 0.001:
+#             stars.append('***')
+#         elif pval < 0.01:
+#             stars.append('**')
+#         elif pval < 0.05:
+#             stars.append('*')
+#         else:
+#             stars.append('')
+#     cmap = plt.cm.get_cmap('cividis', len(data[0]))
+#     colors = [cmap(i) for i in range(len(data[0]))]
+#     plt.figure()
+#     plt.bar(range(len(data[0])), np.mean(data, 0), yerr=np.std(data, 0), color=colors)
+#     frame = plt.gca()
+#     # frame.axes.get_xaxis().set_visible(False)
+#     frame.axes.get_xaxis().set_ticks(range(len(data[0])))
+#     frame.axes.get_xaxis().set_ticklabels(stars)    
+#     plt.ylabel('AUC')
+#     plt.savefig(f'{out_fn}_bar_test.png')
+
+# def save_single_chan_results(args, out_fn, AUC, pvals, ch_names, all_models=None):
+#     print('Saving Single channel results')
+#     AUC = dict(zip(ch_names, AUC))
+#     pickle.dump(AUC, open(out_fn + '_AUC.p', 'wb'))
+#     pvals = dict(zip(ch_names, pvals))
+#     pickle.dump(pvals, open(out_fn + f'_{args.n_perm}p_pvals.p', 'wb'))
+#     if all_models:
+#         pickle.dump(all_models, open(out_fn + '_all_models.p', 'wb'))
+#     return
+
+
+# def plot_single_chan_perf(args, out_fn, data, pvals, ylabel="AUC", contrast=False):
+#     print('Plotting single channel performance')
+#     nchan = len(data)
+#     channels = np.arange(nchan)
+
+#     reject, corrected_pvals = mne.stats.fdr_correction(pvals, alpha=0.05)
+
+#     fig, ax = plt.subplots()
+#     plot = plt.plot(channels, data)
+#     plt.ylabel(ylabel)
+#     plt.xlabel("channels")
+#     if contrast:
+#         plt.axhline(y=0, color='k', linestyle='--')
+#     else:
+#         plt.axhline(y=0.5, color='k', linestyle='--')
+#     for idx in np.where(reject)[0]: plt.plot(idx, np.max(data)+0.1, 'ro')
+#     plt.savefig(f'{out_fn}_{ylabel}.png')
+#     plt.close()
+
+#     fig, ax = plt.subplots()
+#     plot = plt.plot(channels, np.sort(data))
+#     plt.ylabel(ylabel)
+#     plt.xlabel("channels")
+#     if contrast:
+#         plt.axhline(y=0, color='k', linestyle='--')
+#     else:
+#         plt.axhline(y=0.5, color='k', linestyle='--')
+#     for idx in np.where(np.sort(reject))[0]: plt.plot(idx, np.max(data)+0.1, 'ro')
+#     plt.savefig(f'{out_fn}_{ylabel}_sorted.png')
+#     plt.close()
+
+#     return
 
 
 

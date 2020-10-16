@@ -2,3 +2,14 @@ Epochs2: 1-60hz, decim to 100hz
 
 
 do not take hte diag but average a few points around it.
+
+
+Decoding:
+ v3: first real try
+ v4: one_object testing all combination of negative trials.
+ v5: imgloc images
+ v6: all orig
+ v7: imgloc with images. one objects with match
+ v8: imgloc with both words and images - forget about it 
+
+ add a string to filenames in order to facilitate the aggregation of results?
