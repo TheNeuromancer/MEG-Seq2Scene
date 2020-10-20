@@ -6,12 +6,14 @@ import mne
 import argparse
 import pandas as pd
 import numpy as np
+import pickle
 
 from utils.params import *
+from utils.reject import *
 
 parser = argparse.ArgumentParser(description='MEG basic preprocessing')
 parser.add_argument('-r', '--root-path', default='/neurospin/unicog/protocols/MEG/Seq2Scene/', help='Path to parent project folder')
-parser.add_argument('-o', '--out-dir', default='/Data/Epochs2', help='output directory')
+parser.add_argument('-o', '--out-dir', default='/Data/Epochs', help='output directory')
 parser.add_argument('-p', '--subject', default='theo',help='subject name')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
 parser.add_argument('--l_freq', default=1., type=float, help='Low-pass filter frequency (0 for only high pass')
@@ -20,6 +22,9 @@ parser.add_argument('--notch', default=50, type=int, help='frequency of the notc
 parser.add_argument('--resample_sfreq', default=0, type=int, help='resampling frequency')
 parser.add_argument('--plot', default=False, action='store_true', help='Whether to plot some channels and power spectrum')
 parser.add_argument('--show', default=False, action='store_true', help='Whether to show some channels and power spectrum ("need to be locally or ssh -X"')
+parser.add_argument('--ch-var-reject', default=0, type=int, help='whether to reject channels based on temporal variance')
+parser.add_argument('--epo-var-reject', default=0, type=int, help='whether to reject epochs based on temporal variance')
+parser.add_argument('--ref-run', default=8, type=int, help='reference run for head position for maxwell filter')
 
 parser.add_argument('--pass-fosca', default=False, action='store_true', help='exceptions for the first pilot"')
 
@@ -70,9 +75,14 @@ all_runs_fns = sorted(all_runs_fns)
 all_md_fns = glob(in_dir + '/*run*.csv')
 all_md_fns = sorted(all_md_fns)
 
+all_bads_fns = glob(in_dir + '/*run*_bads.p')
+all_bads_fns = sorted(all_bads_fns)
+if len(all_bads_fns) == 0:
+    print(f"Did not find any file containg bad channels at path {in_dir}, you should have detected the bads channels before doing the maxwell filtering using the detect_bad_channels.py script")
+
 if args.subject=="theo": # skip the 5th blocks that have a problem (split in two)
-    all_runs_fns = [run for run in all_runs_fns if "run05" not in run]
-    all_md_fns = [md for md in all_md_fns if "run05" not in md]
+    all_runs_fns = [run for run in all_runs_fns if "run05_1obj_first" not in run] # _1obj_first
+    all_md_fns = [md for md in all_md_fns if "run05_1obj_first" not in md]
 
 assert len(all_runs_fns) == len(all_md_fns)
 print(all_runs_fns)
@@ -84,6 +94,15 @@ out_dir = op.join(args.root_path + args.out_dir, args.subject)
 out_dir_plots = op.join(out_dir, 'plots')
 if not op.exists(out_dir_plots):
     os.makedirs(out_dir_plots)
+
+# get head position of the reference run
+ref_info = mne.io.read_info(all_runs_fns[args.ref_run], verbose='warning')
+ref_run_head_pos = ref_info['dev_head_t']
+# compute head origin from digitization points (same for each run)
+_, head_origin, _ = mne.bem.fit_sphere_to_headshape(ref_info, dig_kinds=['hpi', 'cardinal', 'extra'], units='m')
+# calibration files
+ct_sparse_fn = f"{args.root_path}/Data/SSS/ct_sparse_nspn.fif"
+sss_cal_fn = f"{args.root_path}/Data/SSS/sss_cal_nspn.dat"
 
 raw_loc = []
 raw_imgloc = []
@@ -100,23 +119,14 @@ md_imgloc = []
 md_1obj = []
 md_2obj = []
 
+# change to dict for cleaner use?
+# LOC = {"raw": [], "events": [], "md": []}
+
 for i_run, raw_fn_in in enumerate(all_runs_fns):
     print("doing file ", raw_fn_in)
 
     if i_run==0 and args.pass_fosca: # do not do the first block as we do not have the labels 
         continue
-
-    # raw_fn_out = out_dir + f"/run_{i_run+1}_filt_raw.fif"
-    # print("Input: ", raw_fn_in)
-    # print("Output: ", raw_fn_out)
-
-    # if op.exists(raw_fn_out): # warn and stop if args.overwrite is set to False
-    #     print('output directory already exists...')
-    #     if args.overwrite:
-    #         print('overwrite is set to True ... overwriting')
-    #     else:
-    #         print('overwrite is set to False ... moving on')
-    #         continue
 
     # Load data
     raw = mne.io.Raw(raw_fn_in, preload=True, verbose='error', allow_maxshield=True)
@@ -124,13 +134,29 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         md = pd.read_csv(all_md_fns[i_run])
     except: # weird hack - the 2obj md is with a different encoding ... 
         md = pd.read_csv(all_md_fns[i_run], encoding='ISO-8859-1')
-        # set_trace()
-    
-    print('original raw info')
-    print(raw.info)
-    print('\n\n')
-    
+    try: # read bads from file, you should have detected the bads channels before doing the maxwell filtering using the detect_bad_channels.py script
+        bads = pickle.load(open(all_bads_fns[i_run], "rb"))
+    except: 
+        print("did not find the bads file ...")
+        set_trace()
 
+    md["run_nb"] = str(i_run + 1)
+
+    if "run05" in raw_fn_in: # hack to get the hpi registration
+        qwe = mne.io.read_info("../Data/orig/theo/run05_1obj_first.fif", verbose='warning')
+        raw.info['dev_head_t'] = qwe['dev_head_t']
+
+    # MAXWELL FILTERING
+    mne.channels.fix_mag_coil_types(raw.info)
+    # noisy_chs, flat_chs = mne.preprocessing.find_bad_channels_maxwell(raw, origin=head_origin, coord_frame='head', calibration=sss_cal_fn, cross_talk=ct_sparse_fn, verbose="warning")
+    # if args.plot: plot_deviant_maxwell(scores, f"{out_dir_plots}/run_{i_run+1}")
+    raw.info['bads'] = list(bads) #+ noisy_chs + flat_chs
+    print(f"bad channels automatically detected and interpolated based on Maxwell filtering: {raw.info['bads']}")
+    raw = mne.preprocessing.maxwell_filter(raw, origin=head_origin, coord_frame='head', calibration=sss_cal_fn, 
+                                    cross_talk=ct_sparse_fn, destination=ref_run_head_pos, verbose='warning')
+    
+    raw = raw.del_proj("all")
+    
     if args.plot:
         # plot power spectral densitiy
         fig = raw.plot_psd(area_mode='range', fmin=0., fmax=200., average=True)
@@ -177,19 +203,20 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
     else:
         resample_str = ''
 
-    if args.plot:
+    if args.plot: 
         # plot power spectral densitiy
-        fig = raw.plot_psd(area_mode='range', fmin=0., fmax=200., average=True)
+        fig = raw.plot_psd(area_mode='range', fmin=0., fmax=args.resample_sfreq/2, average=True)
         plt.savefig(f'{out_dir_plots}/run_{i_run+1}_psd_after_bandpass_{args.l_freq}_{args.h_freq}hz_and_notch_{args.notch}hz{resample_str}.png')
         plt.close()
 
-    print('saving data')
-    print('\n\n')
-    print('final raw info')
-    print(raw.info)
-    print('\n\n')
+    # print('final raw info')
+    # print(raw.info)
+    # print('\n\n')
 
-    events = mne.find_events(raw, min_duration=0.002)
+    try:
+        events = mne.find_events(raw, min_duration=0.1)
+    except:
+        set_trace()
 
     # "start" and "end" triggers
     events = events[np.where(events[:,2] != 16434)]
@@ -219,17 +246,17 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         raw_1obj.append(raw)
         events = events[np.where(events==TRIG_DICT['one_object_trial_start'])[0]]
 
-        ## HACK FOR FOSCA's PILOT WHERE WE MISSED 3 TRIALS
-        if len(events) < len(md):
-            print("WARNING: incorrect number of trials or metadata entries ... maybe the recording started after \
-the beginning of the block, as in fosca's pilot ... setting a trace... just continue to remove the metadata entries from the beginning of the run")
-            if not args.pass_fosca:
-                set_trace()
-            md = md.iloc[len(md)-len(events)::]
+#         ## HACK FOR FOSCA's PILOT WHERE WE MISSED 3 TRIALS
+#         if len(events) < len(md):
+#             print("WARNING: incorrect number of trials or metadata entries ... maybe the recording started after \
+# the beginning of the block, as in fosca's pilot ... setting a trace... just continue to remove the metadata entries from the beginning of the run")
+#             if not args.pass_fosca:
+#                 set_trace()
+#             md = md.iloc[len(md)-len(events)::]
 
         ## HACK FOR THEO'S PILOT: THE 5TH BLOCK IS SPLIT IN TWO AND WE MISSED A FEW TRIALS ...
         if "run05" in raw_fn_in:
-            qwe # actually we just skip this run for now
+            md = md.iloc[len(md)-len(events)::] # just skip the first few trials
 
         events_1obj.append(events)
         md_1obj.append(md)
@@ -255,6 +282,7 @@ the beginning of the block, as in fosca's pilot ... setting a trace... just cont
         evo = epo.average()
         evo.plot(spatial_colors=True, show=False)
         plt.savefig(f'{out_dir_plots}/run_{i_run+1}_{block_type}_epochs.png')
+plt.close()
 
     # raw.save(raw_fn_out, overwrite=True)
 
@@ -264,6 +292,24 @@ raw_imgloc, events_imgloc = mne.concatenate_raws(raw_imgloc, events_list=events_
 raw_1obj, events_1obj = mne.concatenate_raws(raw_1obj, events_list=events_1obj)
 raw_2obj, events_2obj = mne.concatenate_raws(raw_2obj, events_list=events_2obj)
 
+# # apply projections
+# raw_loc = raw_loc.apply_proj()
+# raw_imgloc = raw_imgloc.apply_proj()
+# raw_1obj = raw_1obj.apply_proj()
+# raw_2obj = raw_2obj.apply_proj()
+
+if args.ch_var_reject:
+    # detect and reject bad channels
+    bads = get_deviant_ch(raw_loc, thresh=args.ch_var_reject)
+    bads.update(get_deviant_ch(raw_imgloc, thresh=args.ch_var_reject))
+    bads.update(get_deviant_ch(raw_1obj, thresh=args.ch_var_reject))
+    bads.update(get_deviant_ch(raw_2obj, thresh=args.ch_var_reject))
+    # set_trace()
+    raw_loc.info['bads'] = bads
+    raw_imgloc.info['bads'] = bads
+    raw_1obj.info['bads'] = bads
+    raw_2obj.info['bads'] = bads
+
 md_loc = pd.concat(md_loc)
 md_imgloc = pd.concat(md_imgloc)
 md_1obj = pd.concat(md_1obj)
@@ -271,38 +317,64 @@ md_2obj = pd.concat(md_2obj)
 
 if args.overwrite:
     tmin, tmax = tmin_tmax_dict['localizer']
-    epochs_loc = mne.Epochs(raw_loc, events_loc, event_id=TRIG_DICT['localizer_trial_start'], tmin=tmin, tmax=tmax, metadata=md_loc)
-    epochs_loc = epochs_loc.decimate(10)
+    epochs_loc = mne.Epochs(raw_loc, events_loc, event_id=TRIG_DICT['localizer_trial_start'], tmin=tmin, tmax=tmax, metadata=md_loc, preload=True)
+    # epochs_loc = epochs_loc.decimate(10)
+    if args.ch_var_reject:
+        # detect and reject bad epochs
+        bad_epochs = get_deviant_epo(epochs_loc, thresh=args.ch_var_reject)
+        epochs_loc = reject_bad_epochs(epochs_loc, bad_epochs)
     epochs_loc.save(f"{out_dir}/localizer-epo.fif", overwrite=True)
+    
+    # imgloc
     tmin, tmax = tmin_tmax_dict['imgloc']
-    epochs_imgloc = mne.Epochs(raw_imgloc, events_imgloc, event_id=TRIG_DICT['imgloc_trial_start'], tmin=tmin, tmax=tmax, metadata=md_imgloc)
-    epochs_imgloc = epochs_imgloc.decimate(10)
+    epochs_imgloc = mne.Epochs(raw_imgloc, events_imgloc, event_id=TRIG_DICT['imgloc_trial_start'], tmin=tmin, tmax=tmax, metadata=md_imgloc, preload=True)
+    # epochs_imgloc = epochs_imgloc.decimate(10)
+    if args.ch_var_reject:
+        # detect and reject bad epochs
+        bad_epochs = get_deviant_epo(epochs_imgloc, thresh=args.ch_var_reject)
+        epochs_imgloc = reject_bad_epochs(epochs_imgloc, bad_epochs)
     epochs_imgloc.save(f"{out_dir}/imgloc-epo.fif", overwrite=True)
+    
+    # one_object 
     tmin, tmax = tmin_tmax_dict['one_object']
-    epochs_1obj = mne.Epochs(raw_1obj, events_1obj, event_id=TRIG_DICT['one_object_trial_start'], tmin=tmin, tmax=tmax, metadata=md_1obj)
-    epochs_1obj = epochs_1obj.decimate(10)
+    epochs_1obj = mne.Epochs(raw_1obj, events_1obj, event_id=TRIG_DICT['one_object_trial_start'], tmin=tmin, tmax=tmax, metadata=md_1obj, preload=True)
+    # epochs_1obj = epochs_1obj.decimate(10)
+    if args.ch_var_reject:
+        # detect and reject bad epochs
+        bad_epochs = get_deviant_epo(epochs_1obj, thresh=args.ch_var_reject)
+        epochs_1obj = reject_bad_epochs(epochs_1obj, bad_epochs)
     epochs_1obj.save(f"{out_dir}/one_object-epo.fif", overwrite=True)
+    
+    # two_objects
     tmin, tmax = tmin_tmax_dict['two_objects']
-    epochs_2obj = mne.Epochs(raw_2obj, events_2obj, event_id=TRIG_DICT['two_objects_trial_start'], tmin=tmin, tmax=tmax, metadata=md_2obj)
-    epochs_2obj = epochs_2obj.decimate(10)
+    epochs_2obj = mne.Epochs(raw_2obj, events_2obj, event_id=TRIG_DICT['two_objects_trial_start'], tmin=tmin, tmax=tmax, metadata=md_2obj, preload=True)
+    # epochs_2obj = epochs_2obj.decimate(10)
+    if args.ch_var_reject:
+        # detect and reject bad epochs
+        bad_epochs = get_deviant_epo(epochs_2obj, thresh=args.ch_var_reject)
+        epochs_2obj = reject_bad_epochs(epochs_2obj, bad_epochs)
     epochs_2obj.save(f"{out_dir}/two_objects-epo.fif", overwrite=True)
 
 
 evo_loc = epochs_loc.average()
 evo_loc.plot(spatial_colors=True, show=True)
 plt.savefig(f'{out_dir_plots}/epochs_loc.png')
+plt.close()
 
 evo_imgloc = epochs_imgloc.average()
 evo_imgloc.plot(spatial_colors=True, show=True)
 plt.savefig(f'{out_dir_plots}/epochs_imgloc.png')
+plt.close()
 
 evo_1obj = epochs_1obj.average()
 evo_1obj.plot(spatial_colors=True, show=True)
 plt.savefig(f'{out_dir_plots}/epochs_1obj.png')
+plt.close()
 
 evo_2obj = epochs_2obj.average()
 evo_2obj.plot(spatial_colors=True, show=True)
 plt.savefig(f'{out_dir_plots}/epochs_2obj.png')
+plt.close()
 
 plt.show()
 plt.pause(0.1)

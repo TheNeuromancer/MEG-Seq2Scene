@@ -1,5 +1,4 @@
-Epochs2: 1-60hz, decim to 100hz
-
+Epoch: 1-60hz, th-ch=20 th-epo=5, deleting all projections instead of applying them, recalibration between runs, sfreq=100hz
 
 do not take hte diag but average a few points around it.
 
@@ -13,3 +12,9 @@ Decoding:
  v8: imgloc with both words and images - forget about it 
 
  add a string to filenames in order to facilitate the aggregation of results?
+
+
+
+Forget about block design and include all conditions with the task into a single block type. Could help with generalization issues.
+
+train on blocks of 100ms and then gen? or on the whole window, then gen with rolling window
