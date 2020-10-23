@@ -25,6 +25,7 @@ parser.add_argument('--show', default=False, action='store_true', help='Whether 
 parser.add_argument('--ch-var-reject', default=0, type=int, help='whether to reject channels based on temporal variance')
 parser.add_argument('--epo-var-reject', default=0, type=int, help='whether to reject epochs based on temporal variance')
 parser.add_argument('--ref-run', default=8, type=int, help='reference run for head position for maxwell filter')
+parser.add_argument('--run-ica', default=False, action='store_true', help='(re-)run the ICA"')
 
 parser.add_argument('--pass-fosca', default=False, action='store_true', help='exceptions for the first pilot"')
 
@@ -53,20 +54,7 @@ if args.subject == "fosca":
                  "image": 20}
 
 elif args.subject == "theo":
-    TRIG_DICT = {"imglocalizer_block_start": 70,
-                 "localizer_block_start": 50,
-                 "one_object_block_start": 100,
-                 "two_objects_block_start": 200, 
-                 "imgloc_trial_start": 75,
-                 "localizer_trial_start": 55,
-                 "one_object_trial_start": 105,
-                 "two_objects_trial_start": 205,
-                 "imglocalizer_pause_start": 80,
-                 "localizer_pause_start": 60,
-                 "one_object_pause_start": 110,
-                 "two_objects_pause_start": 210,
-                 "new_word": 10, "image": 20, 
-                 "correct": 30, "wrong": 40}
+    pass # don't do anything because the correct TRIG_DICT is in utils/params.py
 
 in_dir = op.join(args.root_path + '/Data', 'orig', args.subject)
 all_runs_fns = glob(in_dir + '/*run*.fif')
@@ -317,7 +305,7 @@ md_2obj = pd.concat(md_2obj)
 
 if args.overwrite:
     tmin, tmax = tmin_tmax_dict['localizer']
-    epochs_loc = mne.Epochs(raw_loc, events_loc, event_id=TRIG_DICT['localizer_trial_start'], tmin=tmin, tmax=tmax, metadata=md_loc, preload=True)
+    epochs_loc = mne.Epochs(raw_loc, events_loc, event_id=TRIG_DICT['localizer_trial_start'], tmin=tmin-1., tmax=tmax+1., metadata=md_loc, preload=True)
     # epochs_loc = epochs_loc.decimate(10)
     if args.ch_var_reject:
         # detect and reject bad epochs
@@ -327,7 +315,7 @@ if args.overwrite:
     
     # imgloc
     tmin, tmax = tmin_tmax_dict['imgloc']
-    epochs_imgloc = mne.Epochs(raw_imgloc, events_imgloc, event_id=TRIG_DICT['imgloc_trial_start'], tmin=tmin, tmax=tmax, metadata=md_imgloc, preload=True)
+    epochs_imgloc = mne.Epochs(raw_imgloc, events_imgloc, event_id=TRIG_DICT['imgloc_trial_start'], tmin=tmin-1., tmax=tmax+1., metadata=md_imgloc, preload=True)
     # epochs_imgloc = epochs_imgloc.decimate(10)
     if args.ch_var_reject:
         # detect and reject bad epochs
@@ -337,7 +325,7 @@ if args.overwrite:
     
     # one_object 
     tmin, tmax = tmin_tmax_dict['one_object']
-    epochs_1obj = mne.Epochs(raw_1obj, events_1obj, event_id=TRIG_DICT['one_object_trial_start'], tmin=tmin, tmax=tmax, metadata=md_1obj, preload=True)
+    epochs_1obj = mne.Epochs(raw_1obj, events_1obj, event_id=TRIG_DICT['one_object_trial_start'], tmin=tmin-1., tmax=tmax+1., metadata=md_1obj, preload=True)
     # epochs_1obj = epochs_1obj.decimate(10)
     if args.ch_var_reject:
         # detect and reject bad epochs
@@ -347,7 +335,7 @@ if args.overwrite:
     
     # two_objects
     tmin, tmax = tmin_tmax_dict['two_objects']
-    epochs_2obj = mne.Epochs(raw_2obj, events_2obj, event_id=TRIG_DICT['two_objects_trial_start'], tmin=tmin, tmax=tmax, metadata=md_2obj, preload=True)
+    epochs_2obj = mne.Epochs(raw_2obj, events_2obj, event_id=TRIG_DICT['two_objects_trial_start'], tmin=tmin-1., tmax=tmax+1., metadata=md_2obj, preload=True)
     # epochs_2obj = epochs_2obj.decimate(10)
     if args.ch_var_reject:
         # detect and reject bad epochs

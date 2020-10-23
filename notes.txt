@@ -1,4 +1,4 @@
-Epoch: 1-60hz, th-ch=20 th-epo=5, deleting all projections instead of applying them, recalibration between runs, sfreq=100hz
+Epoch: 1-60hz, th-ch=20 th-epo=5, deleting all projections instead of applying them, recalibration between runs, sfreq=100hz, rejecting EOG with ICA
 
 do not take hte diag but average a few points around it.
 
@@ -8,8 +8,9 @@ Decoding:
  v4: one_object testing all combination of negative trials.
  v5: imgloc images
  v6: all orig
- v7: imgloc with images. one objects with match
- v8: imgloc with both words and images - forget about it 
+ v7: now classic with wrong tmintmax
+ v8: with correct tmintmax
+
 
  add a string to filenames in order to facilitate the aggregation of results?
 

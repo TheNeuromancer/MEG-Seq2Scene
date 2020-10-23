@@ -833,8 +833,12 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
     train_word_onsets, train_image_onset = get_onsets(train_cond)
     if gen_cond is not None: # mean it is a generalization
         word_onsets, image_onset = get_onsets(gen_cond)
+        orientation = "horizontal"
+        shrink = 0.7
     else:
         word_onsets, image_onset = train_word_onsets, train_image_onset
+        orientation = "vertical"
+        shrink = 1.
 
     n_times_train = data_mean.shape[0]
     n_times_test = data_mean.shape[1]
@@ -855,7 +859,7 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
     # FULL TIMEGEN PLOT
     fig, ax = plt.subplots()
     plt.imshow(data_mean, norm=divnorm, cmap='bwr', origin='lower', extent=[test_tmin, test_tmax, train_tmin, train_tmax])
-    cbar = plt.colorbar()
+    cbar = plt.colorbar(orientation=orientation, shrink=shrink)
     cbar.set_label(ylabel)
     plt.xlabel("Testing time (s)")
     plt.ylabel("Training time (s)")
@@ -882,7 +886,7 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
         cmap = plt.cm.get_cmap('plasma', len(slices))
         # add colored line to th matrix plot
         for i_slice, sli in enumerate(slices):
-            plt.axhline(y=sli, linestyle='--', alpha=.9, color=cmap(i_slice))
+            plt.axhline(y=sli, linestyle=':', alpha=.9, color=cmap(i_slice))
         plt.savefig(out_fn + '_wslices.png')
         plt.close()
 
@@ -895,14 +899,16 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
              fig.axes[0].axvline(x=img_onset, linestyle='-', color='k')
 
         for i_slice, sli in enumerate(slices):
-            data_mean_line = data_mean[(np.abs(times_train - sli)).argmin()]
+            # data_mean_line = data_mean[(np.abs(times_train - sli)).argmin()]
+            line_idx = (np.abs(times_train - sli)).argmin()
+            data_mean_line = np.mean(data_mean[line_idx-5:line_idx+5], 0)
             
             # vertical dashed line for time reference
             if gen_cond is None:
-                plt.axvline(x=sli, color=cmap(i_slice), linestyle='--', alpha=.5)
+                plt.axvline(x=sli, color=cmap(i_slice), linestyle=':', alpha=.7)
 
             # actual trace plot
-            plt.plot(times_test, data_line, label=str(sli)+'s', color=cmap(i_slice))
+            plt.plot(times_test, data_mean_line, label=str(sli)+'s', color=cmap(i_slice))
             # plt.fill_between(times, data_line-std, data_line+std, color=cmap(i_slice), alpha=0.2)
 
             # Compute statistic
@@ -915,7 +921,7 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
             #         # without std, put the hlines closer to the curves
             #         plt.plot(times_test[cluster], np.ones_like(times[cluster])*(max_auc+0.02+0.01*i_slice), color=cmap(i_slice))
 
-        plt.legend(title='training time')
+        plt.legend(title='training time', loc='upper right')
         plt.axhline(y=0.5, color='k', linestyle='-', alpha=.3)
         plt.ylabel(ylabel)
         plt.xlabel("Time (s)")            

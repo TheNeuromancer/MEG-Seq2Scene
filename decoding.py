@@ -50,7 +50,7 @@ parser.add_argument('--test-query-2', help='Metadata query for testing classes')
 parser.add_argument('--train-cond', default='localizer', help='localizer, one_object or two_objects')
 parser.add_argument('--test-cond', default=[], action='append', help='localizer, one_object or two_objects')
 
-parser.add_argument('--label', default=None, help='help to identify the result latter')
+parser.add_argument('--label', default='', help='help to identify the result latter')
 
 print(mne.__version__)
 args = parser.parse_args()

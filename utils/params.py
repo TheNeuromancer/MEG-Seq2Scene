@@ -16,3 +16,9 @@ TRIG_DICT = {"imglocalizer_block_start": 70,
              "two_objects_pause_start": 210,
              "new_word": 10, "image": 20, 
              "correct": 30, "wrong": 40}
+
+
+ica_eog = {"theo_one_object": [0,1,2], 
+           "theo_localizer": [0],
+           "theo_imgloc": [0],
+           "theo_two_objects": [0,1]}
