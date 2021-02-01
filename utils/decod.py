@@ -32,16 +32,16 @@ from scipy.ndimage import gaussian_filter1d
 from .params import *
 
 
-short_to_long_cond = {"loc": "localizer", "imgloc": "image_localizer", "one_obj": "one_object", "two_obj": "two_objects",
-                      "localizer": "localizer", "image_localizer":"image_localizer", "one_object":"one_object"}
+short_to_long_cond = {"loc": "localizer", "one_obj": "one_object", "two_obj": "two_objects",
+                      "localizer": "localizer", "one_object":"one_object"}
 
 
 def get_onsets(cond):
     """ get the word and image onsets depending on the condition
     """
-    SOA_dict = {"localizer": .65, "imgloc": .9, "one_object": .65, "two_objects": .65}
-    delay_dict = {"localizer": None, "imgloc": None, "one_object": 1., "two_objects": 2.}
-    nwords_dict = {"localizer": 1, "imgloc": 1, "one_object": 2, "two_objects": 5}
+    SOA_dict = {"localizer": .9, "one_object": .65, "two_objects": .65}
+    delay_dict = {"localizer": None, "one_object": 1., "two_objects": 2.}
+    nwords_dict = {"localizer": 1, "one_object": 2, "two_objects": 5}
 
     SOA = SOA_dict[cond]
     delay = delay_dict[cond]
@@ -60,7 +60,7 @@ def get_onsets(cond):
 
 
 def get_out_fn(args, dirname='Decoding'):
-    out_dir = f'{args.root_path}/Results/{dirname}_v{args.version}/{args.out_dir}/{args.subject}'
+    out_dir = f'{args.root_path}/Results/{dirname}_v{args.version}/{args.epochs_dir}/{args.subject}'
 
     # C_string = f'_{args.C}C'
     # cat_string = '_' + str(args.cat) + "cat" if not args.mean else '_' + str(args.cat) + "mean"
@@ -133,7 +133,7 @@ def get_paths(args, dirname='Decoding'):
 
     subject_string = args.subject if args.subject!='grand' else ''
 
-    in_dir = op.join(args.root_path + args.in_dir, subject_string)
+    in_dir = f"{args.root_path}/Data/{args.epochs_dir}/{subject_string}"
     print("\nGetting training filename:")
     print(in_dir + f'/{args.train_cond}*-epo.fif')
     train_fn = natsorted(glob(in_dir + f'/{args.train_cond}*-epo.fif'))
@@ -155,7 +155,7 @@ def get_paths(args, dirname='Decoding'):
     print(f'sleeping {rand_time} seconds to desynchronize parallel scripts')
     time.sleep(rand_time)
     
-    out_dir = f'{args.root_path}/Results/{dirname}_v{args.version}/{args.out_dir}/{args.subject}'
+    out_dir = f'{args.root_path}/Results/{dirname}_v{args.version}/{args.epochs_dir}/{args.subject}'
     if not op.exists(out_dir):
         print('Constructing output directory')
         os.makedirs(out_dir)
@@ -203,10 +203,10 @@ def load_data(args, fn, query_1, query_2):
         # bandpass filter
         epochs = [epo.filter(fmin, fmax, n_jobs=-1) for epo in epochs]  
 
-    print(f"starting resampling from {epochs[0].info['sfreq']} to {args.sfreq} ... ")
     if args.sfreq < epochs[0].info['sfreq']: 
+        print(f"starting resampling from {epochs[0].info['sfreq']} to {args.sfreq} ... ")
         epochs = [epo.resample(args.sfreq) for epo in epochs]
-    print("finished resampling ... ")
+        print("finished resampling ... ")
 
     data = [epo.data if isinstance(epo, mne.time_frequency.EpochsTFR) else epo.get_data() for epo in epochs]
 
@@ -283,10 +283,6 @@ def load_data(args, fn, query_1, query_2):
     if args.baseline:
         print('baselining...')
         epochs = [epo.apply_baseline((args.tmin, 0)) for epo in epochs]
-
-    if args.mask_baseline:
-        print('baselining from mask to first word onset...')
-        epochs = [epo.apply_baseline((0, 0.4)) for epo in epochs]
 
 
     test_split_query_indices = []
@@ -468,95 +464,6 @@ def decode(args, X, y, clf, n_times, test_split_query_indices):
         all_models = get_averaged_clf(args, all_models, n_times)
 
     return all_models, AUC, AUC_test_query_split
-
-
-
-# def get_sentence_representation(args, X):
-#     ## get the representation of each word
-#     t_start = int(0.0*args.sfreq)
-#     t_stop = int(0.4*args.sfreq)
-#     word_onsets = (np.array([4.2, 4.4, 4.6, 4.8])*args.sfreq).astype(int)
-#     # SOA = 0.4 # 400ms between 2 word onsets
-#     # word_onsets = (np.arange(1,10)*SOA*args.sfreq).astype(int) # 8 words + an onset after the sentence
-#     word_dat = []
-#     for won in word_onsets:
-#         word_dat.append(np.mean(X[:,:,won+t_start:won+t_stop], axis=2))
-#     X = np.concatenate(word_dat, axis=1)
-#     return X
-
-
-# def decode_all_sentence(args, X, y, clf, n_times, test_split_query_indices):
-#     X = get_sentence_representation(args, X)
-
-#     if args.crossval == 'shufflesplit':
-#         cv = StratifiedShuffleSplit(n_splits=args.n_folds, test_size=0.5)
-#     elif args.crossval == 'kfold':
-#         cv = StratifiedKFold(n_splits=args.n_folds, shuffle=False) # do not shuffle here!! 
-#         # that is because we stored the indices of the queries we want to split at test time.
-#         # plus we shuffle during the data loading
-#     else:
-#         print('unknown specified cross-validation scheme ... exiting')
-#         raise
-    
-#     if args.reduc_dim:
-#         pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
-#     else:
-#         pipeline = make_pipeline(RobustScaler(), clf)
-
-#     all_models = []
-#     AUC = 0
-#     mean_preds = 0
-#     if test_split_query_indices: # split the test indices according to the query
-#         AUC_test_query_split = np.zeros(len(test_split_query_indices))
-#         mean_preds_test_query_split = np.zeros(len(test_split_query_indices))
-#     else:
-#         AUC_test_query_split = None
-#         mean_preds_test_query_split = None
-
-#     for train, test in cv.split(X, y):
-#         pipeline.fit(X[train, :], y[train])
-#         all_models.append(deepcopy(pipeline))
-#         if test_split_query_indices: # split the test indices according to the query
-#             for i_query, split_indices in enumerate(test_split_query_indices):
-#                 test_query = test[np.isin(test, split_indices)]
-#                 pred = predict(pipeline, X[test_query, :])
-#                 AUC_test_query_split[i_query] += roc_auc_score(y_true=y[test_query], y_score=pred) / args.n_folds
-#                 mean_preds_test_query_split[i_query] += np.mean(pred) / args.n_folds
-            
-#         # normal test
-#         pred = predict(pipeline, X[test, :])
-#         AUC += roc_auc_score(y_true=y[test], y_score=pred) / args.n_folds
-#         mean_preds += np.mean(pred) / args.n_folds
-
-#     print(AUC)
-
-#     return all_models, AUC, AUC_test_query_split, mean_preds, mean_preds_test_query_split
-
-
-# def decode_all_sentence_permute(args, X, y, clf, n_times, test_split_query_indices):
-#     X = get_sentence_representation(args, X)
-
-#     if args.crossval == 'shufflesplit':
-#         cv = StratifiedShuffleSplit(n_splits=args.n_folds, test_size=0.5)
-#     elif args.crossval == 'kfold':
-#         cv = StratifiedKFold(n_splits=args.n_folds, shuffle=False) # do not shuffle here!! 
-#         # that is because we stored the indices of the queries we want to split at test time.
-#         # plus we shuffle during the data loading
-#     else:
-#         print('unknown specified cross-validation scheme ... exiting')
-#         raise
-    
-#     if args.reduc_dim:
-#         pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
-#     else:
-#         pipeline = make_pipeline(RobustScaler(), clf)
-
-#     AUC, perm_scores, pvalue = permutation_test_score(pipeline, X, y, scoring="roc_auc", 
-#                                             cv=cv, n_permutations=1000, n_jobs=-2)
-#     print(AUC, pvalue)
-
-#     return pvalue, AUC
-
 
 
 def get_averaged_clf(args, all_models, n_times):

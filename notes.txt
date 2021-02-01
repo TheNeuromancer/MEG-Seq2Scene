@@ -1,4 +1,5 @@
 Epoch: 1-60hz, th-ch=20 th-epo=5, deleting all projections instead of applying them, recalibration between runs, sfreq=100hz, rejecting EOG with ICA
+Epochs2: 0.1-80hz, th-ch=20 th-epo=5
 
 do not take hte diag but average a few points around it.
 
@@ -9,13 +10,33 @@ Decoding:
  v5: imgloc images
  v6: all orig
  v7: now classic with wrong tmintmax
- v8: with correct tmintmax
+ v8: with correct tmintmax filter = 1-60hz
+v9: decoder carré vs autres formes dans le localizer, pas vs tous les autres mots.
+passe haut à 0.1 pour avoir plus de chance de voir les effets soutenus. - >fitler 0.03-80
+Entrainer sur imgloc IMG and test on imgloc WORDS.
+Entrainer décodage couleur sur 2 obj. Utiliser toutes les époques ? ie couleur sur le 1er et sur le 2eme objet ?
+Splitter par match/nonmatch pour le décodage (dès l'entrainement), car on teste des choses différentes.
 
+pooler les essais du loc et de 1obj pour améliorer la generalization.
 
- add a string to filenames in order to facilitate the aggregation of results?
-
-
-
-Forget about block design and include all conditions with the task into a single block type. Could help with generalization issues.
 
 train on blocks of 100ms and then gen? or on the whole window, then gen with rolling window
+
+
+Meeting 27-10-20:
+Mesure résumée : pool par fenetre après chaque mot et moyenne
+La généralisation est-elle "diagonale" après le mot, ou bien off-diagonale ? Si on a un processing très différent on peut s'attendre a du off-diagonale. 
+Decoder la position des mots ? Ou bien l'inclure dans la RSA. 
+Inclure un flash sur tout l'écran, un truc gris ou salt and pepper, sur la moitié des essais, 500ms avant l'image. 
+Figure finale : on veut un truc a la JR ou a la Pedro avec un timecourse par propriété d'interet: forme1, couleur1, relation, forme2, couleur2, objet individuels, match/nonmatch 
+Trace de la prédiction pour chaque décodeur : quand est-ce que la perf est bonne ET quand est-ce qu'on a une réactivation. On peut les moyenner comme on le fait pour l'AUC. 
+Quand on a une réactivation, est ce qu'elle est jointe pour nom et adj (forme et couleur), ou bien séparée ? Quel délai ? Comment sont ségrégées les réactivations d'un objet et de l'autre ? => binding problem.
+
+
+Discuter quel type de flash avec JR et Stan, puis le tester à NS et ensuite tout laisser bien propre pour la reprise. 
+
+
+FLASH
+
+
+make ICA separately for each block!!!

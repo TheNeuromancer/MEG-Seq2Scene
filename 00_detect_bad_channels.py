@@ -11,24 +11,25 @@ import argparse
 import pandas as pd
 import pickle
 import numpy as np
+import importlib
 
 from utils.params import *
 from utils.reject import *
 
-parser = argparse.ArgumentParser(description='MEG basic preprocessing')
-parser.add_argument('-r', '--root-path', default='/neurospin/unicog/protocols/MEG/Seq2Scene/', help='Path to parent project folder')
-parser.add_argument('-p', '--subject', default='theo',help='subject name')
-parser.add_argument('--l_freq', default=1., type=float, help='Low-pass filter frequency (0 for only high pass')
-parser.add_argument('--h_freq', default=60, type=float, help='High_pass filter frequency(0 for only low pass)')
-parser.add_argument('--notch', default=50, type=int, help='frequency of the notch filter (0 = no notch filtering)')
-parser.add_argument('--plot', default=False, action='store_true', help='Whether to plot some channels and power spectrum')
-parser.add_argument('--ch-var-reject', default=20, type=int, help='whether to reject channels based on temporal variance')
-
-### TODO: OPTIONALLY PASS A LIST OF BAD MEG SENSORS AS ARGUMENT? OR A PATH TO A TXT OR CSV FILE CONTAINING THE BAD SENSORS
-
-print(mne.__version__)
+parser = argparse.ArgumentParser(description='Load and convert to MNE Raw, then preprocess, make Epochs and save')
+parser.add_argument('-c', '--config', default='config', help='path to config file')
+parser.add_argument('-s', '--subject', default='js180232',help='subject name')
+parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
+# parser.add_argument('--plot', default=False, action='store_true', help='Whether to plot some channels and power spectrum')
+# parser.add_argument('--show', default=False, action='store_true', help='Whether to show some channels and power spectrum ("need to be locally or ssh -X"')
 args = parser.parse_args()
+
+# import config parameters
+config = importlib.import_module(f"configs.{args.config}", "Config").Config()
+# update argparse with arguments from the config
+for arg in vars(config): setattr(args, arg, getattr(config, arg))
 print(args)
+
 
 in_dir = op.join(args.root_path + '/Data', 'orig', args.subject)
 all_runs_fns = glob(in_dir + '/*run*.fif')

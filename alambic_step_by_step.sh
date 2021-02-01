@@ -42,7 +42,7 @@ do
 cat <<EOT >> $file_qsub
 #!/bin/bash
 #PBS -N $i
-#PBS -l walltime=19:59:00
+#PBS -l walltime=09:59:00
 #PBS -l ncpus=1
 #PBS -l mem=5G
 #PBS -q Nspin_long

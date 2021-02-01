@@ -1,78 +1,83 @@
-for subject in theo
+for sub in js180232 #$(python configs/config.py)
 do
 	# for freq_band in low_high low_low high_low high_vlow low_vlow low_vhigh high_vhigh vhigh_vhigh vhigh_high vhigh_low
 	# do
 
-for colour in rouge bleu vert
-do
-	# train on localizer
-	echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'localizer' --label Colour \
---test-cond 'one_object' --test-cond 'two_objects' \
--w --timegen -s $subject --sfreq 100 \
---train-query-1 \"Loc_word=='$colour'\" \
---train-query-2 \"Loc_word!='$colour'\" \
---test-query-1 \"Colour1=='$colour'\" \
---test-query-2 \"Colour1!='$colour'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+declare -a all_colours
+all_colours[0]="rouge;bleu;vert"
+all_colours[1]="vert;rouge;bleu"
+all_colours[2]="bleu;vert;rouge"
 
-	# train on imglocalizer
-	echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'imgloc' --label Colour \
---test-cond 'one_object' --test-cond 'two_objects' \
--w --timegen -s $subject --sfreq 100 \
---train-query-1 \"Loc_word=='$colour'\" \
---train-query-2 \"Loc_word!='$colour'\" \
---test-query-1 \"Colour1=='$colour'\" \
---test-query-2 \"Colour1!='$colour'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+for colours in "${all_colours[@]}" # loop over all combinations of colours (the first one is the train label, the other two are for negatvie examples)
+do
+	IFS=";" read -r -a colours <<< "${colours}" # from string to array
+
+	# train on localizer - colours only
+	echo "python decoding.py --train-cond 'localizer' --label Colour \
+--test-cond 'one_object' --test-cond 'two_objects' -w --timegen -s $sub \
+--train-query-1 \"Loc_word=='${colours[0]}'\" \
+--train-query-2 \"Loc_word in ['${colours[1]}', '${colours[2]}']\" \
+--test-query-1 \"Colour1=='${colours[0]}'\" \
+--test-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\""
 
 	# train on one object
-	echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'one_object' --label Colour \
--w --timegen -s $subject --sfreq 100 --test-cond 'two_objects' \
---train-query-1 \"Colour1=='$colour'\" \
---train-query-2 \"Colour1!='$colour'\" \
---test-query-1 \"Colour1=='$colour'\" \
---test-query-2 \"Colour1!='$colour'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+	echo "python decoding.py \
+ --train-cond 'one_object' --label Colour \
+-w --timegen -s $sub --test-cond 'two_objects' \
+--train-query-1 \"Colour1=='${colours[0]}'\" \
+--train-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\" \
+--test-query-1 \"Colour1=='${colours[0]}'\" \
+--test-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\""
+
+	# train on two objects
+	echo "python decoding.py \
+ --train-cond 'two_objects' --label Colour \
+-w --timegen -s $sub --test-cond 'one_object' \
+--train-query-1 \"Colour1=='${colours[0]}'\" \
+--train-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\" \
+--test-query-1 \"Colour1=='${colours[0]}'\" \
+--test-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\""	
+
 
 done
 
 
-for shape in carre cercle triangle
-do
-	# train on localizer
-	echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'localizer' --label Shape \
---test-cond 'one_object' --test-cond 'two_objects' \
--w --timegen -s $subject --sfreq 100 \
---train-query-1 \"Loc_word=='$shape'\" \
---train-query-2 \"Loc_word!='$shape'\" \
---test-query-1 \"Shape1=='$shape'\" \
---test-query-2 \"Shape1!='$shape'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+#### SHAPES ####
+declare -a all_shapes
+all_shapes[0]="carre;cercle;triangle"
+all_shapes[1]="triangle;carre;cercle"
+all_shapes[2]="cercle;triangle;carre"
 
-	# train on imglocalizer
-	echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'imgloc' --label Shape \
---test-cond 'one_object' --test-cond 'two_objects' \
--w --timegen -s $subject --sfreq 100 \
---train-query-1 \"Loc_word=='$shape'\" \
---train-query-2 \"Loc_word!='$shape'\" \
---test-query-1 \"Shape1=='$shape'\" \
---test-query-2 \"Shape1!='$shape'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+for shapes in "${all_shapes[@]}" # loop over all combinations of shapes (the first one is the train label, the other two are for negatvie examples)
+do
+	IFS=";" read -r -a shapes <<< "${shapes}" # from string to array
+
+	# train on localizer
+	echo "python decoding.py --train-cond 'localizer' --label Shape \
+--test-cond 'one_object' --test-cond 'two_objects' -w --timegen -s $sub \
+--train-query-1 \"Loc_word=='${shapes[0]}'\" \
+--train-query-2 \"Loc_word in ['${shapes[1]}', '${shapes[2]}']\" \
+--test-query-1 \"Shape1=='${shapes[0]}'\" \
+--test-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\""
 
 	# train on one object
-	echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'one_object' --label Shape \
--w --timegen -s $subject --sfreq 100 --test-cond 'two_objects' \
---train-query-1 \"Shape1=='$shape'\" \
---train-query-2 \"Shape1!='$shape'\" \
---test-query-1 \"Shape1=='$shape'\" \
---test-query-2 \"Shape1!='$shape'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+	echo "python decoding.py \
+ --train-cond 'one_object' --label Shape \
+-w --timegen -s $sub --test-cond 'two_objects' \
+--train-query-1 \"Shape1=='${shapes[0]}'\" \
+--train-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\" \
+--test-query-1 \"Shape1=='${shapes[0]}'\" \
+--test-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\""
+
+	# train on two objects
+	echo "python decoding.py \
+ --train-cond 'two_objects' --label Shape \
+-w --timegen -s $sub --test-cond 'one_object' \
+--train-query-1 \"Shape1=='${shapes[0]}'\" \
+--train-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\" \
+--test-query-1 \"Shape1=='${shapes[0]}'\" \
+--test-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\""
+
 done
 
 
@@ -82,158 +87,114 @@ for colour in rouge bleu vert
 do
 	for shape in carre cercle triangle
 	do
-
 			# train on all other trials, gen to first object
-			echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'one_object' --label AllObject \
--w --timegen -s $subject --sfreq 100 --test-cond 'two_objects' \
+			echo "python decoding.py \
+--train-cond 'one_object' --label AllObject \
+-w --timegen -s $sub --test-cond 'two_objects' \
 --train-query-1 \"Shape1=='$shape' and Colour1=='$colour'\" \
 --train-query-2 \"Shape1!='$shape' or Colour1!='$colour'\" \
 --test-query-1 \"Shape1=='$shape' and Colour1=='$colour'\" \
---test-query-2 \"Shape1!='$shape' or Colour1!='$colour'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+--test-query-2 \"Shape1!='$shape' or Colour1!='$colour'\""
 
 		# train on all other trials, gen to second object
-			echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'one_object' --label All2ndObject \
--w --timegen -s $subject --sfreq 100 --test-cond 'two_objects' \
+			echo "python decoding.py \
+--train-cond 'one_object' --label All2ndObject \
+-w --timegen -s $sub --test-cond 'two_objects' \
 --train-query-1 \"Shape1=='$shape' and Colour1=='$colour'\" \
 --train-query-2 \"Shape1!='$shape' or Colour1!='$colour'\" \
 --test-query-1 \"Shape2=='$shape' and Colour2=='$colour'\" \
---test-query-2 \"Shape2!='$shape' or Colour2!='$colour'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+--test-query-2 \"Shape2!='$shape' or Colour2!='$colour'\""
 
 
-		# train on trials that either share the shape or the color, test on all
-			echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'one_object' --label ShareTrainObject \
--w --timegen -s $subject --sfreq 100 --test-cond 'two_objects' \
---train-query-1 \"Shape1=='$shape' and Colour1=='$colour'\" \
---train-query-2 \"(Shape1=='$shape' and Colour1!='$colour') or (Shape1!='$shape' and Colour1=='$colour')\" \
---test-query-1 \"Shape1=='$shape' and Colour1=='$colour'\" \
---test-query-2 \"Shape1!='$shape' or Colour1!='$colour'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+			## #MATCHING ONLY FROM TRANING 
+			# train on all other trials, gen to first object
+			echo "python decoding.py \
+--train-cond 'one_object' --label AllObject \
+-w --timegen -s $sub --test-cond 'two_objects' \
+--train-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='match'\" \
+--train-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='match'\" \
+--test-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='match'\" \
+--test-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='match'\""
 
-# 		# train on trials that either share the shape or the color and test on same trials
-# 			echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
-# --crossval 'kfold' --n_folds 5 --train-cond 'one_object' --label ShareTestObject \
-# -w --timegen -s $subject --sfreq 100 --test-cond 'two_objects' \
-# --train-query-1 \"Shape1=='$shape' and Colour1=='$colour'\" \
-# --train-query-2 \"(Shape1=='$shape' and Colour1!='$colour') or (Shape1!='$shape' and Colour1=='$colour')\" \
-# --test-query-1 \"Shape1=='$shape' and Colour1=='$colour'\" \
-# --test-query-2 \"(Shape1=='$shape' and Colour1!='$colour') or (Shape1!='$shape' and Colour1=='$colour')\" \
-# -i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
-
+		# train on all other trials, gen to second object
+			echo "python decoding.py \
+--train-cond 'one_object' --label All2ndObject \
+-w --timegen -s $sub --test-cond 'two_objects' \
+--train-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='match'\" \
+--train-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='match'\" \
+--test-query-1 \"Shape2=='$shape' and Colour2=='$colour' and Matching=='match'\" \
+--test-query-2 \"Shape2!='$shape' or Colour2!='$colour' and Matching=='match'\""
 
 
-# 		# train on all trials and test on match trials only to get the same image, on first or second position
-# 			echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
-# --crossval 'kfold' --n_folds 5 --train-cond 'one_object' --label MatchObject \
-# -w --timegen -s $subject --sfreq 100 --test-cond 'two_objects' \
-# --train-query-1 \"(Shape1=='$shape') and (Colour1=='$colour') and (Matching=='match')\" \
-# --train-query-2 \"(Shape1!='$shape') or (Colour1!='$colour') and (Matching=='match')\" \
-# --test-query-1 \"(Shape1=='$shape' and Colour1=='$colour') or (Shape2=='$shape' and Colour2=='$colour') and (and Matching=='match')\" \
-# --test-query-2 \"(Shape1!='$shape' or Colour1!='$colour') and (Shape2!='$shape' or Colour2=='$colour') and (and Matching=='match')\" \
-# -i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+			## # NON MATCHING ONLY
+			# train on all other trials, gen to first object
+			echo "python decoding.py \
+--train-cond 'one_object' --label AllObject \
+-w --timegen -s $sub --test-cond 'two_objects' \
+--train-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='nonmatch'\" \
+--train-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='nonmatch'\" \
+--test-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='nonmatch'\" \
+--test-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='nonmatch'\""
+
+		# train on all other trials, gen to second object
+			echo "python decoding.py \
+--train-cond 'one_object' --label All2ndObject \
+-w --timegen -s $sub --test-cond 'two_objects' \
+--train-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='nonmatch'\" \
+--train-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='nonmatch'\" \
+--test-query-1 \"Shape2=='$shape' and Colour2=='$colour' and Matching=='nonmatch'\" \
+--test-query-2 \"Shape2!='$shape' or Colour2!='$colour' and Matching=='nonmatch'\""
 
 	done
 done
 
 
-# IMG LOCALIZER IMAGES
+
+
+# IMG LOCALIZER  TRAIN ON IMAGES AND TEST ON WORDS
 for colour in rouge bleu vert
 do
-	# train on imglocalizer images 
-	echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'imgloc' --label ImgC \
---test-cond 'one_object' --test-cond 'two_objects' \
--w --timegen -s $subject --sfreq 100 \
+	echo "python decoding.py --train-cond 'localizer' --label Img2WordC \
+--test-cond 'localizer' -w --timegen -s $sub \
 --train-query-1 \"Loc_word=='img_$colour'\" \
 --train-query-2 \"Loc_word!='img_$colour'\" \
---test-query-1 \"Colour1=='$colour'\" \
---test-query-2 \"Colour1!='$colour'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+--test-query-1 \"Loc_word=='$colour'\" \
+--test-query-2 \"Loc_word!='$colour'\""
 done
-
 
 for shape in carre cercle triangle
 do
-	# train on imglocalizer
-	echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'imgloc' --label ImgS \
---test-cond 'one_object' --test-cond 'two_objects' \
--w --timegen -s $subject --sfreq 100 \
+	echo "python decoding.py --train-cond 'localizer' --label Img2WordS \
+--test-cond 'localizer' -w --timegen -s $sub \
 --train-query-1 \"Loc_word=='img_$shape'\" \
 --train-query-2 \"Loc_word!='img_$shape'\" \
---test-query-1 \"Shape1=='$shape'\" \
---test-query-2 \"Shape1!='$shape'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+--test-query-1 \"Loc_word=='$shape'\" \
+--test-query-2 \"Loc_word!='$shape'\""
 done
 
 
-
-# IMG LOCALIZER - TRAIN ON BOTH WORDS AND IMAGES
+# IMG LOCALIZER  TRAIN ON WORDS AND TEST ON IMAGES
 for colour in rouge bleu vert
 do
-	# train on imglocalizer images 
-	echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'imgloc' --label bothC \
---test-cond 'one_object' --test-cond 'two_objects' \
--w --timegen -s $subject --sfreq 100 \
---train-query-1 \"Loc_word in ['$colour', 'img_$colour']\" \
---train-query-2 \"Loc_word not in ['$colour', 'img_$colour']\" \
---test-query-1 \"Colour1=='$colour'\" \
---test-query-2 \"Colour1!='$colour'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+	echo "python decoding.py --train-cond 'localizer' --label Word2ImgC \
+--test-cond 'localizer' -w --timegen -s $sub \
+--train-query-1 \"Loc_word=='$colour'\" \
+--train-query-2 \"Loc_word!='$colour'\" \
+--test-query-1 \"Loc_word=='img_$colour'\" \
+--test-query-2 \"Loc_word!='img_$colour'\""
 done
 
 for shape in carre cercle triangle
 do
-	# train on imglocalizer
-	echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
---crossval 'kfold' --n_folds 5 --train-cond 'imgloc' --label bothS \
---test-cond 'one_object' --test-cond 'two_objects' \
--w --timegen -s $subject --sfreq 100 \
---train-query-1 \"Loc_word in ['$shape', 'img_$shape']\" \
---train-query-2 \"Loc_word not in ['$shape', 'img_$shape']\" \
---test-query-1 \"Shape1=='$shape'\" \
---test-query-2 \"Shape1!='$shape'\" \
--i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
+	echo "python decoding.py --train-cond 'localizer' --label Word2ImgS \
+--test-cond 'localizer' -w --timegen -s $sub \
+--train-query-1 \"Loc_word=='$shape'\" \
+--train-query-2 \"Loc_word!='$shape'\" \
+--test-query-1 \"Loc_word=='img_$shape'\" \
+--test-query-2 \"Loc_word!='img_$shape'\""
 done
 
 
-
-# # IMG LOCALIZER IMAGES - TEST ON MATCH ONLY (SO THAT THE IMAGES MATCH)
-# for colour in rouge bleu vert
-# do
-# 	# train on imglocalizer images 
-# 	echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
-# --crossval 'kfold' --n_folds 5 --train-cond 'imgloc' --label ImgC \
-# --test-cond 'one_object' --test-cond 'two_objects' \
-# -w --timegen -s $subject --sfreq 100 \
-# --train-query-1 \"Loc_word=='img_$colour'\" \
-# --train-query-2 \"Loc_word!='img_$colour'\" \
-# --test-query-1 \"Colour1=='$colour' and Matching=='match'\" \
-# --test-query-2 \"Colour1!='$colour' and Matching=='match'\" \
-# -i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
-# done
-
-# for shape in carre cercle triangle
-# do
-# 	# train on imglocalizer
-# 	echo "python decoding.py --baseline -v 8 --clip --smooth 5 \
-# --crossval 'kfold' --n_folds 5 --train-cond 'imgloc' --label ImgS \
-# --test-cond 'one_object' --test-cond 'two_objects' \
-# -w --timegen -s $subject --sfreq 100 \
-# --train-query-1 \"Loc_word=='img_$shape'\" \
-# --train-query-2 \"Loc_word!='img_$shape'\" \
-# --test-query-1 \"Shape1=='$shape' and Matching=='match'\" \
-# --test-query-2 \"Shape1!='$shape' and Matching=='match'\" \
-# -i \"Data/Epochs_after_ica/\" -o \"/Epochs_after_ica/\" --tmin '-0.5' --tmax 8. "
-# done
-
-
-
-# --localizer --path2loc 'Single_Chan_vs15/CMR_clean_sent' --pval-thresh 0.01 \
+# # --localizer --path2loc 'Single_Chan_vs15/CMR_clean_sent' --pval-thresh 0.01 \
 	# done
 done

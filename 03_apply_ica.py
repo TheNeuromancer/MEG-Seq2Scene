@@ -12,21 +12,28 @@ from mne.report import Report
 
 from utils.params import *
 
-# matplotlib.use('Qt5Agg')
-matplotlib.use('Agg') # no output to screen.
-
 parser = argparse.ArgumentParser(description='MEG ICA components estimation')
-parser.add_argument('-r', '--root-path', default='/neurospin/unicog/protocols/MEG/Seq2Scene/',help='Path to parent project folder')
-parser.add_argument('-i', '--in-dir', default='Epochs',help='Input directory')
-parser.add_argument('-s', '--subject', default='theo',help='subject name')
+parser.add_argument('-c', '--config', default='config', help='path to config file')
+parser.add_argument('-s', '--subject', default='js180232',help='subject name')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
-
-print(mne.__version__)
-mne.set_log_level(verbose='warning')
+parser.add_argument('--plot', default=False, action='store_true', help='Whether to plot some channels and power spectrum')
+parser.add_argument('--show', default=False, action='store_true', help='Whether to show some channels and power spectrum ("need to be locally or ssh -X"')
 args = parser.parse_args()
+
+# import config parameters
+config = importlib.import_module(f"configs.{args.config}", "Config").Config()
+# update argparse with arguments from the config
+for arg in vars(config): setattr(args, arg, getattr(config, arg))
 print(args)
 
 np.random.seed(42)
+
+import matplotlib
+if args.show:
+    matplotlib.use('Qt5Agg') # output to screen (locally or through ssh -X)
+else:
+    matplotlib.use('Agg') # no output to screen.
+import matplotlib.pyplot as plt
 
 in_dir = op.join(args.root_path, 'Data', args.in_dir, args.subject)
 all_epo_fns = sorted(glob(in_dir + f'/*-epo.fif'))

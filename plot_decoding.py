@@ -24,12 +24,12 @@ plt.rcParams['figure.dpi'] = 300
 
 parser = argparse.ArgumentParser(description='MEG ans SEEG plotting of decoding results')
 parser.add_argument('-r', '--root-path', default='/neurospin/unicog/protocols/MEG/Seq2Scene/', help='root path')
-parser.add_argument('-i', '--in-dir', default='Results/Decoding_v8/Epochs_after_ica/', help='input directory')
-parser.add_argument('-s', '--subject', default='theo',help='subject name')
+parser.add_argument('-i', '--in-dir', default='Results/Decoding_v1/Epochs/', help='input directory')
+parser.add_argument('-s', '--subject', default='js180232',help='subject name')
 parser.add_argument('-o', '--out-dir', default='/agg/', help='output directory')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
 parser.add_argument('--slices', action='store_true',  default=False, help='Whether to make horizontal slice plots of single decoder')
-parser.add_argument('--skip_for', action='store_true',  default=False, help='Whether to skip the split queries plot (eg: for_struct=2-6)')
+# parser.add_argument('--skip_for', action='store_true',  default=False, help='Whether to skip the split queries plot (eg: for_struct=2-6)')
 
 print(mne.__version__)
 args = parser.parse_args()
@@ -73,15 +73,13 @@ report = mne.report.Report()
 all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_filenames])
 
 for label in all_labels:
-    for train_cond in ["localizer", "imgloc", "one_object"]:
+    for train_cond in ["localizer", "imgloc", "one_object", "two_objects"]:
         if args.slices:
             if train_cond in ["localizer", "imgloc"]: slices = slices_loc
             if train_cond == "one_object": slices = slices_one_obj
         for match in [True, False]:
-            for gen_cond in [None, "one_object", "two_objects"]:
-                if train_cond == gen_cond: continue # skip when we both have one object, it is not generalization
-                print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} {'matching trials only' if match else ''}")
-
+            for gen_cond in [None, "localizer", "imgloc", "one_object", "two_objects"]:
+                # if train_cond == gen_cond: continue # skip when we both have one object, it is not generalization
                 all_AUC = []
                 for fn in all_filenames:
                     if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
@@ -93,7 +91,7 @@ for label in all_labels:
                         if "match" in fn: continue
                         match_str = ""
                     if gen_cond is not None:
-                        if gen_cond not in fn: continue
+                        if f"tested_on_{gen_cond}" not in fn: continue
                     else: # ensure we don't have generalization results
                         if "tested_on" in fn: continue
 
@@ -101,14 +99,17 @@ for label in all_labels:
                     all_AUC.append(np.load(fn))
 
                 if not all_AUC: 
-                    print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} {'matching trials only' if match else ''}")
+                    # print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} {'matching trials only' if match else ''}")
                     continue
+                print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} {'matching trials only' if match else ''}")
                 gen_str = f"_tested_on_{gen_cond}" if gen_cond is not None else ""
                 out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}{match_str}"
                 all_AUC = np.array(all_AUC)
                 AUC_mean = np.mean(all_AUC, 0)
                 AUC_std = np.std(all_AUC, 0)
 
+                if label == "Word2ImgC" and gen_cond=="imgloc": set_trace()
+                
                 train_tmin, train_tmax = tmin_tmax_dict[train_cond]
                 if gen_cond is not None:
                     test_tmin, test_tmax = tmin_tmax_dict[gen_cond]
@@ -132,6 +133,7 @@ for label in all_labels:
                          test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, gen_cond=gen_cond, slices=slices)
 
                 print(f"Finished {label} trained on {train_cond} with generalization {gen_cond} {'matching trials only' if match else ''}\n")
+                plt.close('all')
 
 
 
