@@ -18,7 +18,7 @@ from utils.reject import *
 
 parser = argparse.ArgumentParser(description='Load and convert to MNE Raw, then preprocess, make Epochs and save')
 parser.add_argument('-c', '--config', default='config', help='path to config file')
-parser.add_argument('-s', '--subject', default='js180232',help='subject name')
+parser.add_argument('-s', '--subject', default='03_cr170417',help='subject name')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
 # parser.add_argument('--plot', default=False, action='store_true', help='Whether to plot some channels and power spectrum')
 # parser.add_argument('--show', default=False, action='store_true', help='Whether to show some channels and power spectrum ("need to be locally or ssh -X"')
@@ -28,6 +28,7 @@ args = parser.parse_args()
 config = importlib.import_module(f"configs.{args.config}", "Config").Config()
 # update argparse with arguments from the config
 for arg in vars(config): setattr(args, arg, getattr(config, arg))
+args.subject = num2sub_name(args.subject, args.all_subjects) # get full subject name if only the number was passed as argument
 print(args)
 
 

@@ -5,10 +5,10 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "1"
+    version: str = "3"
     root_path: str = "/neurospin/unicog/protocols/MEG/Seq2Scene/"
     epochs_dir: str = "Epochs"
-    all_subjects: tuple = ('js180232')
+    all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197')
 
     # Epochs preprocessing parameters
     baseline: bool = True # apply baseline correction if True
@@ -19,8 +19,6 @@ class Config:
     h_freq: float = 100 # low-pass filter cutoff
     notch: int = 50 # land line frequency
     sfreq: int = 100 # final sampling frequency
-    tmin: float = -0.3 # final start of the epochs
-    tmax: float = 2.6 # final end time of the epochs
 
     ## Decoding parameters
     n_folds: int = 5 # number of shuffle splits
@@ -28,7 +26,7 @@ class Config:
     reduc_dim: float = 0 # dimensionality reduction
     cat: int = 0 # number of timepoints to concatenate
     mean: bool = False # Wether to average instead of concatenate if using the "cat" argument
-    smooth: int = 0 # hanning smoothing window, in timesample,
+    smooth: int = 11 # hanning smoothing window, in timesample,
     clip: bool = True # Whether to clip to the 5th and 95th percentile for each channel
     subtract_evoked: bool = False # Whether to subtract the evoked signal from the epochs
     avg_clf: bool = False # Whether to average classifiers across cval folds

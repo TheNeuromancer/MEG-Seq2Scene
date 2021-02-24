@@ -42,7 +42,7 @@ in_dir = op.join(args.root_path, 'Data', args.epochs_dir, args.subject)
 all_epo_fns = sorted(glob(in_dir + f'/*-epo.fif'))
 print(all_epo_fns)
 out_dir = op.join(args.root_path, 'Data', f'ICA_{args.epochs_dir}', args.subject)
-set_trace()
+
 ## make output dir
 if not op.exists(out_dir):
             os.makedirs(out_dir)

@@ -15,7 +15,7 @@ from copy import deepcopy
 from tqdm import trange
 from sklearn.preprocessing import StandardScaler, RobustScaler, label_binarize
 from sklearn.pipeline import make_pipeline
-from sklearn.linear_model import LogisticRegression, RidgeClassifier
+from sklearn.linear_model import LogisticRegression, RidgeClassifier, LogisticRegressionCV
 from sklearn.svm import SVC, LinearSVC
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.neural_network import MLPClassifier
@@ -96,6 +96,7 @@ def shorten_filename(fn):
     fn = fn.replace(',', '')
     fn = fn.replace('Colour', 'C')
     fn = fn.replace('Shape', 'S')
+    fn = fn.replace('Binding', 'Bd')
     fn = fn.replace('cercle', 'cl')
     fn = fn.replace('carre', 'ca')
     fn = fn.replace('triangle', 'tr')
@@ -274,15 +275,17 @@ def load_data(args, fn, query_1, query_2):
 
 
     # crop after getting high gammas and smoothing to avoid border issues
+    block_type = op.basename(fn[0]).split("-epo.fif")[0]
+    tmin, tmax = tmin_tmax_dict[block_type]
     print('initial tmin and tmax: ', [(epo.times[0], epo.times[-1]) for epo in epochs])
-    print('cropping to final tmin and tmax: ', args.tmin, args.tmax)
-    epochs = [epo.crop(args.tmin, args.tmax) for epo in epochs]
+    print('cropping to final tmin and tmax: ', tmin, tmax)
+    epochs = [epo.crop(tmin, tmax) for epo in epochs]
     
 
     ### BASELINING
     if args.baseline:
         print('baselining...')
-        epochs = [epo.apply_baseline((args.tmin, 0)) for epo in epochs]
+        epochs = [epo.apply_baseline((tmin, 0)) for epo in epochs]
 
 
     test_split_query_indices = []
@@ -758,9 +761,9 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
         vmax = np.max(data_mean) if np.max(data_mean) > 0.001 else 0.001
     else:
         vcenter = 0.5
-        vmin = 0.35
-        vmax = 0.7
-    divnorm = matplotlib.colors.DivergingNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
+        vmin = 0.4
+        vmax = 0.6
+    divnorm = matplotlib.colors.TwoSlopeNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
 
 
     # FULL TIMEGEN PLOT

@@ -16,9 +16,9 @@ passe haut à 0.1 pour avoir plus de chance de voir les effets soutenus. - >fitl
 Entrainer sur imgloc IMG and test on imgloc WORDS.
 Entrainer décodage couleur sur 2 obj. Utiliser toutes les époques ? ie couleur sur le 1er et sur le 2eme objet ?
 Splitter par match/nonmatch pour le décodage (dès l'entrainement), car on teste des choses différentes.
+-> back to v1 on real subjects
 
 pooler les essais du loc et de 1obj pour améliorer la generalization.
-
 
 train on blocks of 100ms and then gen? or on the whole window, then gen with rolling window
 
@@ -32,11 +32,20 @@ Figure finale : on veut un truc a la JR ou a la Pedro avec un timecourse par pro
 Trace de la prédiction pour chaque décodeur : quand est-ce que la perf est bonne ET quand est-ce qu'on a une réactivation. On peut les moyenner comme on le fait pour l'AUC. 
 Quand on a une réactivation, est ce qu'elle est jointe pour nom et adj (forme et couleur), ou bien séparée ? Quel délai ? Comment sont ségrégées les réactivations d'un objet et de l'autre ? => binding problem.
 
-
-Discuter quel type de flash avec JR et Stan, puis le tester à NS et ensuite tout laisser bien propre pour la reprise. 
-
-
-FLASH
+v1: 200hz decoding. no smoothing.
+v2: decoding at 100hz and smooting 11
+v3: Same but with half of the trials in order to check whether we can changethe design or not. 
 
 
 make ICA separately for each block!!!
+
+
+Notes on subjects quality: 
+sub03 has chance level decoding accuracy. Lots of blinks in the evoked a signals. let's see after ICA.
+
+
+Binding condition: triangle bleue vs other triangles, generalized to triangle bleue vs other triangles when the other object is blue (and optionally also not a triangle)
+
+
+Potential models: http://vrr-vg.com/
+https://github.com/facebookresearch/CoDraw

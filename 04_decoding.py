@@ -41,7 +41,9 @@ args = parser.parse_args()
 config = importlib.import_module(f"configs.{args.config}", "Config").Config()
 # update argparse with arguments from the config
 for arg in vars(config): setattr(args, arg, getattr(config, arg))
+args.subject = num2sub_name(args.subject, args.all_subjects) # get full subject name if only the number was passed as argument
 print(args)
+print("matplotlib: ", matplotlib.__version__)
 
 np.random.seed(args.seed)
 
@@ -62,13 +64,15 @@ train_tmin, train_tmax = epochs[0].tmin, epochs[0].tmax
 X, y, nchan, ch_names = get_data(args, epochs, args.sfreq)
 del epochs
 
+print("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!\n\nDropping half of the trials to check whether it still works\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
+to_keep = np.random.choice(X.shape[0], len(X)//2)
+X, y = X[to_keep], y[to_keep]
+
+
 n_times = X.shape[2]
 
-
-clf = LogisticRegression(class_weight='balanced', solver='lbfgs', max_iter=1000, verbose=False)
-# grid_logreg = {'C':np.logspace(-3, 3., 7)}
-# clf = GridSearchCV(logreg, grid_logreg, n_jobs=30, cv=5, scoring='roc_auc', iid=True)
-
+# clf = LogisticRegression(class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False)
+clf = LogisticRegressionCV(Cs=10, class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False, cv=5)
 clf = mne.decoding.LinearModel(clf)
 
 

@@ -1,0 +1,8 @@
+sub01: BADS: 1233. HPI ok, movement ok. Good signal, good subject. NO ECG NOR EOG. missed a few trials a the begining of some blocks because the subject could start the block herself, but this is correctly treated in the preproc script. 
+sub02: BADS: 1441, 2113, 1731. very good behavioral, no head movement at all but bad HPI (>5mm). Missing triggers in run1, 9 and 10. 10=last5(?). 1=sum of resp+trig75+8192=8267.
+sub03: pretty tired, low performance on the 2obj blocks. bad HPI (>5mm diff + lot of mouvement between runs)
+sub04: BADS: 2643 oubli de retirer le masque pendant le premier bloc, mais le signal est ok ... surement rien de métallique dans le masque, mais il le retire quand meme pour la suite. Un peu de mouvements de têtes au cours de l'exp, mais ça va. HPI OK. stratégie auditive, répéter la phrase au moment où la scène est présentée.
+
+
+Train classifier on trials of the same color from different blocks, ie look for what is different between runs. Negatives can be objects of different colors. 
+When training on one object, test on 2 objects when the color and shape match, versus when the color or shape is attributed to the other object. eg train on blue triangle vs anything else, test on blue triangle left of red square vs blue square left of red triangle. 
