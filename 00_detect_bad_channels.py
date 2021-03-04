@@ -45,6 +45,13 @@ n_runs = len(all_runs_fns)
 
 for i_run, raw_fn_in in enumerate(all_runs_fns):
     print("doing file ", raw_fn_in)
+    out_fn = f"{in_dir}/run{i_run+1}_bads.p"
+    if op.exists(out_fn):
+        print("output file alreay exists")
+        if args.overwrite:
+            print("Overwriting")
+        else:
+            print("Overwrite is set to false, moving on to next block")
 
     # Load data
     raw = mne.io.Raw(raw_fn_in, preload=True, verbose='error', allow_maxshield=True)
@@ -74,5 +81,5 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
     # detect and reject bad channels
     bads = get_deviant_ch(raw, thresh=args.ch_var_reject)
     
-    pickle.dump(bads, open(f"{in_dir}/run{i_run+1}_bads.p", "wb"))
+    pickle.dump(bads, open(out_fn, "wb"))
     print(f"Done with run {i_run+1}\n\n")

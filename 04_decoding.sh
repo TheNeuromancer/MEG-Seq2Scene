@@ -13,21 +13,21 @@ for colours in "${all_colours[@]}" # loop over all combinations of colours (the 
 do
 	IFS=";" read -r -a colours <<< "${colours}" # from string to array
 
-# 	# train on localizer words only
-# 	echo "python 04_decoding.py --train-cond 'localizer' --label Colour \
-# --test-cond 'one_object' --test-cond 'two_objects' -w --timegen -s $sub \
-# --train-query-1 \"Loc_word=='${colours[0]}'\" \
-# --train-query-2 \"Loc_word in ['${colours[1]}', '${colours[2]}']\" \
-# --test-query-1 \"Colour1=='${colours[0]}'\" \
-# --test-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\""
+	# train on localizer words only
+	echo "python 04_decoding.py --train-cond 'localizer' --label Colour \
+--test-cond 'one_object' --test-cond 'two_objects' -w --timegen -s $sub \
+--train-query-1 \"Loc_word=='${colours[0]}'\" \
+--train-query-2 \"Loc_word in ['${colours[1]}', '${colours[2]}']\" \
+--test-query-1 \"Colour1=='${colours[0]}'\" \
+--test-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\""
 
-# 	# train on localizer words + images
-# 	echo "python 04_decoding.py --train-cond 'localizer' --label Colour \
-# --test-cond 'one_object' --test-cond 'two_objects' -w --timegen -s $sub \
-# --train-query-1 \"Loc_word in ['${colours[0]}', 'img_${colours[0]}']\" \
-# --train-query-2 \"Loc_word in ['${colours[1]}', '${colours[2]}', 'img_${colours[1]}', 'img_${colours[2]}']\" \
-# --test-query-1 \"Colour1=='${colours[0]}'\" \
-# --test-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\""
+	# train on localizer words + images
+	echo "python 04_decoding.py --train-cond 'localizer' --label Colour \
+--test-cond 'one_object' --test-cond 'two_objects' -w --timegen -s $sub \
+--train-query-1 \"Loc_word in ['${colours[0]}', 'img_${colours[0]}']\" \
+--train-query-2 \"Loc_word in ['${colours[1]}', '${colours[2]}', 'img_${colours[1]}', 'img_${colours[2]}']\" \
+--test-query-1 \"Colour1=='${colours[0]}'\" \
+--test-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\""
 
 	# train on one object
 	echo "python 04_decoding.py \
@@ -38,14 +38,14 @@ do
 --test-query-1 \"Colour1=='${colours[0]}'\" \
 --test-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\""
 
-# 	# train on two objects
-# 	echo "python 04_decoding.py \
-#  --train-cond 'two_objects' --label Colour \
-# -w --timegen -s $sub --test-cond 'one_object' \
-# --train-query-1 \"Colour1=='${colours[0]}'\" \
-# --train-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\" \
-# --test-query-1 \"Colour1=='${colours[0]}'\" \
-# --test-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\""	
+	# train on two objects
+	echo "python 04_decoding.py \
+ --train-cond 'two_objects' --label Colour \
+-w --timegen -s $sub --test-cond 'one_object' \
+--train-query-1 \"Colour1=='${colours[0]}'\" \
+--train-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\" \
+--test-query-1 \"Colour1=='${colours[0]}'\" \
+--test-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\""	
 
 
 done
@@ -61,21 +61,21 @@ for shapes in "${all_shapes[@]}" # loop over all combinations of shapes (the fir
 do
 	IFS=";" read -r -a shapes <<< "${shapes}" # from string to array
 
-# 	# train on localizer words only
-# 	echo "python 04_decoding.py --train-cond 'localizer' --label Shape \
-# --test-cond 'one_object' --test-cond 'two_objects' -w --timegen -s $sub \
-# --train-query-1 \"Loc_word=='${shapes[0]}'\" \
-# --train-query-2 \"Loc_word in ['${shapes[1]}', '${shapes[2]}']\" \
-# --test-query-1 \"Shape1=='${shapes[0]}'\" \
-# --test-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\""
+	# train on localizer words only
+	echo "python 04_decoding.py --train-cond 'localizer' --label Shape \
+--test-cond 'one_object' --test-cond 'two_objects' -w --timegen -s $sub \
+--train-query-1 \"Loc_word=='${shapes[0]}'\" \
+--train-query-2 \"Loc_word in ['${shapes[1]}', '${shapes[2]}']\" \
+--test-query-1 \"Shape1=='${shapes[0]}'\" \
+--test-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\""
 
-# 	# train on localizer words + images
-# 	echo "python 04_decoding.py --train-cond 'localizer' --label Shape \
-# --test-cond 'one_object' --test-cond 'two_objects' -w --timegen -s $sub \
-# --train-query-1 \"Loc_word in ['${shapes[0]}', 'img_${shapes[0]}']\" \
-# --train-query-2 \"Loc_word in ['${shapes[1]}', '${shapes[2]}', 'img_${shapes[1]}', 'img_${shapes[2]}']\" \
-# --test-query-1 \"Shape1=='${shapes[0]}'\" \
-# --test-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\""
+	# train on localizer words + images
+	echo "python 04_decoding.py --train-cond 'localizer' --label Shape \
+--test-cond 'one_object' --test-cond 'two_objects' -w --timegen -s $sub \
+--train-query-1 \"Loc_word in ['${shapes[0]}', 'img_${shapes[0]}']\" \
+--train-query-2 \"Loc_word in ['${shapes[1]}', '${shapes[2]}', 'img_${shapes[1]}', 'img_${shapes[2]}']\" \
+--test-query-1 \"Shape1=='${shapes[0]}'\" \
+--test-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\""
 
 	# train on one object
 	echo "python 04_decoding.py \
@@ -86,14 +86,14 @@ do
 --test-query-1 \"Shape1=='${shapes[0]}'\" \
 --test-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\""
 
-# 	# train on two objects
-# 	echo "python 04_decoding.py \
-#  --train-cond 'two_objects' --label Shape \
-# -w --timegen -s $sub --test-cond 'one_object' \
-# --train-query-1 \"Shape1=='${shapes[0]}'\" \
-# --train-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\" \
-# --test-query-1 \"Shape1=='${shapes[0]}'\" \
-# --test-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\""
+	# train on two objects
+	echo "python 04_decoding.py \
+ --train-cond 'two_objects' --label Shape \
+-w --timegen -s $sub --test-cond 'one_object' \
+--train-query-1 \"Shape1=='${shapes[0]}'\" \
+--train-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\" \
+--test-query-1 \"Shape1=='${shapes[0]}'\" \
+--test-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\""
 
 done
 
@@ -165,44 +165,44 @@ do
 
 
 
-# 			## #MATCHING ONLY FROM TRANING 
-# 			# train on all other trials, gen to first object
-# 			echo "python 04_decoding.py \
-# --train-cond 'one_object' --label AllObject \
-# -w --timegen -s $sub --test-cond 'two_objects' \
-# --train-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='match'\" \
-# --train-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='match'\" \
-# --test-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='match'\" \
-# --test-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='match'\""
+			## #MATCHING ONLY FROM TRANING 
+			# train on all other trials, gen to first object
+			echo "python 04_decoding.py \
+--train-cond 'one_object' --label AllObject \
+-w --timegen -s $sub --test-cond 'two_objects' \
+--train-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='match'\" \
+--train-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='match'\" \
+--test-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='match'\" \
+--test-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='match'\""
 
-# 		# train on all other trials, gen to second object
-# 			echo "python 04_decoding.py \
-# --train-cond 'one_object' --label All2ndObject \
-# -w --timegen -s $sub --test-cond 'two_objects' \
-# --train-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='match'\" \
-# --train-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='match'\" \
-# --test-query-1 \"Shape2=='$shape' and Colour2=='$colour' and Matching=='match'\" \
-# --test-query-2 \"Shape2!='$shape' or Colour2!='$colour' and Matching=='match'\""
+		# train on all other trials, gen to second object
+			echo "python 04_decoding.py \
+--train-cond 'one_object' --label All2ndObject \
+-w --timegen -s $sub --test-cond 'two_objects' \
+--train-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='match'\" \
+--train-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='match'\" \
+--test-query-1 \"Shape2=='$shape' and Colour2=='$colour' and Matching=='match'\" \
+--test-query-2 \"Shape2!='$shape' or Colour2!='$colour' and Matching=='match'\""
 
 
-# 			## # NON MATCHING ONLY
-# 			# train on all other trials, gen to first object
-# 			echo "python 04_decoding.py \
-# --train-cond 'one_object' --label AllObject \
-# -w --timegen -s $sub --test-cond 'two_objects' \
-# --train-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='nonmatch'\" \
-# --train-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='nonmatch'\" \
-# --test-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='nonmatch'\" \
-# --test-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='nonmatch'\""
+			## # NON MATCHING ONLY
+			# train on all other trials, gen to first object
+			echo "python 04_decoding.py \
+--train-cond 'one_object' --label AllObject \
+-w --timegen -s $sub --test-cond 'two_objects' \
+--train-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='nonmatch'\" \
+--train-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='nonmatch'\" \
+--test-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='nonmatch'\" \
+--test-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='nonmatch'\""
 
-# 		# train on all other trials, gen to second object
-# 			echo "python 04_decoding.py \
-# --train-cond 'one_object' --label All2ndObject \
-# -w --timegen -s $sub --test-cond 'two_objects' \
-# --train-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='nonmatch'\" \
-# --train-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='nonmatch'\" \
-# --test-query-1 \"Shape2=='$shape' and Colour2=='$colour' and Matching=='nonmatch'\" \
-# --test-query-2 \"Shape2!='$shape' or Colour2!='$colour' and Matching=='nonmatch'\""
+		# train on all other trials, gen to second object
+			echo "python 04_decoding.py \
+--train-cond 'one_object' --label All2ndObject \
+-w --timegen -s $sub --test-cond 'two_objects' \
+--train-query-1 \"Shape1=='$shape' and Colour1=='$colour' and Matching=='nonmatch'\" \
+--train-query-2 \"Shape1!='$shape' or Colour1!='$colour' and Matching=='nonmatch'\" \
+--test-query-1 \"Shape2=='$shape' and Colour2=='$colour' and Matching=='nonmatch'\" \
+--test-query-2 \"Shape2!='$shape' or Colour2!='$colour' and Matching=='nonmatch'\""
 
 	done
 done

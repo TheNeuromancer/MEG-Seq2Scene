@@ -5,10 +5,11 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "3"
+    version: str = "2"
     root_path: str = "/neurospin/unicog/protocols/MEG/Seq2Scene/"
     epochs_dir: str = "Epochs"
-    all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197')
+    all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
+                           '08_ch180036', '09_jl190711', '10_ma200371')
 
     # Epochs preprocessing parameters
     baseline: bool = True # apply baseline correction if True

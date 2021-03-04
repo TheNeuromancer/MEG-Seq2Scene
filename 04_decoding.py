@@ -64,9 +64,9 @@ train_tmin, train_tmax = epochs[0].tmin, epochs[0].tmax
 X, y, nchan, ch_names = get_data(args, epochs, args.sfreq)
 del epochs
 
-print("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!\n\nDropping half of the trials to check whether it still works\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
-to_keep = np.random.choice(X.shape[0], len(X)//2)
-X, y = X[to_keep], y[to_keep]
+# print("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!\n\nDropping half of the trials to check whether it still works\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
+# to_keep = np.random.choice(X.shape[0], len(X)//2)
+# X, y = X[to_keep], y[to_keep]
 
 
 n_times = X.shape[2]

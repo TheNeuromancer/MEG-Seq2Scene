@@ -111,6 +111,7 @@ def fn2blocktype(fn):
 for i_run, raw_fn_in in enumerate(all_runs_fns):
     # if not "1obj" in raw_fn_in:
     #     continue
+    if "run10" in raw_fn_in: continue
 
     print("doing file ", raw_fn_in)
     run_nb = op.basename(raw_fn_in).split("run")[1].split("_")[0]
@@ -212,7 +213,7 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
 
     if args.plot:
         fig = mne.viz.plot_events(events, sfreq=raw.info['sfreq'], first_samp=raw.first_samp)
-        plt.savefig(f'{out_dir_plots}/run_{run_nb}_{block_type}_events.png')
+        plt.savefig(f'{out_dir_plots}/run_{run_nb}_{block_type}_events.png', dpi=500)
         plt.close()  
 
     
@@ -236,6 +237,8 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         ## HACK FOR WHEN WE MISSED A FEW TRIALS AT THE BEGINING OF THE BLOCK...
         if args.subject == "01_js180232" and "run3" in raw_fn_in:
             md = md.iloc[len(md)-len(events)::] # just skip the first few trials
+        elif args.subject == "09_jl190711" and "run2" in raw_fn_in:
+            md = md.iloc[1::] # just skip the first trial
 
         events_1obj.append(events)
         md_1obj.append(md)
