@@ -6,6 +6,8 @@ sub06: good perf, nearly no haed movement, but bliks during trials. Les pelleute
 sub07: perf ok, stratégie de répéter la phrase, HPI ok mais qq mvt de tete. travaux loin. Problem in run10_loc, missing 2 triggers, probably one between the first and second pause and one between 2nd and 3rd (sum of trial onsets between pause onsets). no clear reason, for the first one there seem to be 2 missing triggers, for no reason.
 New design!! 600ms SOA instead go 650 for objects and scenes. Flash in half of the trials. 4 2obj blocks, 4 1obj block, and 600ms -> about the same total time.
 sub08: Great perf, HPI ok, some head mvt, stratégie visuelle. Des camions passent pas loin vers la fin du bloc 6.
+sub09-10: gantry position was not "upright" so it might explain why wedon't have much signal...
+
 
 
 Train classifier on trials of the same color from different blocks, ie look for what is different between runs. Negatives can be objects of different colors. 

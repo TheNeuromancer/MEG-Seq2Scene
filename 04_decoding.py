@@ -72,7 +72,7 @@ del epochs
 n_times = X.shape[2]
 
 # clf = LogisticRegression(class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False)
-clf = LogisticRegressionCV(Cs=10, class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False, cv=5)
+clf = LogisticRegressionCV(Cs=10, class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False, cv=5, n_jobs=1)
 clf = mne.decoding.LinearModel(clf)
 
 
