@@ -2,6 +2,7 @@ sub01: BADS: 1233. HPI ok, movement ok. Good signal, good subject. NO ECG NOR EO
 sub02: BADS: 1441, 2113, 1731. very good behavioral, no head movement at all but bad HPI (>5mm). Missing triggers in run1, 9 and 10. 10=last5(?). 1=sum of resp+trig75+8192=8267.
 sub03: pretty tired, low performance on the 2obj blocks. bad HPI (>5mm diff + lot of mouvement between runs)
 sub04: BADS: 2643 oubli de retirer le masque pendant le premier bloc, mais le signal est ok ... surement rien de métallique dans le masque, mais il le retire quand meme pour la suite. Un peu de mouvements de têtes au cours de l'exp, mais ça va. HPI OK. stratégie auditive, répéter la phrase au moment où la scène est présentée.
+sub05: premier sujet avec les travaux sur le parking. Camion passe jsute devant après la 2ème pause du 1er bloc et après ~10 essais au bloc 5. Pas de camion pour les locs 7 à 10. 
 sub06: good perf, nearly no haed movement, but bliks during trials. Les pelleuteuses passent près vers la fin du bloc4. 
 sub07: perf ok, stratégie de répéter la phrase, HPI ok mais qq mvt de tete. travaux loin. Problem in run10_loc, missing 2 triggers, probably one between the first and second pause and one between 2nd and 3rd (sum of trial onsets between pause onsets). no clear reason, for the first one there seem to be 2 missing triggers, for no reason.
 New design!! 600ms SOA instead go 650 for objects and scenes. Flash in half of the trials. 4 2obj blocks, 4 1obj block, and 600ms -> about the same total time.
