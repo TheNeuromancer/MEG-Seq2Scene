@@ -1,5 +1,5 @@
 def num2sub_name(num, all_subjects):
-  if len(num) > 2:
+  if not num.isdigit():
     return num
   else: 
     sub_name = [sub for sub in all_subjects if num == sub[0:2]]

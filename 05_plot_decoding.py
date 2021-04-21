@@ -51,8 +51,8 @@ else:
 
 print('This script lists all the .npy files in all the subjects decoding output directories, takes the set of this and the averages all unique filenames to get on plot for all subjects per condition')
 
-if args.subject == "all":
-    in_dir = f"{args.root_path}/Results/Decoding_v{args.version}/{args.epochs_dir}/0*/"
+if args.subject in ["all", "v1", "v2"]: # for v1 and v2 we filter later
+    in_dir = f"{args.root_path}/Results/Decoding_v{args.version}/{args.epochs_dir}/*/"
 else:
     in_dir = f"{args.root_path}/Results/Decoding_v{args.version}/{args.epochs_dir}/{args.subject}/"
 out_dir = f"{args.root_path}/Results/Decoding_v{args.version}/{args.epochs_dir}/{args.subject}/{args.out_dir}/"
@@ -73,7 +73,21 @@ else:
 # list all .npy files in the directory
 all_filenames = glob(in_dir + '/*AUC*.npy')
 
-report = mne.report.Report()
+# keep the first 8 subjects for the 1st version, all the remaining for v2
+if args.subject == "v1":
+    all_filenames = [fn for fn in all_filenames if int(op.basename(op.dirname(fn))[0:2]) < 9]
+    version = "v1"
+elif args.subject in ["v2", "all"]:
+    all_filenames = [fn for fn in all_filenames if int(op.basename(op.dirname(fn))[0:2]) > 8]
+    version = "v2"
+elif int(args.subject[0:2]) < 9:
+    version = "v1"
+elif int(args.subject[0:2]) > 8:
+    version = "v2"
+else:
+    qwe
+
+# report = mne.report.Report()
 
 
 all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_filenames])
@@ -131,11 +145,11 @@ for label in all_labels:
 
                 if gen_cond is None:
                     plot_diag(data_mean=AUC_mean, data_std=AUC_std, out_fn=out_fn, train_cond=train_cond, 
-                        train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast)
+                        train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
 
 
                 plot_GAT(data_mean=AUC_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, 
-                         test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, gen_cond=gen_cond, slices=slices)
+                         test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, gen_cond=gen_cond, slices=slices, version=version)
 
                 print(f"Finished {label} trained on {train_cond} with generalization {gen_cond} {'matching trials only' if match else ''}\n")
                 plt.close('all')

@@ -7,7 +7,7 @@ from ipdb import set_trace
 import argparse
 import pickle
 import time
-import importlib 
+import importlib
 
 from utils.decod import *
 
@@ -64,11 +64,6 @@ train_tmin, train_tmax = epochs[0].tmin, epochs[0].tmax
 X, y, nchan, ch_names = get_data(args, epochs, args.sfreq)
 del epochs
 
-# print("\n\n!!!!!!!!!!!!!!!!!!!!!!!!!\n\nDropping half of the trials to check whether it still works\n\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
-# to_keep = np.random.choice(X.shape[0], len(X)//2)
-# X, y = X[to_keep], y[to_keep]
-
-
 n_times = X.shape[2]
 
 # clf = LogisticRegression(class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False)
@@ -82,14 +77,14 @@ all_models, AUC, AUC_query = decode(args, X, y, clf, n_times, test_split_query_i
 print(f'Finished training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
 
 ### SAVE RESULTS ###
-save_results(args, out_fn, AUC, all_models)
+save_results(args, out_fn, AUC) #, all_models)
 # save_preds(args, out_fn, mean_preds)
 save_patterns(args, out_fn, all_models)
 pickle.dump(ch_names, open(out_fn + '_ch_names.p', 'wb'))
 
 ### PLOT PERFORMANCE ###
-plot_perf(args, out_fn, AUC, args.train_cond, train_tmin=train_tmin, 
-    train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax)
+version = "v1" if int(args.subject[0:2]) < 8 else "v2"
+plot_perf(args, out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
 
 # # # plot pred
 # plot_perf(args, out_fn, mean_preds, ylabel='prediction')
@@ -99,16 +94,14 @@ if AUC_query is not None: # save the results for all the splits
         query = '_'.join(query.split()) # replace spaces by underscores
         query = shorten_filename(query) # shorten string by removing unnecessary stuff
         save_results(args, out_fn+f'_for_{query}', AUC_query[:,:,i_query])
-        plot_perf(args, out_fn+f'_for_{query}', AUC_query[:,:,i_query], args.train_cond, 
-            train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax)
+        plot_perf(args, out_fn+f'_for_{query}', AUC_query[:,:,i_query], args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
 
     # save every contrast - full minus every split
     for i_query, query in enumerate(args.split_queries):
         query = '_'.join(query.split()) # replace spaces by underscores
         query = shorten_filename(query) # shorten string by removing unnecessary stuff
         save_results(args, out_fn+f'_for_{query}_full_minus_split', AUC - AUC_query[:,:,i_query])
-        plot_perf(args, out_fn+f'_for_{query}_full_minus_split', AUC - AUC_query[:,:,i_query], args.train_cond, 
-            contrast=True, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax)
+        plot_perf(args, out_fn+f'_for_{query}_full_minus_split', AUC - AUC_query[:,:,i_query], args.train_cond, contrast=True, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
 
 
 # # plot pred
@@ -167,8 +160,7 @@ for test_cond, test_fn, test_out_fn in zip(args.test_cond, test_fns, test_out_fn
     # save_preds(args, test_out_fn, mean_preds)
 
     ### PLOT PERFORMANCE ###
-    plot_perf(args, test_out_fn, AUC, args.train_cond, train_tmin=train_tmin, 
-        train_tmax=train_tmax, test_tmin=test_tmin, test_tmax=test_tmax, gen_cond=test_cond)
+    plot_perf(args, test_out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, test_tmax=test_tmax, gen_cond=test_cond, version=version)
 
     # # # plot pred
     # plot_perf(args, out_fn+f"_tested_on_{test_cond}", mean_preds, test_cond, ylabel='prediction')

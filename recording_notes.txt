@@ -14,7 +14,11 @@ sub10: légers problèmes de vue, l'écran est rapproché pour lui permettre de 
 sub11: data quality is terrible for all blocks, due to contruction work being very close and very active. Also lots of movements and hence muscle artifacts. HPI was ok and not too much head mvt though. Stratégie visuelle, perf plutot mauvaise (mais elle a dit que souvent elle appuyait trop vite et se rendait compte tout de suite qu'elle s'était trompé). 
 sub12: 
 
+sub14: Good performance, nearly no construction work, great signal quality, except for a few jumps in the signal: many adjacent channels have a huge increase at the same time. good eog, ecg is a bit noisy. Good HPI, except for block 9. To use for source localization! Low mvt, blinks between trials most of the time. Strategy: repeat the sentence, then transform the image in a sentence in order to do the matching. Signal quality was not great for run2, cleaned afterwards. 
 
+sub15: bad perf for the first few minutes, then pretty good. great signal - with very string occipital and parietal occilations - but looooads of blinks, feets and finger mvt. Perfect HPI and nearly no head mvt, should be used for source localization. Good ecg/eog. Strategy: keep in mind text and image AT THE SAME TIME (so he says). repeat sentence and visualize scene. 
+
+sub16: had to put her higher in the chair after the first run because she said she fell a bit. very good perf. Signal quality is not great but ok. ecg and eog are good, not much muscle nor head mvt, nor blinks. Bad HPI (too large discrepancy). no construction work at all. Stategy: repreat the sentence. MRI done right after the MEG (01/04/21). 
 
 Train classifier on trials of the same color from different blocks, ie look for what is different between runs. Negatives can be objects of different colors. 
 When training on one object, test on 2 objects when the color and shape match, versus when the color or shape is attributed to the other object. eg train on blue triangle vs anything else, test on blue triangle left of red square vs blue square left of red triangle. 

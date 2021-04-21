@@ -1,8 +1,8 @@
 Epoch: 1-60hz, th-ch=20 th-epo=5, deleting all projections instead of applying them, recalibration between runs, sfreq=100hz, rejecting EOG with ICA
 Epochs2: 0.1-80hz, th-ch=20 th-epo=5
+resample before storing epochs ?
 
-do not take hte diag but average a few points around it.
-
+do not take the diag but average a few points around it.
 
 Decoding:
  v3: first real try
@@ -18,7 +18,7 @@ Entrainer décodage couleur sur 2 obj. Utiliser toutes les époques ? ie couleur
 Splitter par match/nonmatch pour le décodage (dès l'entrainement), car on teste des choses différentes.
 -> back to v1 on real subjects
 
-pooler les essais du loc et de 1obj pour améliorer la generalization.
+pooler les essais du loc et de 1obj pour améliorer la generalization.?
 
 train on blocks of 100ms and then gen? or on the whole window, then gen with rolling window
 
@@ -34,18 +34,34 @@ Quand on a une réactivation, est ce qu'elle est jointe pour nom et adj (forme e
 
 v1: 200hz decoding. no smoothing.
 v2: decoding at 100hz and smooting 11
-v3: Same but with half of the trials in order to check whether we can changethe design or not. 
+v3: Same but with half of the trials in order to check whether we can changethe design or not.  DELETED
+new v3: smoothing 21, filter 0.01, no lp, no channel rejection., 10 folds.
+v4: same with no baseline
 
 
-make ICA separately for each block!!!
-
-
-Notes on subjects quality: 
-sub03 has chance level decoding accuracy. Lots of blinks in the evoked a signals. let's see after ICA.
+make ICA separately for each block!!! or not at all...
 
 
 Binding condition: triangle bleue vs other triangles, generalized to triangle bleue vs other triangles when the other object is blue (and optionally also not a triangle)
 
 
-Potential models: http://vrr-vg.com/
-https://github.com/facebookresearch/CoDraw
+
+Preprocessing notes:
+bad subjects (chance-level AUC) : 03 - 09 - 10 - 12 - 14
+weird perf before t0: 07 - 11 - 13 - 16
+
+to look into: 
+sub01 - very weird looking PSD on 1, 2, 4 and 5, - run4: shity spiked dominating the evoked.
+sub02 - run3 (one_obj). Weird very high amplitude ramping.
+sub03 - run8 (1obj) : that asshole kept the button pressed for a whole trial. Maybe trials are shifted, resulting in bad decoding perf.
+sub06: run1 one response was too quick. Wwird peak in the PSD at ! 12hz and ~30hz. Linked to construction work ? Run5-7-8-9: sustained diverging channels.
+sub07 - run5 2obj: delay in one trial, maybe trials are shifted. Also same peak in PSD.
+sub08 - run3 2obj: answered once during the presentation of the sentence. same peak in PSD.
+sub09: same peak in PSD but even bigger. Huge ammount of noise in frontal sensors. Also looks like there is a jitter on the image presentation, also for sub08 but not really before (maybe on the onset but not the end).
+sub10 - same jitter, same peak in PSD, also hige ammount of noise all over. 
+sub11 - run1: one press during trial + run4 on during delay. run5: huge jumps + one huge fuckup in the triggers. Trials may be shifted. One button press at the begining of a trial in run6. Super fucking weird channel jumps in run7. On press before image on run 8. Super weird high sustained channels on run 9 + one press during the image. What a clusterfuck!
+sub12 - run4 and 7: fckin weird ch jump. run5-6-7: weird peak in the PSD at 55hz... no run 10 ?
+sub13 - run1: multiple answers during trials. Weird ch jumps in run7. No run10.
+sub14: just fucking noisy all over.
+sub15 - run1: button press jsut before a trial. run6: one trial is shifted. 
+sub16: bit noisy but looks ok. problem in run8?

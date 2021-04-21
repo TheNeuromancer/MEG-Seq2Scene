@@ -159,20 +159,17 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         if args.l_freq == 0: args.l_freq = None
         if args.h_freq == 0: args.h_freq = None
         print("Filtering data between %s and %s (Hz)" %(args.l_freq, args.h_freq))
-        raw.filter(
-            args.l_freq, args.h_freq,
+        raw.filter(args.l_freq, args.h_freq,
             l_trans_bandwidth='auto',
             h_trans_bandwidth='auto',
             filter_length='auto', phase='zero', fir_window='hamming',
             fir_design='firwin')
-
 
     if args.plot:
         # plot power spectral densitiy
         fig = raw.plot_psd(area_mode='range', fmin=0., fmax=200., average=True)
         plt.savefig(f'{out_dir_plots}/run_{run_nb}_psd_after_bandpass_{args.l_freq}_{args.h_freq}hz.png')
         plt.close()
-
 
     if args.notch:
         print(f"applying notch filter at {args.notch} and 3 harmonics")
@@ -202,6 +199,11 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         #         min_duration = 0.002
         events = mne.find_events(raw, stim_channel='STI101', verbose=True, min_duration=min_duration, consecutive='increasing', uint_cast=True, mask=128 + 256 + 512 + 1024 + 2048 + 4096 + 8192 + 16384 + 32768, mask_type='not_and',)
 
+
+    if args.subject[0:2]=="16" and ("run1_loc" in raw_fn_in or "run9_2obj" in raw_fn_in):
+        print("\n\nNEEDS TO INVESTIGATE, MISSING ONE TRIGGER ON RUN 1 and 9AND DO NOT KNOW YET WHERE IT IS SUPPOSED TO BE. Passing for now\n\n")
+        continue
+
     if args.subject == "05_mb140004" and "run8" in raw_fn_in:
         # missing the 12th trial_start trigger: fix works
         trial_start_to_word_delay = events[events[:,2]==10][0][0] - events[events[:,2]==105][0][0]
@@ -227,26 +229,23 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
 
     if block_type == 'localizer':
         raw_loc.append(raw)
-        events = events[np.where(events==TRIG_DICT['localizer_trial_start'])[0]]
+        events = events[events[:,2]==TRIG_DICT['localizer_trial_start']]
         events_loc.append(events)
         md_loc.append(md)
     elif block_type == 'one_object':
         raw_1obj.append(raw)
-        events = events[np.where(events==TRIG_DICT['one_object_trial_start'])[0]]
-
+        events = events[events[:,2]==TRIG_DICT['one_object_trial_start']]
         ## HACK FOR WHEN WE MISSED A FEW TRIALS AT THE BEGINING OF THE BLOCK...
         if args.subject == "01_js180232" and "run3" in raw_fn_in:
             md = md.iloc[len(md)-len(events)::] # just skip the first few trials
         elif args.subject == "09_jl190711" and "run2" in raw_fn_in:
             md = md.iloc[1::] # just skip the first trial
-
         events_1obj.append(events)
         md_1obj.append(md)
 
     elif block_type == 'two_objects':
         raw_2obj.append(raw)
-        events = events[np.where(events==TRIG_DICT['two_objects_trial_start'])[0]]
-
+        events = events[events[:,2]==TRIG_DICT['two_objects_trial_start']]
         ## HACKS FOR THE MISSING TRIALS
         if args.subject == "01_js180232" and "run5" in raw_fn_in:
             md = md.iloc[len(md)-len(events)::] # just skip the first few trials
@@ -264,6 +263,8 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         tmin, tmax = tmin_tmax_dict[block_type]
         try:
             epo = mne.Epochs(raw, events, event_id=TRIG_DICT[f'{block_type}_trial_start'], tmin=tmin, tmax=tmax, metadata=md, baseline=(None, 0), preload=True)
+            # events = mne.find_events(raw, stim_channel='STI101', verbose=True, min_duration=min_duration, consecutive='increasing', uint_cast=True, mask=128 + 256 + 512 + 1024 + 2048 + 4096 + 8192 + 16384 + 32768, mask_type='not_and',)
+            # events[events[:,2]==TRIG_DICT[f'{block_type}_trial_start']]
         except:
             set_trace()
         evo = epo.average()
@@ -317,12 +318,10 @@ if raw_loc:
         bad_epochs = get_deviant_epo(epochs_loc, thresh=args.epo_var_reject)
         epochs_loc = reject_bad_epochs(epochs_loc, bad_epochs)
 
-    # resample to the final sfreq
-    if args.sfreq:
+    if args.sfreq: # resample to the final sfreq
         print("Resampling data to %.1f Hz" % args.sfreq)
-        raw.resample(args.sfreq, npad='auto')
-        resample_str = f'_and_resampling_{args.sfreq}hz'
-
+        epochs_loc.resample(args.sfreq, npad='auto')
+        
     epochs_loc.save(f"{out_dir}/localizer-epo.fif", overwrite=True)
 
 
@@ -338,12 +337,10 @@ if raw_1obj:
         bad_epochs = get_deviant_epo(epochs_1obj, thresh=args.epo_var_reject)
         epochs_1obj = reject_bad_epochs(epochs_1obj, bad_epochs)
 
-    # resample to the final sfreq
-    if args.sfreq:
+    if args.sfreq: # resample to the final sfreq
         print("Resampling data to %.1f Hz" % args.sfreq)
-        raw.resample(args.sfreq, npad='auto')
-        resample_str = f'_and_resampling_{args.sfreq}hz'
-
+        epochs_1obj.resample(args.sfreq, npad='auto')    
+        
     epochs_1obj.save(f"{out_dir}/one_object-epo.fif", overwrite=True)
 
 
@@ -359,12 +356,10 @@ if raw_2obj:
         bad_epochs = get_deviant_epo(epochs_2obj, thresh=args.epo_var_reject)
         epochs_2obj = reject_bad_epochs(epochs_2obj, bad_epochs)
 
-    # resample to the final sfreq
-    if args.sfreq:
+    if args.sfreq: # resample to the final sfreq
         print("Resampling data to %.1f Hz" % args.sfreq)
-        raw.resample(args.sfreq, npad='auto')
-        resample_str = f'_and_resampling_{args.sfreq}hz'
-
+        epochs_2obj.resample(args.sfreq, npad='auto')
+        
     epochs_2obj.save(f"{out_dir}/two_objects-epo.fif", overwrite=True)
 
 

@@ -36,10 +36,13 @@ short_to_long_cond = {"loc": "localizer", "one_obj": "one_object", "two_obj": "t
                       "localizer": "localizer", "one_object":"one_object"}
 
 
-def get_onsets(cond):
+def get_onsets(cond, version="v1"):
     """ get the word and image onsets depending on the condition
     """
-    SOA_dict = {"localizer": .9, "one_object": .65, "two_objects": .65}
+    if version == "v1": # first version, longger SOA
+        SOA_dict = {"localizer": .9, "one_object": .65, "two_objects": .65}
+    else: # second version for subject 9 and up
+        SOA_dict = {"localizer": .9, "one_object": .6, "two_objects": .6}
     delay_dict = {"localizer": None, "one_object": 1., "two_objects": 2.}
     nwords_dict = {"localizer": 1, "one_object": 2, "two_objects": 5}
 
@@ -69,17 +72,19 @@ def get_out_fn(args, dirname='Decoding'):
     # smooth_str = f"_{args.smooth}smooth" if args.smooth else ""
     shuffle_str = '_shuffled' if args.shuffle else ''
     fband_str = f'_{args.freq_band}' if args.freq_band else ''
-    if args.train_query_1 and args.train_query_2:
-        train_query_1 = '_'.join(args.train_query_1.split())
-        train_query_2 = '_'.join(args.train_query_2.split())
-    else:
-        train_query_1 = ''
-        train_query_2 = ''
-
     cond_str = f"_cond-{args.train_cond}-"
-    out_fn = f'{out_dir}/{args.label}-{train_query_1}_vs_{train_query_2}{reduc_dim_str}{shuffle_str}{fband_str}{cond_str}'
+    if hasattr(args, 'train_query_1'):
+        if args.train_query_1 and args.train_query_2:
+            train_query_1 = '_'.join(args.train_query_1.split())
+            train_query_2 = '_'.join(args.train_query_2.split())
+        else:
+            train_query_1 = ''
+            train_query_2 = ''
+        out_fn = f'{out_dir}/{args.label}-{train_query_1}_vs_{train_query_2}{reduc_dim_str}{shuffle_str}{fband_str}{cond_str}'
+    else: # RSA
+        out_fn = f'{out_dir}/{args.label}-{reduc_dim_str}{shuffle_str}{fband_str}{cond_str}'
+    
     out_fn = shorten_filename(out_fn)
-
     print('\noutput file will be in: ' + out_fn)
     print('eg:' + out_fn + '_AUC_diag.npy\n')
     return out_fn
@@ -177,6 +182,9 @@ def load_data(args, fn, query_1, query_2):
     if args.subtract_evoked:
         epochs = epochs.subtract_evoked(epochs.average())
     epochs = [epochs[query_1], epochs[query_2]]
+    epochs = [epo.pick('meg') for epo in epochs]
+    print(epochs[0].info)
+    print(epochs[1].info)
     initial_sfreq = epochs[0].info['sfreq']
 
     ### SELECT ONLY CH THAT HAD AN EFFECT IN THE LOCALIZER
@@ -210,7 +218,6 @@ def load_data(args, fn, query_1, query_2):
         print("finished resampling ... ")
 
     data = [epo.data if isinstance(epo, mne.time_frequency.EpochsTFR) else epo.get_data() for epo in epochs]
-
 
     metadatas = [epo.metadata for epo in epochs]
 
@@ -388,7 +395,7 @@ def predict(clf, data):
     wrapper for predicting from any sklearn classifier
     """
     try:
-        pred = clf.predict_proba(data)[:,1]
+        pred = clf.predict_proba(data)[:,1] # no multiclass so just keep the proba for class 1
     except AttributeError: # no predict_proba method
         pred = clf.predict(data)
     return pred
@@ -715,8 +722,8 @@ def plot_perf(args, out_fn, data_mean, train_cond, train_tmin, train_tmax, test_
     return
 
 
-def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", contrast=False):
-    word_onsets, image_onset = get_onsets(train_cond)
+def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", contrast=False, version="v1"):
+    word_onsets, image_onset = get_onsets(train_cond, version=version)
     n_times_train = data_mean.shape[0]
     times_train = np.linspace(train_tmin, train_tmax, n_times_train)
 
@@ -739,10 +746,10 @@ def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=No
     plt.close()
 
 
-def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, test_tmax, ylabel="AUC", contrast=False, gen_cond=None, gen_color='k', slices=[]):
-    train_word_onsets, train_image_onset = get_onsets(train_cond)
+def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, test_tmax, ylabel="AUC", contrast=False, gen_cond=None, gen_color='k', slices=[], version="v1"):
+    train_word_onsets, train_image_onset = get_onsets(train_cond, version=version)
     if gen_cond is not None: # mean it is a generalization
-        word_onsets, image_onset = get_onsets(gen_cond)
+        word_onsets, image_onset = get_onsets(gen_cond, version=version)
         orientation = "horizontal"
         shrink = 0.7
     else:

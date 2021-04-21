@@ -79,7 +79,10 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
     
 
     # detect and reject bad channels
-    bads = get_deviant_ch(raw, thresh=args.ch_var_reject)
+    if args.ch_var_reject:
+        bads = get_deviant_ch(raw, thresh=args.ch_var_reject)
+    else:
+        bads = []
     
     pickle.dump(bads, open(out_fn, "wb"))
     print(f"Done with run {i_run+1}\n\n")
