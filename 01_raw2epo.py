@@ -32,6 +32,7 @@ config = importlib.import_module(f"configs.{args.config}", "Config").Config()
 for arg in vars(config): setattr(args, arg, getattr(config, arg))
 args.subject = num2sub_name(args.subject, args.all_subjects) # get full subject name if only the number was passed as argument
 print(args)
+print(f"mne version: {mne.__version__}")
 
 np.random.seed(42)
 
@@ -138,12 +139,12 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
 
     # MAXWELL FILTERING
     mne.channels.fix_mag_coil_types(raw.info)
-    # noisy_chs, flat_chs = mne.preprocessing.find_bad_channels_maxwell(raw, origin=head_origin, coord_frame='head', calibration=sss_cal_fn, cross_talk=ct_sparse_fn, verbose="warning")
-    # if args.plot: plot_deviant_maxwell(scores, f"{out_dir_plots}/run_{run_nb}")
-    raw.info['bads'] = list(bads) #+ noisy_chs + flat_chs
+
+    noisy_chs, flat_chs = mne.preprocessing.find_bad_channels_maxwell(raw, origin=head_origin, coord_frame='head', calibration=sss_cal_fn, cross_talk=ct_sparse_fn, verbose="warning")
+    if args.plot: plot_deviant_maxwell(scores, f"{out_dir_plots}/run_{run_nb}")
+    raw.info['bads'] = list(bads) + noisy_chs + flat_chs
     print(f"bad channels automatically detected and interpolated based on Maxwell filtering: {raw.info['bads']}")
-    raw = mne.preprocessing.maxwell_filter(raw, origin=head_origin, coord_frame='head', calibration=sss_cal_fn, 
-                                    cross_talk=ct_sparse_fn, destination=ref_run_head_pos, verbose='warning')
+    raw = mne.preprocessing.maxwell_filter(raw, origin=head_origin, coord_frame='head', calibration=sss_cal_fn, cross_talk=ct_sparse_fn, destination=ref_run_head_pos, verbose='DEBUG')
     
     raw = raw.del_proj("all")
     

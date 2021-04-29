@@ -15,11 +15,8 @@ from copy import deepcopy
 from tqdm import trange
 from sklearn.preprocessing import StandardScaler, RobustScaler, label_binarize
 from sklearn.pipeline import make_pipeline
-from sklearn.linear_model import LogisticRegression, RidgeClassifier, LogisticRegressionCV
+from sklearn.linear_model import RidgeClassifier, RidgeClassifierCV, LogisticRegression, LogisticRegressionCV, LinearRegression
 from sklearn.svm import SVC, LinearSVC
-from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-from sklearn.neural_network import MLPClassifier
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from sklearn.metrics import roc_auc_score, accuracy_score
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit, permutation_test_score, GridSearchCV
 from sklearn.decomposition import PCA
@@ -152,9 +149,11 @@ def get_paths(args, dirname='Decoding'):
     ### SET UP OUTPUT DIRECTORY AND FILENAME
     out_fn = get_out_fn(args, dirname=dirname)
     test_out_fns = []
-    for test_cond in args.test_cond: 
-        test_query_str = f"{'_'.join(args.test_query_1.split())}_vs_{'_'.join(args.test_query_2.split())}"
-        test_out_fns.append(shorten_filename(f"{out_fn}_tested_on_{test_cond}_{test_query_str}"))
+    for i_fn, (test_cond, test_query1, test_query2) in enumerate(zip(args.test_cond, args.test_query_1, args.test_query_2)):
+        test_query_str = f"{'_'.join(test_query1.split())}_vs_{'_'.join(test_query2.split())}"
+        # add an int to the label to split the different tests
+        new_out_fn = f"{out_fn.split('-')[0]}_{i_fn}-{'-'.join(out_fn.split('-')[1::])}"
+        test_out_fns.append(shorten_filename(f"{new_out_fn}_tested_on_{test_cond}_{test_query_str}"))
 
     # wait for a random time in order to avoird conflit (parallel jobs that try to construct the same directory)
     rand_time = float(str(abs(hash(str(args))))[0:8]) / 100000000
@@ -167,12 +166,32 @@ def get_paths(args, dirname='Decoding'):
         os.makedirs(out_dir)
     else:
         print('output directory already exists')
-        if args.overwrite:
-            print('overwrite is set to True ... overwriting\n')
-        else:
-            print('overwrite is set to False ... exiting smoothly')
-            exit()
+        if op.exists(f"{out_dir}_AUC.npy"):
+            if args.overwrite:
+                print('overwrite is set to True ... overwriting\n')
+            else:
+                print('overwrite is set to False ... exiting smoothly')
+                exit()
     return train_fn, test_fns, out_fn, test_out_fns
+
+
+def complement_md(md):
+    """ add entries to metadata:
+    Right_obj and Left_obj = what object was on which side
+    """
+    right_obj, left_obj = [], [] 
+    for i, line in md.iterrows():
+        if line.Relation == "à gauche d'":
+            left_obj.append(f"{line.Shape1}_{line.Colour1}")
+            right_obj.append(f"{line.Shape2}_{line.Colour2}")
+        elif line.Relation == "à droite d'":
+            right_obj.append(f"{line.Shape1}_{line.Colour1}")
+            left_obj.append(f"{line.Shape2}_{line.Colour2}")
+        else:
+            raise RuntimeError("Could not parse metadata to get left and right obejcts")
+    md["Right_obj"] = right_obj
+    md["Left_obj"] = left_obj
+    return md
 
 
 def load_data(args, fn, query_1, query_2):
@@ -181,10 +200,15 @@ def load_data(args, fn, query_1, query_2):
     epochs = mne.read_epochs(fn[0], preload=True, verbose=False)
     if args.subtract_evoked:
         epochs = epochs.subtract_evoked(epochs.average())
-    epochs = [epochs[query_1], epochs[query_2]]
+    if "Right_obj" in query_1 or "Left_obj" in query_1:
+        epochs.metadata = complement_md(epochs.metadata)
+    try:
+        epochs = [epochs[query_1], epochs[query_2]]
+    except:
+        set_trace()
     epochs = [epo.pick('meg') for epo in epochs]
-    print(epochs[0].info)
-    print(epochs[1].info)
+    # print(epochs[0].info)
+    # print(epochs[1].info)
     initial_sfreq = epochs[0].info['sfreq']
 
     ### SELECT ONLY CH THAT HAD AN EFFECT IN THE LOCALIZER
@@ -213,9 +237,15 @@ def load_data(args, fn, query_1, query_2):
         epochs = [epo.filter(fmin, fmax, n_jobs=-1) for epo in epochs]  
 
     if args.sfreq < epochs[0].info['sfreq']: 
+        if args.sfreq < epochs[0].info['lowpass']:
+            print(f"Lowpass filtering the data at the final sampling rate, {args.sfreq}Hz")
+            epochs.filter(None, args.sfreq, l_trans_bandwidth='auto', h_trans_bandwidth='auto', filter_length='auto', phase='zero', fir_window='hamming', fir_design='firwin')
         print(f"starting resampling from {epochs[0].info['sfreq']} to {args.sfreq} ... ")
         epochs = [epo.resample(args.sfreq) for epo in epochs]
         print("finished resampling ... ")
+
+    if args.dummy:
+        epochs = [epo.decimate(10) for epo in epochs]
 
     data = [epo.data if isinstance(epo, mne.time_frequency.EpochsTFR) else epo.get_data() for epo in epochs]
 
@@ -292,7 +322,7 @@ def load_data(args, fn, query_1, query_2):
     ### BASELINING
     if args.baseline:
         print('baselining...')
-        epochs = [epo.apply_baseline((tmin, 0)) for epo in epochs]
+        epochs = [epo.apply_baseline((tmin, 0), verbose=0) for epo in epochs]
 
 
     test_split_query_indices = []
@@ -412,6 +442,8 @@ def decode(args, X, y, clf, n_times, test_split_query_indices):
     else:
         print('unknown specified cross-validation scheme ... exiting')
         raise
+    if args.dummy:
+        cv = StratifiedKFold(n_splits=2, shuffle=False)
     
     if args.reduc_dim:
         pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
@@ -709,16 +741,16 @@ def save_patterns(args, out_fn, all_models):
     np.save(out_fn + '_patterns.npy', patterns)
 
 
-def plot_perf(args, out_fn, data_mean, train_cond, train_tmin, train_tmax, test_tmin, test_tmax, ylabel="AUC", contrast=False, gen_cond=None):
+def plot_perf(args, out_fn, data_mean, train_cond, train_tmin, train_tmax, test_tmin, test_tmax, ylabel="AUC", contrast=False, gen_cond=None, version="v1"):
     """ plot performance of individual subject,
     called during training by decoding.py script
     """
     if gen_cond is None:
         plot_diag(data_mean=data_mean, data_std=None, out_fn=out_fn, train_cond=train_cond, 
-            train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=contrast)
+            train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=contrast, version=version)
 
     plot_GAT(data_mean=data_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, 
-             test_tmax=test_tmax, ylabel=ylabel, contrast=contrast, gen_cond=gen_cond, slices=[])
+             test_tmax=test_tmax, ylabel=ylabel, contrast=contrast, gen_cond=gen_cond, slices=[], version=version)
     return
 
 
@@ -729,10 +761,16 @@ def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=No
 
     # DIAGONAL PLOT
     fig, ax = plt.subplots()
-    data_mean_diag = np.diag(data_mean)
+    if data_mean.ndim > 1: # we have the full timegen
+        data_mean_diag = np.diag(data_mean)
+    else: # already have the diagonal
+        data_mean_diag = data_mean
     plot = plt.plot(times_train, data_mean_diag)
     if data_std is not None:
-        data_std_diag = np.diag(data_std)
+        if data_std.ndim > 1: # we have the full timegen
+            data_std_diag = np.diag(data_std)
+        else: # already have the diagonal
+            data_std_diag = data_std
         ax.fill_between(times_train, data_mean_diag-data_std_diag, data_mean_diag+data_std_diag, alpha=0.2)
     plt.ylabel(ylabel)
     plt.xlabel("Time (s)")

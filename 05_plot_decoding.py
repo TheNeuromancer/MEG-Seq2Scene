@@ -51,7 +51,7 @@ else:
 
 print('This script lists all the .npy files in all the subjects decoding output directories, takes the set of this and the averages all unique filenames to get on plot for all subjects per condition')
 
-if args.subject in ["all", "v1", "v2"]: # for v1 and v2 we filter later
+if args.subject in ["all", "v1", "v2",  "goods"]: # for v1 and v2 we filter later
     in_dir = f"{args.root_path}/Results/Decoding_v{args.version}/{args.epochs_dir}/*/"
 else:
     in_dir = f"{args.root_path}/Results/Decoding_v{args.version}/{args.epochs_dir}/{args.subject}/"
@@ -79,6 +79,9 @@ if args.subject == "v1":
     version = "v1"
 elif args.subject in ["v2", "all"]:
     all_filenames = [fn for fn in all_filenames if int(op.basename(op.dirname(fn))[0:2]) > 8]
+    version = "v2"
+elif args.subject == "goods":
+    all_filenames = [fn for fn in all_filenames if not op.basename(op.dirname(fn))[0:2] in bad_subjects]
     version = "v2"
 elif int(args.subject[0:2]) < 9:
     version = "v1"

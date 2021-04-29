@@ -16,25 +16,25 @@ from tqdm import trange
 from scipy.signal import savgol_filter
 from scipy.spatial.distance import squareform
 from scipy.stats import pearsonr, spearmanr
-from sklearn.preprocessing import StandardScaler, RobustScaler, label_binarize, LabelEncoder, OneHotEncoder
+from sklearn.preprocessing import StandardScaler, RobustScaler, label_binarize, LabelEncoder, OneHotEncoder, MinMaxScaler
 from sklearn.pipeline import make_pipeline
-from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, RidgeClassifier, RidgeClassifierCV
+from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, RidgeClassifier, RidgeClassifierCV, RidgeCV
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn.svm import SVC, LinearSVC
 from sklearn.metrics import roc_auc_score, accuracy_score
-from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit, permutation_test_score, GridSearchCV, LeaveOneOut
+from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit, permutation_test_score, GridSearchCV, LeaveOneOut, GroupKFold
 from sklearn.decomposition import PCA
 from sklearn.utils.extmath import softmax        
 
 # local import
 from .params import *
-from .decod import get_out_fn, smooth, get_onsets, predict
+from .decod import get_out_fn, smooth, get_onsets, predict, complement_md
 
 class RidgeClassifierCVwithProba(RidgeClassifierCV):
     def predict_proba(self, X):
         d = self.decision_function(X)
-        d_2d = np.c_[-d, d]
-        return softmax(d_2d)
+        d_2d = np.c_[-d, d] # go 2d to get proba for all classes at the same time
+        return softmax(d_2d, copy=False)
 
 cmap = plt.cm.get_cmap('tab10', 10)
 
@@ -55,10 +55,8 @@ def get_paths_rsa(args, dirname='RSA'):
 
     ### SET UP OUTPUT DIRECTORY AND FILENAME
     out_fn = get_out_fn(args, dirname=dirname)
-    # test_out_fns = []
-    # for test_cond in args.test_cond: 
-    #     test_query_str = f"{'_'.join(args.test_query_1.split())}_vs_{'_'.join(args.test_query_2.split())}"
-    #     test_out_fns.append(shorten_filename(f"{out_fn}_tested_on_{test_cond}_{test_query_str}"))
+    xdawn_str = "dawn-" if args.xdawn else ""
+    out_fn += xdawn_str
 
     # wait for a random time in order to avoird conflit (parallel jobs that try to construct the same directory)
     rand_time = float(str(abs(hash(str(args))))[0:8]) / 100000000
@@ -79,7 +77,7 @@ def get_paths_rsa(args, dirname='RSA'):
     return train_fn, out_fn
 
 
-def load_data_rsa(args, fn, filter=''): # query, 
+def load_data_rsa(args, fn, filter=''):
     # LOAD THE DATA
     epochs = mne.read_epochs(fn[0], preload=True, verbose=False)
     if args.subtract_evoked:
@@ -272,17 +270,106 @@ def save_rsa_results(args, out_fn, results, factors):
     pickle.dump(dict(zip(factors, results)), open(out_fn + '_all_results.p', 'wb'))
 
 
-def get_y_from_epo(epochs, factor):
-    labenc = LabelEncoder()
-    if "+" in factor:
-        labels = np.array(['' for qwe in range(len(epochs))])
-        for subfac in factor.split("+"):
-            labels = np.char.add(labels, epochs.metadata[subfac].values)
-        print(labels)
-        y = labenc.fit_transform(labels)
-    else:
-        y = labenc.fit_transform(epochs.metadata[factor])
-    return y
+# def get_y_from_epo(epochs, factor):
+#     labenc = LabelEncoder()
+#     if "+" in factor:
+#         labels = np.array(['' for qwe in range(len(epochs))])
+#         for subfac in factor.split("+"):
+#             labels = np.char.add(labels, epochs.metadata[subfac].values)
+#         print(labels)
+#         y = labenc.fit_transform(labels)
+#     else:
+#         y = labenc.fit_transform(epochs.metadata[factor])
+#     return y
+
+
+def get_class_queries(cond):
+    """ get the query for each class
+    depending on the condition
+    6 classes for localizer
+    9 for objects
+    18 for scenes
+    """
+    colors = ["vert", "bleu", "rouge"]
+    shapes = ["triangle", "cercle", "carre"]
+    if cond == "localizer":
+        class_queries = colors + shapes 
+        print("TODO: Implement decoding of image localier, only using words for now")
+    elif cond == "one_object":
+        class_queries = [f"Shape1=='{s}' and Colour1=='{c}'" for s in shapes for c in colors]
+    elif cond == "two_objects":
+        class_queries = [f"Shape1=='{s}' and Colour1=='{c}'" for s in shapes for c in colors] + \
+                        [f"Shape2=='{s}' and Colour2=='{c}'" for s in shapes for c in colors]
+        # class_queries = [f"Left_obj=='{s}_{c}'" for s in shapes for c in colors] + \
+        #                 [f"Right_obj=='{s}_{c}'" for s in shapes for c in colors]
+    return class_queries
+
+
+def get_dsm_from_queries(factor, class_queries):
+    """ get the distance matrix for a given factor 
+    for a set of queries that will be used to get trials for each class
+    """
+    if "+" in factor: # joint factor, get a matrix for each subfactor
+        subfac_dsms = []
+        for subfac in factor.split("+"): # recursive call
+            subfac_dsms.append(get_dsm_from_queries(subfac, class_queries))
+        if factor == "Right_obj+Left_obj": # here we need a least one to be equal
+            dsm = np.sum(subfac_dsms, 0) > 0
+        else: # if any property is different, then the distance is 1, else 0
+            try:
+                dsm = np.any(subfac_dsms, 0)
+                # dsm = np.logical_or(*subfac_dsms)
+            except:
+                set_trace()
+        return dsm
+
+    # marginal factor or recursive calls
+    dsm = np.ones((len(class_queries), len(class_queries)))
+
+
+    # special case, we don't have (sub) factor names in the queries
+    if "Right_obj" in class_queries[0] or "Left_obj" in class_queries[0]:
+        for ii, class_query1 in enumerate(class_queries):
+            if factor == "Shape": 
+                val1 = class_query1.split("'")[1].split("_")[0]
+            elif factor == "Colour":
+                val1 = class_query1.split("'")[1].split("_")[1]
+            else: # Right_obj and Left_obj factors
+                val1 = class_query1 #.split("'")[1]
+            # print("\n", val1)
+            for jj, class_query2 in enumerate(class_queries):
+                if factor == "Shape": 
+                    val2 = class_query2.split("'")[1].split("_")[0]
+                elif factor == "Colour":
+                    val2 = class_query2.split("'")[1].split("_")[1]
+                else: # Right_obj and Left_obj factors
+                    val2 = class_query2 #.split("'")[1]
+                # print(val2)
+                if val1 == val2:
+                    dsm[ii, jj] = 0
+    
+    else: # usual case
+        for ii, class_query1 in enumerate(class_queries):
+            if factor not in class_query1: # query irrelevant of the factor, let distance=1
+                # print("m1")
+                continue
+            try:
+                val1 = class_query1.split(factor)[1].split("'")[1]
+            except:
+                set_trace()
+            # print("\n", val1)
+            for jj, class_query2 in enumerate(class_queries):
+                if factor not in class_query2: # query irrelevant of the factor, let distance=1
+                    # print("m1")
+                    continue
+                try:
+                    val2 = class_query2.split(factor)[1].split("'")[1]
+                except:
+                    set_trace()
+                # print(val2)
+                if val1 == val2:
+                    dsm[ii, jj] = 0
+    return dsm
 
 
 def predict(clf, data):
@@ -296,26 +383,32 @@ def predict(clf, data):
     return pred
 
 
-def decoder_confusion(args, epochs, factor, n_times):
+def decoder_confusion(args, epochs, class_queries, n_times):
     """ X: n_trials, n_sensors, n_times
         y: n_trials
+        class_queries: list of strings, pandas queries to get each class
     """
-    y = get_y_from_epo(epochs, factor)
-    X = epochs.get_data()
-    classes, counts = np.unique(y, return_counts=True)
-    print([(clas, count) for clas, count in zip(classes, counts)], "\n")
-    for to_del in np.where(counts < args.min_nb_trial)[0]: # single trial, cannot predict. Happens with single scene classification
-        idx_to_del = np.where(y==classes[to_del])[0]
-        X = X[~np.isin(np.arange(len(X)), idx_to_del)]
-        y = y[~np.isin(np.arange(len(y)), idx_to_del)]
-    classes, counts = np.unique(y, return_counts=True) # re-get classes and counts after deletion
-    print([(clas, count) for clas, count in zip(classes, counts)])
-    n_classes = len(classes)
-    print(n_classes)
+    md = epochs.metadata
+    X, y, groups = [], [], []
+    for i, class_query in enumerate(class_queries):
+        X.extend(epochs[class_query].get_data())
+        y.extend([i for qwe in range(len(md.query(class_query)))])
+        # rely on the indices in the metadata to get groups. Only useful to split scene trials 
+        groups.extend(md.query(class_query).index.values)
 
-    if not np.all(counts >= args.n_folds): # can't do usual crossval with only a few example of each class... so do LOO. Happens with single scene classification
-        # cv = LeaveOneOut() # waaaaay too long
-        cv = StratifiedKFold(n_splits=args.min_nb_trial, shuffle=True, random_state=42)
+    X, y = np.array(X), np.array(y)
+    classes, counts = np.unique(y, return_counts=True)
+    n_classes = len(classes)
+    print(f"n_classes: {n_classes}")
+
+    # if not np.all(counts >= args.n_folds): # can't do usual crossval with only a few example of each class... so do LOO. Happens with single scene classification
+    #     # cv = LeaveOneOut() # waaaaay too long
+    #     print(f"Using only {args.min_nb_trial} folds because we don;t have enough trials")
+    #     cv = StratifiedKFold(n_splits=args.min_nb_trial, shuffle=True, random_state=42)
+
+    # if "Right_obj" in class_queries[0] or "Left_obj" in class_queries[0]: # special case, need groupedKFold
+    if args.train_cond == "two_objects":
+        cv = GroupKFold(n_splits=args.n_folds)
     elif args.crossval == 'shufflesplit':
         cv = StratifiedShuffleSplit(n_splits=args.n_folds, test_size=0.5, random_state=42)
     elif args.crossval == 'kfold':
@@ -324,14 +417,12 @@ def decoder_confusion(args, epochs, factor, n_times):
         print('unknown specified cross-validation scheme ... exiting')
         raise
     
-
-    # if args.pval_thresh > 0.05:
-    #     clf = LogisticRegressionCV(Cs=5, solver='liblinear', multi_class='auto', n_jobs=-1, cv=5) #, max_iter=10000)
-    # else:
+    # clf = LogisticRegressionCV(Cs=10, solver='liblinear', multi_class='auto', n_jobs=-1, cv=5) #, max_iter=10000)
     # clf = LogisticRegression(C=1, solver='liblinear', multi_class='auto')
     # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=cv, class_weight='balanced')
-    clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=cv, class_weight='balanced')
-    clf = OneVsRestClassifier(clf, n_jobs=-1)
+    # clf = RidgeClassifier(class_weight='balanced')
+    clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
+    clf = OneVsRestClassifier(clf, n_jobs=1)
     onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
@@ -342,24 +433,19 @@ def decoder_confusion(args, epochs, factor, n_times):
 
 
     all_models = []
-    # AUC = np.zeros(n_times)
+    AUC = np.zeros(n_times)
     all_confusions = []
     for t in trange(n_times):
         y_pred = np.zeros((len(y), n_classes))
         # all_models.append([])
-        for train, test in cv.split(X, y):    
+        for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
             pipeline.fit(X[train, :, t], y[train])
             # all_models[-1].append(deepcopy(pipeline))
-            # preds = predict(pipeline, X[test, :, t])
             preds = predict(pipeline, X[test, :, t])
-            try:
-                # if 
+            if preds.ndim == 2:
                 y_pred[test] = preds
-                # y_pred[test] = onehotenc.transform(preds.reshape((-1,1)))
-            except:
-                set_trace()
-                # pass
-        
+            else:
+                y_pred[test] = onehotenc.transform(preds.reshape((-1,1)))
         # full confusion matrix
         confusion = np.zeros((len(classes), len(classes)))
         for ii, train_class in enumerate(classes):
@@ -368,9 +454,38 @@ def decoder_confusion(args, epochs, factor, n_times):
                 confusion[jj, ii] = confusion[ii, jj]
         # confusion = squareform(confusion, checks=False)
         all_confusions.append(confusion)
-        # AUC[t] += roc_auc_score(y_true=y[test], y_score=pred) / args.n_folds
-        # mean_preds[t] += np.mean(pred) / args.n_folds
+        AUC[t] += roc_auc_score(y_true=y, y_score=y_pred, multi_class='ovr')
 
     all_confusions = np.array(all_confusions)
 
-    return all_confusions
+    return AUC, all_confusions
+
+
+def regression_score(data_dsm, model_dsms):
+    """ Compute regression coefficients 
+    for each input matrices
+    """
+    reg = RidgeCV()
+    # pl = make_pipeline(StandardScaler(), reg)
+    reg.fit(model_dsms, data_dsm)
+    coefs = reg.coef_
+    return coefs
+
+
+def Xdawn(epochs4xdawn, epochs2transform, factor, n_comp=10):
+    md = epochs4xdawn.metadata
+    y = np.sum([md[subfac] for subfac in factor.split("+")], 0)
+    labencod = LabelEncoder()
+    y = labencod.fit_transform(y)
+    xdawn = mne.preprocessing.Xdawn(n_components=n_comp)
+    xdawn.fit(epochs4xdawn, y=y)
+    epochs = xdawn.apply(epochs2transform)['1']
+    return epochs
+    # evo = epochs.average()
+    # plot = evo.plot(spatial_clors=True)
+    # plt.savefig('tmp2.png')
+
+    # epochs2 = xdawn.apply(epochs)
+    # evo = epochs2['1'].average()
+    # plot = evo.plot(spatial_colors=True)
+    # plt.savefig('tmp2.png')

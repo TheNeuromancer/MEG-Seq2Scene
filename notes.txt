@@ -36,7 +36,11 @@ v1: 200hz decoding. no smoothing.
 v2: decoding at 100hz and smooting 11
 v3: Same but with half of the trials in order to check whether we can changethe design or not.  DELETED
 new v3: smoothing 21, filter 0.01, no lp, no channel rejection., 10 folds.
-v4: same with no baseline
+v4: same with no baseline. 50hz
+v5: same with actually no baseline. 50hz
+v6: smth
+v7: RSA with first and 2nd object, and with xdawn. Also decoding with ridgeCV and scoring=auc.
+v8: same with logistic - not launched
 
 
 make ICA separately for each block!!! or not at all...

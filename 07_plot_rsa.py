@@ -17,6 +17,8 @@ from mne.stats import permutation_cluster_1samp_test
 
 from utils.RSA import *
 from utils.params import *
+from utils.decod import plot_diag
+
 
 matplotlib.rcParams.update({'font.size': 19})
 matplotlib.rcParams.update({'lines.linewidth': 2})
@@ -52,7 +54,7 @@ else:
 
 print('This script lists all the .npy files in all the subjects RSA output directories, takes the set of this and the averages all unique filenames to get on plot for all subjects per condition')
 
-if args.subject in ["all", "v1", "v2"]: # for v1 and v2 we filter later
+if args.subject in ["all", "v1", "v2", "goods"]: # for v1 and v2 we filter later
     in_dir = f"{args.root_path}/Results/RSA_v{args.version}/{args.epochs_dir}/*/"
 else:
     in_dir = f"{args.root_path}/Results/RSA_v{args.version}/{args.epochs_dir}/{args.subject}/"
@@ -80,6 +82,8 @@ if args.subject == "v1":
     version = "v1"
 elif args.subject in ["v2", "all"]:
     all_filenames = [fn for fn in all_filenames if int(op.basename(op.dirname(fn))[0:2]) > 8]
+elif args.subject == "goods":
+    all_filenames = [fn for fn in all_filenames if not op.basename(op.dirname(fn))[0:2] in bad_subjects]
     version = "v2"
 elif int(args.subject[0:2]) < 9:
     version = "v1"
@@ -99,15 +103,20 @@ for label in all_labels:
         elif "one_object" in label: slices = slices_one_obj
         elif "two_objects" in label: slices = slices_two_obj
     all_subs_results = []
+    all_subs_AUCs = []
     for fn in all_filenames:
         # if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
         if label not in fn: continue
         print('loading file ', fn)
         try:
             all_subs_results.append(pickle.load(open(fn, "rb")))
+            if "confusion" in label:
+                AUC_fn = '-'.join(fn.split('-')[0:-1]) + "-_AUC.npy"
+                all_subs_AUCs.append(np.load(AUC_fn))
         except EOFError:
             print("nope")
             continue
+
 
     if len(all_subs_results) < 2: 
         # print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} {'matching trials only' if match else ''}")
@@ -139,6 +148,12 @@ for label in all_labels:
     plot_rsa(rsa_results, factors, out_fn, times, cond=cond, data_std=std_results.values(), ylabel=ylabel, version=version, dpi=dpi)
     if len(factors) > 1:
         multi_plot_rsa(rsa_results, factors, out_fn, times, cond=cond, data_std=std_results.values(), ylabel=ylabel, version=version, dpi=dpi)
+
+    ## AUC
+    if "confusion" in label:
+        plot_diag(data_mean=np.mean(all_subs_AUCs, 0), out_fn=f"{out_fn}_mean_AUC_{len(all_subs_AUCs)}subs.png", \
+            data_std=np.std(all_subs_AUCs, 0), train_cond=cond, train_tmin=tmin, train_tmax=tmax, ylabel='AUC', version=version)
+
 
     print(f"Finished {label}\n")
     plt.close('all')
