@@ -3,6 +3,7 @@ def num2sub_name(num, all_subjects):
     return num
   else: 
     sub_name = [sub for sub in all_subjects if num == sub[0:2]]
+    print(all_subjects)
     assert len(sub_name) == 1
     return sub_name[0]
 

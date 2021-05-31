@@ -25,6 +25,7 @@ parser.add_argument('--freq-band', default='', help='name of frequency band to u
 parser.add_argument('--train-cond', default='localizer', help='localizer, one_object or two_objects')
 parser.add_argument('--test-cond', default=[], action='append', help='localizer, one_object or two_objects')
 parser.add_argument('--label', default='', help='help to identify the result latter')
+parser.add_argument('--filter', default='', help='md query to filter trials before anything else (eg to use only matching trials')
 
 parser.add_argument('--distance_metric', default='confusion', help='Metric to compute RSA')
 parser.add_argument('--rsa_metric', default='spearman', help='Metric to compute RSA')
@@ -62,7 +63,7 @@ if args.train_cond == "two_objects":
     epochs.metadata = complement_md(epochs.metadata)
 
 if args.xdawn and args.train_cond == "two_objects":
-    path_oneobj = f"{op.dirname(train_fn[0])}/one_object-epo.fif"
+    path_oneobj = f"{op.dirname(train_fn)}/one_object-epo.fif"
     epochs4xdawn = load_data_rsa(args, train_fn)
     epochs = Xdawn(epochs4xdawn=epochs4xdawn, epochs2transform=epochs, factor="Shape1+Colour1")
 
@@ -82,9 +83,9 @@ elif args.train_cond == "two_objects":
     if args.distance_metric == "confusion":
         # factors = ["Shape", "Colour", "Shape+Colour", "Left_obj", "Right_obj", "Right_obj+Left_obj"]
         # factors = ["Shape", "Colour", "Shape+Colour", "Shape1+Colour1+Shape2+Colour2"]
-        factors = ["Shape1", "Colour1", "Shape2", "Colour2", "Shape1+Colour1", "Shape2+Colour2", "Relation", "Right_obj", "Left_obj", "Colour1+Colour2", "Shape1+Shape2"] #, "Shape1+Colour1+Shape2+Colour2"]
+        factors = ["Shape1", "Colour1", "Shape2", "Colour2", "Shape1+Colour1", "Shape2+Colour2", "Relation", "Right_obj", "Left_obj"]
     else:
-        factors = ["Shape1", "Colour1", "Shape2", "Colour2", "Shape1+Colour1", "Shape2+Colour2", "Relation", "Right_obj", "Left_obj", "Colour1+Colour2", "Shape1+Shape2", "Shape1+Colour1+Shape2+Colour2"]
+        factors = ["Shape1", "Colour1", "Shape2", "Colour2", "Shape1+Colour1", "Shape2+Colour2", "Relation", "Right_obj", "Left_obj"] #, "Colour1+Colour2", "Shape1+Shape2", "Shape1+Colour1+Shape2+Colour2"]
 # factors += ["Matching"]
 n_factors = len(factors)
 

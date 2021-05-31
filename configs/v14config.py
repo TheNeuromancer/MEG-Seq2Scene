@@ -5,7 +5,7 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "18"
+    version: str = "15"
     root_path: str = "/neurospin/unicog/protocols/MEG/Seq2Scene/"
     epochs_dir: str = "Epochs"
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
@@ -24,9 +24,8 @@ class Config:
 
     ## Decoding parameters
     n_folds: int = 5 # number of shuffle splits
-    crossval: str = "kfold" # cross-validation scheme. "kfold" or "sufflesplit"
+    crossval: str = "shufflesplit" # cross-validation scheme. "kfold" or "sufflesplit"
     reduc_dim: float = 0 # dimensionality reduction
-    reduc_dim_window: float = 100 # dimensionality reduction for the window decoding analysis 
     cat: int = 0 # number of timepoints to concatenate
     mean: bool = False # Wether to average instead of concatenate if using the "cat" argument
     smooth: int = 21 # hanning smoothing window, in timesample,

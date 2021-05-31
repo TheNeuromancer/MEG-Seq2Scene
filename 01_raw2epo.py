@@ -139,8 +139,7 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
 
     # MAXWELL FILTERING
     mne.channels.fix_mag_coil_types(raw.info)
-
-    noisy_chs, flat_chs = mne.preprocessing.find_bad_channels_maxwell(raw, origin=head_origin, coord_frame='head', calibration=sss_cal_fn, cross_talk=ct_sparse_fn, verbose="warning")
+    noisy_chs, flat_chs, scores = mne.preprocessing.find_bad_channels_maxwell(raw, origin=head_origin, coord_frame='head', calibration=sss_cal_fn, cross_talk=ct_sparse_fn, return_scores=True, verbose="warning")
     if args.plot: plot_deviant_maxwell(scores, f"{out_dir_plots}/run_{run_nb}")
     raw.info['bads'] = list(bads) + noisy_chs + flat_chs
     print(f"bad channels automatically detected and interpolated based on Maxwell filtering: {raw.info['bads']}")
@@ -184,6 +183,7 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         plt.close()
 
     block_type = fn2blocktype(raw_fn_in)
+    trig = TRIG_DICT[f'{block_type}_trial_start']
 
     ## get events
     min_duration = 0.002
@@ -205,6 +205,33 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         print("\n\nNEEDS TO INVESTIGATE, MISSING ONE TRIGGER ON RUN 1 and 9AND DO NOT KNOW YET WHERE IT IS SUPPOSED TO BE. Passing for now\n\n")
         continue
 
+    elif args.subject[0:2] == "17" and "run7_2obj" in raw_fn_in:
+            # missing one 205 triggers at trial 32. Adding it based on the triggers 30 (= image presentation)
+            # found with np.argmax(np.diff(np.where(events[:,2]==205)[0]))
+            missing_trial = 32
+            image_presentation_time = events[np.where(events[:,2]==20)[0][missing_trial], 0]
+            trig_img_delay = 5165 # average time between trial start and image presentation (tiny jitter when the screen skips an image)
+            new_event = np.array([image_presentation_time-trig_img_delay, 0, 205])
+            events = np.concatenate([[ev for ev in events if ev[0]<new_event[0]],[new_event],[ev for ev in events if ev[0]>new_event[0]]])
+
+            # # can also find nissing trigs with:
+            # twenties = events[events[:,2]==20]
+            # two_o_five = events[events[:,2]==205]
+            # for i, (twen, twoo) in enumerate(zip(twenties, two_o_five)): 
+            #     if twen[0] < twoo[0]:
+            #         print(i)
+            #         break
+
+    elif (args.subject[0:2] == "19" and ("run2_1obj" in raw_fn_in or "run4_1obj" in raw_fn_in)) \
+                        or (args.subject[0:2] == "21" and "run6_1obj" in raw_fn_in):
+        missing_trial = np.argmax(np.diff(np.where(events[:,2]==trig)[0]))
+        image_presentation_time = events[np.where(events[:,2]==20)[0][missing_trial], 0]
+        # trig_img_delay = np.mean(events[events[:,2]==20, 0][0:50] - events[events[:,2]==trig, 0][0:50], 0) # 2266 or 2299
+        trig_img_delay = 2284 # ave time between first word of image.
+        new_event = np.array([image_presentation_time-trig_img_delay, 0, trig])
+        events = np.concatenate([[ev for ev in events if ev[0]<new_event[0]],[new_event],[ev for ev in events if ev[0]>new_event[0]]])
+            
+
     if args.subject == "05_mb140004" and "run8" in raw_fn_in:
         # missing the 12th trial_start trigger: fix works
         trial_start_to_word_delay = events[events[:,2]==10][0][0] - events[events[:,2]==105][0][0]
@@ -214,11 +241,10 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         event_to_insert = np.array((infered_trial_onset, 0, 105))
         events = np.vstack((events[0:idx_to_insert], event_to_insert, events[idx_to_insert::]))
 
-    if args.plot:
+    if args.plot: # plot original triggers from stim ch
         fig = mne.viz.plot_events(events, sfreq=raw.info['sfreq'], first_samp=raw.first_samp)
-        plt.savefig(f'{out_dir_plots}/run_{run_nb}_{block_type}_events.png', dpi=500)
-        plt.close()  
-
+        plt.savefig(f'{out_dir_plots}/run_{run_nb}_{block_type}_events_all.png', dpi=500)
+        plt.close()
     
     # # remove "start" and "end" triggers
     # events = events[np.where(events[:,2] != 16434)]
@@ -227,15 +253,17 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
     # events = events[np.where(events[:,2] != 8232)]
     # events = events[np.where(events[:,2] != 8224)]
     # print(f"found {len(events)} triggers")
+    events = events[events[:,2]==trig]
+    nb_ev_per_block = {"localizer": 360, "one_object": 135, "two_objects": 81}
+    if events.shape[0] != nb_ev_per_block[block_type]:
+        set_trace()
 
     if block_type == 'localizer':
         raw_loc.append(raw)
-        events = events[events[:,2]==TRIG_DICT['localizer_trial_start']]
         events_loc.append(events)
         md_loc.append(md)
     elif block_type == 'one_object':
         raw_1obj.append(raw)
-        events = events[events[:,2]==TRIG_DICT['one_object_trial_start']]
         ## HACK FOR WHEN WE MISSED A FEW TRIALS AT THE BEGINING OF THE BLOCK...
         if args.subject == "01_js180232" and "run3" in raw_fn_in:
             md = md.iloc[len(md)-len(events)::] # just skip the first few trials
@@ -246,26 +274,28 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
 
     elif block_type == 'two_objects':
         raw_2obj.append(raw)
-        events = events[events[:,2]==TRIG_DICT['two_objects_trial_start']]
         ## HACKS FOR THE MISSING TRIALS
         if args.subject == "01_js180232" and "run5" in raw_fn_in:
             md = md.iloc[len(md)-len(events)::] # just skip the first few trials
         events_2obj.append(events)
         md_2obj.append(md)
-
     else:
         raise RuntimeError("Unknown block type", "Unknown block type")
-    
 
     print(f"Found {len(events)} events")
+
+    if args.plot: # plot events for this event type only
+        fig = mne.viz.plot_events(events, sfreq=raw.info['sfreq'], first_samp=raw.first_samp)
+        plt.savefig(f'{out_dir_plots}/run_{run_nb}_{block_type}_events_filtered.png', dpi=500)
+        plt.close()
 
     ## epochs for this block plot
     if args.plot:
         tmin, tmax = tmin_tmax_dict[block_type]
         try:
-            epo = mne.Epochs(raw, events, event_id=TRIG_DICT[f'{block_type}_trial_start'], tmin=tmin, tmax=tmax, metadata=md, baseline=(None, 0), preload=True)
+            epo = mne.Epochs(raw, events, event_id=trig, tmin=tmin, tmax=tmax, metadata=md, baseline=(None, 0), preload=True)
             # events = mne.find_events(raw, stim_channel='STI101', verbose=True, min_duration=min_duration, consecutive='increasing', uint_cast=True, mask=128 + 256 + 512 + 1024 + 2048 + 4096 + 8192 + 16384 + 32768, mask_type='not_and',)
-            # events[events[:,2]==TRIG_DICT[f'{block_type}_trial_start']]
+            # events[events[:,2]==trig]
         except:
             set_trace()
         evo = epo.average()
@@ -278,7 +308,7 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         # sti_data[np.where(sti_data==8232)[0]] = 0 # remove button presses
         # sti_data[np.where(sti_data==8224)[0]] = 0 # remove button presses
         epo_stim = mne.EpochsArray(sti_data, info, tmin=epo.tmin)
-        epo_stim.plot_image(picks="STIM", show=False, scalings=dict(misc=1), units=dict(misc='UA'), vmin=0, vmax=TRIG_DICT[f'{block_type}_trial_start']+20)
+        epo_stim.plot_image(picks="STIM", show=False, scalings=dict(misc=1), units=dict(misc='UA'), vmin=0, vmax=trig+20)
         plt.savefig(f'{out_dir_plots}/run_{run_nb}_{block_type}_stim_channel.png')
         plt.close("all")
 

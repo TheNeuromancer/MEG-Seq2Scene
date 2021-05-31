@@ -19,16 +19,18 @@ from scipy.stats import pearsonr, spearmanr
 from sklearn.preprocessing import StandardScaler, RobustScaler, label_binarize, LabelEncoder, OneHotEncoder, MinMaxScaler
 from sklearn.pipeline import make_pipeline
 from sklearn.linear_model import LogisticRegression, LogisticRegressionCV, RidgeClassifier, RidgeClassifierCV, RidgeCV
-from sklearn.multiclass import OneVsRestClassifier
+from sklearn.multiclass import OneVsRestClassifier, OneVsOneClassifier
 from sklearn.svm import SVC, LinearSVC
-from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.metrics import roc_auc_score, accuracy_score, confusion_matrix
 from sklearn.model_selection import StratifiedKFold, StratifiedShuffleSplit, permutation_test_score, GridSearchCV, LeaveOneOut, GroupKFold
 from sklearn.decomposition import PCA
 from sklearn.utils.extmath import softmax        
+from yellowbrick.classifier import ROCAUC
 
 # local import
 from .params import *
 from .decod import get_out_fn, smooth, get_onsets, predict, complement_md
+from .split import StratifiedGroupKFold, RepeatedStratifiedGroupKFold
 
 class RidgeClassifierCVwithProba(RidgeClassifierCV):
     def predict_proba(self, X):
@@ -38,17 +40,41 @@ class RidgeClassifierCVwithProba(RidgeClassifierCV):
 
 cmap = plt.cm.get_cmap('tab10', 10)
 
+
 short_to_long_cond = {"loc": "localizer", "one_obj": "one_object", "two_obj": "two_objects",
                       "localizer": "localizer", "one_object":"one_object"}
+
+
+"""
+******   MAIN FUNCTIONS   *******
+*                               *
+*          _---~~~~-_.          *
+*        _(        )   )        *
+*      ,   ) -~~- ( ,-' )_      *
+*     (  `-,_..`., )-- '_,)     *
+*    ( ` _)  (  -~( -_ `,  }    *
+*    (_-  _  ~_-~~~~`,  ,' )    *
+*      `~ -^(    __;-,((()))    *
+*           ~~~~ {_ -_(())      *
+*                 `'  }         *
+*                   { }         *
+*                               *
+*********************************
+"""
+
 
 def get_paths_rsa(args, dirname='RSA'):
     subject_string = args.subject if args.subject!='grand' else ''
     in_dir = f"{args.root_path}/Data/{args.epochs_dir}/{subject_string}"
     print("\nGetting training filename:")
-    print(in_dir + f'/{args.train_cond}*-epo.fif')
-    train_fn = natsorted(glob(in_dir + f'/{args.train_cond}*-epo.fif'))
+    if isinstance(args.train_cond, list):
+        print("Getting MULTIPLE training filenameS:")
+        train_fns = [natsorted(glob(in_dir + f'/{cond}*-epo.fif')) for cond in args.train_cond]
+    else:
+        print(in_dir + f'/{args.train_cond}*-epo.fif')
+        train_fn = natsorted(glob(in_dir + f'/{args.train_cond}*-epo.fif'))[0]
     print(train_fn)
-    assert len(train_fn) == 1
+    # assert len(train_fn) == 1
     print("\nGetting test filenames:")
     test_fns = [natsorted(glob(in_dir + f'/{cond}*-epo.fif')) for cond in args.test_cond]
     print(test_fns)
@@ -79,11 +105,12 @@ def get_paths_rsa(args, dirname='RSA'):
 
 def load_data_rsa(args, fn, filter=''):
     # LOAD THE DATA
-    epochs = mne.read_epochs(fn[0], preload=True, verbose=False)
+    epochs = mne.read_epochs(fn, preload=True, verbose=False)
     if args.subtract_evoked:
         epochs = epochs.subtract_evoked(epochs.average())
-    if filter: # filter metadata before anything else
-        epochs = epochs[filter]
+    if args.filter: # filter metadata before anything else
+        print(epochs.metadata)
+        epochs = epochs[args.filter]
     epochs = epochs.pick('meg')
     print(epochs.info)
     initial_sfreq = epochs[0].info['sfreq']
@@ -176,7 +203,7 @@ def load_data_rsa(args, fn, filter=''):
 
 
     # crop after getting high gammas and smoothing to avoid border issues
-    block_type = op.basename(fn[0]).split("-epo.fif")[0]
+    block_type = op.basename(fn).split("-epo.fif")[0]
     tmin, tmax = tmin_tmax_dict[block_type]
     print('initial tmin and tmax: ', epochs.times[0], epochs.times[-1])
     print('cropping to final tmin and tmax: ', tmin, tmax)
@@ -186,16 +213,6 @@ def load_data_rsa(args, fn, filter=''):
     if args.baseline:
         print('baselining...')
         epochs = epochs.apply_baseline((tmin, 0))
-
-    # test_split_query_indices = []
-    # for split_query in args.split_queries: # get the indices of each of the categories to split during test
-    #     metadatas = [epo.metadata for epo in epochs]
-    #     split_overall_indices = [epo[split_query].metadata.index for epo in epochs]
-    #     split_local_indices = [np.arange(len(meta))[np.isin(meta.index, split_idx)] for meta, split_idx in zip(metadatas, split_overall_indices)]
-    #     # split local indices contains the indices in the epochs.get_data() corresponding to the query
-    #     # offset the second query indices by the length of the first epochs.get_data() to get final indices (X is the concatenation of both epochs data)
-    #     split_local_indices[1] += len(metadatas[0])
-    #     test_split_query_indices.append(np.concatenate(split_local_indices))
 
     return epochs #, test_split_query_indices #, pd.concat(metadatas)
 
@@ -263,6 +280,343 @@ def multi_plot_rsa(results, factors, out_fn, times, cond, data_std=None, ylabel=
     plt.tight_layout()
     plt.savefig(f'{out_fn}_rsa_multiplot.png')
     plt.close()
+
+
+
+def decoder_confusion(args, epochs, class_queries, n_times):
+    """ X: n_trials, n_sensors, n_times
+        y: n_trials
+        class_queries: list of strings, pandas queries to get each class
+    """
+    md = epochs.metadata
+    X, y, groups = [], [], []
+    for i, class_query in enumerate(class_queries):
+        X.extend(epochs[class_query].get_data())
+        y.extend([i for qwe in range(len(md.query(class_query)))])
+        # rely on the indices in the metadata to get groups. Only useful to split scene trials 
+        groups.extend(md.query(class_query).index.values)
+
+    X, y = np.array(X), np.array(y)
+    classes, counts = np.unique(y, return_counts=True)
+    n_classes = len(classes)
+    print(f"n_classes: {n_classes}")
+
+    # if not np.all(counts >= args.n_folds): # can't do usual crossval with only a few example of each class... so do LOO. Happens with single scene classification
+    #     # cv = LeaveOneOut() # waaaaay too long
+    #     print(f"Using only {args.min_nb_trial} folds because we don;t have enough trials")
+    #     cv = StratifiedKFold(n_splits=args.min_nb_trial, shuffle=True, random_state=42)
+
+    # if "Right_obj" in class_queries[0] or "Left_obj" in class_queries[0]: # special case, need groupedKFold
+    if args.train_cond == "two_objects":
+        if args.crossval == 'shufflesplit':
+            cv = RepeatedStratifiedGroupKFold(n_splits=args.n_folds, n_repeats=10)
+        elif args.crossval == 'kfold':
+            cv = StratifiedGroupKFold(n_splits=args.n_folds)
+    elif args.crossval == 'shufflesplit':
+        cv = StratifiedShuffleSplit(n_splits=args.n_folds, test_size=0.5, random_state=42)
+    elif args.crossval == 'kfold':
+        cv = StratifiedKFold(n_splits=args.n_folds, shuffle=True, random_state=42)
+    else:
+        print('unknown specified cross-validation scheme ... exiting')
+        raise
+    
+    # clf = LogisticRegressionCV(Cs=10, solver='liblinear', multi_class='auto', n_jobs=-1, cv=5, max_iter=10000)
+    # clf = LogisticRegressionCV(Cs=10, class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False, cv=5, n_jobs=1)
+    clf = LogisticRegression(C=1, class_weight='balanced', solver='liblinear', multi_class='auto')
+    # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=cv, class_weight='balanced')
+    # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
+    # clf = RidgeClassifier(class_weight='balanced')
+    clf = OneVsRestClassifier(clf, n_jobs=1)
+    # clf = OneVsOneClassifier(clf, n_jobs=1)
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
+
+    if args.reduc_dim:
+        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
+    else:
+        pipeline = make_pipeline(RobustScaler(), clf)
+
+
+    all_models = []
+    AUC = np.zeros(n_times)
+    all_confusions = np.zeros((n_times, len(classes), len(classes))) # full confusion matrix
+    for t in trange(n_times):
+        # all_models.append([])
+        for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
+            pipeline.fit(X[train, :, t], y[train])
+            # all_models[-1].append(deepcopy(pipeline))
+            preds = predict(pipeline, X[test, :, t])
+            if preds.ndim == 2:
+                preds = preds
+            else:
+                preds = onehotenc.transform(preds.reshape((-1,1)))
+
+            all_confusions[t] += confusion_matrix(y[test], preds.argmax(1), normalize='all')
+            AUC[t] += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
+
+    return AUC, all_confusions
+
+
+
+def unit_vector(vector):
+    """ Returns the unit vector of the vector.  """
+    return vector / np.linalg.norm(vector)
+
+def angle_between(v1, v2):
+    """ Returns the angle in radians between vectors 'v1' and 'v2'::
+
+            >>> angle_between((1, 0, 0), (0, 1, 0))
+            1.5707963267948966
+            >>> angle_between((1, 0, 0), (1, 0, 0))
+            0.0
+            >>> angle_between((1, 0, 0), (-1, 0, 0))
+            3.141592653589793
+    """
+    v1_u = unit_vector(v1)
+    v2_u = unit_vector(v2)
+    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+
+
+def decode_window(args, epochs, class_queries):
+    """ X: n_trials, n_sensors
+        y: n_trials
+        class_queries: list of strings, pandas queries to get each class
+    """
+    md = epochs.metadata
+    X, y, groups = [], [], []
+    for i, class_query in enumerate(class_queries):
+        X.extend(epochs[class_query].get_data())
+        y.extend([i for qwe in range(len(md.query(class_query)))])
+        # rely on the indices in the metadata to get groups. Only useful to split scene trials 
+        groups.extend(md.query(class_query).index.values)
+
+    X, y = np.array(X), np.array(y)
+    n_trials = len(X)
+    X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
+    classes, counts = np.unique(y, return_counts=True)
+    n_classes = len(classes)
+    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+    
+    if args.train_cond == "two_objects":
+        if args.crossval == 'shufflesplit':
+            cv = RepeatedStratifiedGroupKFold(n_splits=args.n_folds, n_repeats=10)
+        elif args.crossval == 'kfold':
+            cv = StratifiedGroupKFold(n_splits=args.n_folds)
+    elif args.crossval == 'shufflesplit':
+        cv = StratifiedShuffleSplit(n_splits=args.n_folds, test_size=0.5, random_state=42)
+    elif args.crossval == 'kfold':
+        cv = StratifiedKFold(n_splits=args.n_folds, shuffle=True, random_state=42)
+    else:
+        print('unknown specified cross-validation scheme ... exiting')
+        raise
+    
+    clf = LogisticRegression(C=1, class_weight='balanced', solver='liblinear', multi_class='auto')
+    clf = OneVsRestClassifier(clf, n_jobs=1)
+
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
+
+    if args.reduc_dim_window:
+        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim_window), clf)
+    else:
+        pipeline = make_pipeline(RobustScaler(), clf)
+
+    models_all_folds = []
+    AUC, accuracy = 0, 0
+    for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
+        pipeline.fit(X[train], y[train])
+        models_all_folds.append(deepcopy(pipeline))
+
+        preds = predict(pipeline, X[test])
+        if preds.ndim == 2:
+            preds = preds
+        else:
+            preds = onehotenc.transform(preds.reshape((-1,1)))
+        
+        AUC += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
+        accuracy += accuracy_score(y[test], preds.argmax(1)) / args.n_folds
+
+    return AUC, accuracy, models_all_folds
+
+
+
+def decode_ovr(args, epochs, class_queries, n_times):
+    """ X: n_trials, n_sensors, n_times
+        y: n_trials
+        class_queries: list of strings, pandas queries to get each class
+    """
+    md = epochs.metadata
+    X, y, groups = [], [], []
+    for i, class_query in enumerate(class_queries):
+        X.extend(epochs[class_query].get_data())
+        y.extend([i for qwe in range(len(md.query(class_query)))])
+        # rely on the indices in the metadata to get groups. Only useful to split scene trials 
+        groups.extend(md.query(class_query).index.values)
+
+    X, y = np.array(X), np.array(y)
+    classes, counts = np.unique(y, return_counts=True)
+    n_classes = len(classes)
+    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+
+    # if "Right_obj" in class_queries[0] or "Left_obj" in class_queries[0]: # special case, need groupedKFold
+    if args.train_cond == "two_objects":
+        if args.crossval == 'shufflesplit':
+            cv = RepeatedStratifiedGroupKFold(n_splits=args.n_folds, n_repeats=10)
+        elif args.crossval == 'kfold':
+            cv = StratifiedGroupKFold(n_splits=args.n_folds)
+    elif args.crossval == 'shufflesplit':
+        cv = StratifiedShuffleSplit(n_splits=args.n_folds, test_size=0.5, random_state=42)
+    elif args.crossval == 'kfold':
+        cv = StratifiedKFold(n_splits=args.n_folds, shuffle=True, random_state=42)
+    else:
+        print('unknown specified cross-validation scheme ... exiting')
+        raise
+    
+    clf = LogisticRegression(C=1, class_weight='balanced', solver='liblinear', multi_class='auto')
+    # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=cv, class_weight='balanced')
+    # clf = RidgeClassifier(class_weight='balanced')
+    # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
+    # clf = LogisticRegressionCV(Cs=10, solver='liblinear', multi_class='auto', n_jobs=-1, cv=5) #, max_iter=10000)
+    # clf = LogisticRegressionCV(Cs=10, class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False, cv=5, n_jobs=1)
+    # clf = SVC()
+    # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-4, 4, 9)})
+    clf = OneVsRestClassifier(clf, n_jobs=1)
+    # class_names = []
+    # for c in class_queries:
+    #     class_names.append(" ".join([c.split("'")[(i*2)+1] for i in range(c.count("'")//2)]))
+    # clf = ROCAUC(clf, encoder=dict(zip(classes, class_names)))
+    # clf.binary = False # prevents an error from yellowbrick
+
+    # set_trace()
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
+
+    if args.reduc_dim:
+        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
+    else:
+        pipeline = make_pipeline(RobustScaler(), clf)
+
+    all_models = []
+    if args.timegen:
+        AUC = np.zeros((n_times, n_times))
+        accuracy = np.zeros((n_times, n_times))
+        # AUC_all_classes = np.zeros((n_classes, n_times, n_times))
+        all_confusions = []
+        for t in trange(n_times):
+            all_models.append([])
+            for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
+                pipeline.fit(X[train, :, t], y[train])
+                all_models[-1].append(deepcopy(pipeline))
+
+                for tgen in range(n_times):
+                    preds = predict(pipeline, X[test, :, tgen])
+                    if preds.ndim == 2:
+                        preds = preds
+                    else:
+                        preds = onehotenc.transform(preds.reshape((-1,1)))
+                    # AUC[t, tgen] += roc_auc_score(y_true=onehotenc.transform(y[test].reshape(-1,1)), y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
+                    AUC[t, tgen] += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
+                    accuracy[t, tgen] += accuracy_score(y[test], preds.argmax(1)) / args.n_folds
+
+    else:
+        AUC = np.zeros(n_times)
+        for t in trange(n_times):
+            y_pred = np.zeros((len(y), n_classes))
+            for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
+                pipeline.fit(X[train, :, t], y[train])
+                accuracy[t] = pipeline.score(X[test, :, t], y[test])
+                preds = predict(pipeline, X[test, :, t])
+                if preds.ndim == 2:
+                    y_pred[test] = preds
+                else:
+                    y_pred[test] = onehotenc.transform(preds.reshape((-1,1)))
+            AUC[t] = roc_auc_score(y_true=y, y_score=y_pred, multi_class='ovr')
+
+    return AUC, accuracy, all_models
+
+
+def test_decode_ovr(args, epochs, class_queries, all_models):
+    n_folds = len(all_models[0])
+    n_times_test = len(epochs.times)
+    n_times_train = len(all_models)
+
+    md = epochs.metadata
+    X, y = [], []
+    for i, class_query in enumerate(class_queries):
+        X.extend(epochs[class_query].get_data())
+        y.extend([i for qwe in range(len(md.query(class_query)))])
+    X, y = np.array(X), np.array(y)
+    classes, counts = np.unique(y, return_counts=True)
+    n_classes = len(classes)
+    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
+    
+    if args.timegen:
+        AUC = np.zeros((n_times_train, n_times_test))
+        accuracy = np.zeros((n_times_train, n_times_test))
+        for tgen in trange(n_times_test):
+            t_data = X[:, :, tgen]
+            for t in range(n_times_train):
+                all_folds_preds = []
+                for i_fold in range(n_folds):
+                    pipeline = all_models[t][i_fold]
+                    preds = predict(pipeline, t_data)
+                    if preds.ndim == 2:
+                        y_pred = preds
+                    else:
+                        y_pred = onehotenc.transform(preds.reshape((-1,1)))
+                    all_folds_preds.append(y_pred)
+                mean_fold_pred = np.mean(all_folds_preds, 0)
+                AUC[t, tgen] = roc_auc_score(y_true=y, y_score=mean_fold_pred, multi_class='ovr')
+                accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1))
+
+        # for t in trange(n_times):
+        #     y_pred = np.zeros((n_times, len(y), n_classes))
+        #     # all_models.append([])
+        #     for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
+        #         pipeline.fit(X[train, :, t], y[train])
+
+        #         for tgen in range(n_times):
+        #             preds = predict(pipeline, X[test, :, tgen])
+        #             if preds.ndim == 2:
+        #                 y_pred[tgen, test] = preds
+        #             else:
+        #                 y_pred[tgen, test] = onehotenc.transform(preds.reshape((-1,1)))
+        #     for tgen in range(n_times):
+        #         AUC[t, tgen] += roc_auc_score(y_true=y, y_score=y_pred[tgen], multi_class='ovr')
+    
+    # else: # diag only
+    #     AUC = np.zeros(n_times_train)
+    #     mean_preds = np.zeros(n_times_train)
+    #     for t in range(n_times_train):
+    #         t_data = X[:, :, t]
+    #         all_folds_preds = []
+    #         for i_fold in range(n_folds):
+    #             pipeline = all_models[i_fold][t]
+    #             all_folds_preds.append(predict(pipeline, t_data))
+    #         AUC[t] = roc_auc_score(y_true=y, y_score=np.mean(all_folds_preds, 0))
+    #         mean_preds[t] = np.mean(all_folds_preds)
+
+    print('mean AUC: ', AUC.mean())
+    print('max AUC: ', AUC.max())
+
+    return AUC, accuracy
+
+
+
+"""
+********   HELPER FUNCTIONS   *********
+*                                     *
+*  .----.                    .---.    *
+* '---,  `.________________.'  _  `.  *
+*      )   ________________   <_>  :  *
+* .---'  .'                `.     .'  *
+*  `----'                    `---'    *
+*                                     *
+***************************************
+"""
 
 
 def save_rsa_results(args, out_fn, results, factors):
@@ -383,84 +737,6 @@ def predict(clf, data):
     return pred
 
 
-def decoder_confusion(args, epochs, class_queries, n_times):
-    """ X: n_trials, n_sensors, n_times
-        y: n_trials
-        class_queries: list of strings, pandas queries to get each class
-    """
-    md = epochs.metadata
-    X, y, groups = [], [], []
-    for i, class_query in enumerate(class_queries):
-        X.extend(epochs[class_query].get_data())
-        y.extend([i for qwe in range(len(md.query(class_query)))])
-        # rely on the indices in the metadata to get groups. Only useful to split scene trials 
-        groups.extend(md.query(class_query).index.values)
-
-    X, y = np.array(X), np.array(y)
-    classes, counts = np.unique(y, return_counts=True)
-    n_classes = len(classes)
-    print(f"n_classes: {n_classes}")
-
-    # if not np.all(counts >= args.n_folds): # can't do usual crossval with only a few example of each class... so do LOO. Happens with single scene classification
-    #     # cv = LeaveOneOut() # waaaaay too long
-    #     print(f"Using only {args.min_nb_trial} folds because we don;t have enough trials")
-    #     cv = StratifiedKFold(n_splits=args.min_nb_trial, shuffle=True, random_state=42)
-
-    # if "Right_obj" in class_queries[0] or "Left_obj" in class_queries[0]: # special case, need groupedKFold
-    if args.train_cond == "two_objects":
-        cv = GroupKFold(n_splits=args.n_folds)
-    elif args.crossval == 'shufflesplit':
-        cv = StratifiedShuffleSplit(n_splits=args.n_folds, test_size=0.5, random_state=42)
-    elif args.crossval == 'kfold':
-        cv = StratifiedKFold(n_splits=args.n_folds, shuffle=True, random_state=42)
-    else:
-        print('unknown specified cross-validation scheme ... exiting')
-        raise
-    
-    # clf = LogisticRegressionCV(Cs=10, solver='liblinear', multi_class='auto', n_jobs=-1, cv=5) #, max_iter=10000)
-    # clf = LogisticRegression(C=1, solver='liblinear', multi_class='auto')
-    # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=cv, class_weight='balanced')
-    # clf = RidgeClassifier(class_weight='balanced')
-    clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
-    clf = OneVsRestClassifier(clf, n_jobs=1)
-    onehotenc = OneHotEncoder(sparse=False, categories='auto')
-    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
-
-    if args.reduc_dim:
-        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
-    else:
-        pipeline = make_pipeline(RobustScaler(), clf)
-
-
-    all_models = []
-    AUC = np.zeros(n_times)
-    all_confusions = []
-    for t in trange(n_times):
-        y_pred = np.zeros((len(y), n_classes))
-        # all_models.append([])
-        for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
-            pipeline.fit(X[train, :, t], y[train])
-            # all_models[-1].append(deepcopy(pipeline))
-            preds = predict(pipeline, X[test, :, t])
-            if preds.ndim == 2:
-                y_pred[test] = preds
-            else:
-                y_pred[test] = onehotenc.transform(preds.reshape((-1,1)))
-        # full confusion matrix
-        confusion = np.zeros((len(classes), len(classes)))
-        for ii, train_class in enumerate(classes):
-            for jj in range(ii, len(classes)):
-                confusion[ii, jj] = roc_auc_score(y == train_class, y_pred[:, jj])
-                confusion[jj, ii] = confusion[ii, jj]
-        # confusion = squareform(confusion, checks=False)
-        all_confusions.append(confusion)
-        AUC[t] += roc_auc_score(y_true=y, y_score=y_pred, multi_class='ovr')
-
-    all_confusions = np.array(all_confusions)
-
-    return AUC, all_confusions
-
-
 def regression_score(data_dsm, model_dsms):
     """ Compute regression coefficients 
     for each input matrices
@@ -477,7 +753,7 @@ def Xdawn(epochs4xdawn, epochs2transform, factor, n_comp=10):
     y = np.sum([md[subfac] for subfac in factor.split("+")], 0)
     labencod = LabelEncoder()
     y = labencod.fit_transform(y)
-    xdawn = mne.preprocessing.Xdawn(n_components=n_comp)
+    xdawn = mne.preprocessing.Xdawn(n_components=n_comp, correct_overlap=False)
     xdawn.fit(epochs4xdawn, y=y)
     epochs = xdawn.apply(epochs2transform)['1']
     return epochs

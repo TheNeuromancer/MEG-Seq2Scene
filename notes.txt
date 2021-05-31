@@ -41,6 +41,27 @@ v5: same with actually no baseline. 50hz
 v6: smth
 v7: RSA with first and 2nd object, and with xdawn. Also decoding with ridgeCV and scoring=auc.
 v8: same with logistic - not launched
+v9: OVO for RSA and decoding_ovr and subsampling majority classes for decoding. Also with baseline correction.
++ v8: RSA with matching trials only (+ OVO)
+v10: split queries (during training but not yet test) for decoding - no baseline. RSA: back to OVR because OVO scoring is fucked up (gives majority class, not proba for each class) ; + weighted average instead of macro.
+v11: baseline. LogRegCV partout. Saving accuracy as well as AUC.
+remove equalize trials!
+v12: OVR, now averaging AUC over strat grouped folds. RidgeCV proba -> looks like the AUC problem is solved !!
+v13: OVR+decoding, SVC and gridsearch -> weaker than the one before ...
+v14: ridgecv, repeated strat grouped kfold with 10 repeats.
+v15: same with 100 repeats
+v16: Decoding same colour, shape, or object. 10folds.
+v17: OVR with LR (no CV), 5folds. Also all conditions. 
+v18: sklearn's confusion matric func for RSA. 
+
+
+TODO: add split queries for test queries as well (currently only for training queries).
+split queries not working well, we are missing trials for some queries in some folds, leading to having 0 examplars of some classes. 
+split with grey screen 
+
+angle between first and second color (or shape) encoding in scenes ? How is it compared to signle objects?
+add n_repeats to the config
+
 
 
 make ICA separately for each block!!! or not at all...

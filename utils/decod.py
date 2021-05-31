@@ -211,6 +211,13 @@ def load_data(args, fn, query_1, query_2):
     # print(epochs[1].info)
     initial_sfreq = epochs[0].info['sfreq']
 
+    if args.equalize_events:
+        print(f"Equalizing event counts: ", end='')
+        n_trials = min([len(epo) for epo in epochs])
+        print(f"keeping: {n_trials} events in each class")
+        epochs = [epo[np.random.choice(range(len(epo)), n_trials, replace=False)] for epo in epochs]
+
+
     ### SELECT ONLY CH THAT HAD AN EFFECT IN THE LOCALIZER
     if args.localizer:
         print("not implemented yet ...")
@@ -239,7 +246,8 @@ def load_data(args, fn, query_1, query_2):
     if args.sfreq < epochs[0].info['sfreq']: 
         if args.sfreq < epochs[0].info['lowpass']:
             print(f"Lowpass filtering the data at the final sampling rate, {args.sfreq}Hz")
-            epochs.filter(None, args.sfreq, l_trans_bandwidth='auto', h_trans_bandwidth='auto', filter_length='auto', phase='zero', fir_window='hamming', fir_design='firwin')
+            # epochs.filter(None, args.sfreq, l_trans_bandwidth='auto', h_trans_bandwidth='auto', filter_length='auto', phase='zero', fir_window='hamming', fir_design='firwin')
+            epochs = [epo.filter(None, args.sfreq, l_trans_bandwidth='auto', h_trans_bandwidth='auto', filter_length='auto', phase='zero', fir_window='hamming', fir_design='firwin') for epo in epochs]
         print(f"starting resampling from {epochs[0].info['sfreq']} to {args.sfreq} ... ")
         epochs = [epo.resample(args.sfreq) for epo in epochs]
         print("finished resampling ... ")
@@ -252,14 +260,17 @@ def load_data(args, fn, query_1, query_2):
     metadatas = [epo.metadata for epo in epochs]
 
     # CLIP THE DATA
-    if args.clip:
-        print('clipping the data at the 5th and 95th percentile for each channel')
-        for query_data in data:
-            for ch in range(query_data.shape[1]):
-                # Get the 5th and 95th percentile and channel
-                p5 = np.percentile(query_data[:, ch, :], 5)
-                p95 = np.percentile(query_data[:, ch, :], 95)
-                query_data[:, ch, :] = np.clip(query_data[:, ch, :], p5, p95)
+    try:
+        if args.clip:
+            print('clipping the data at the 5th and 95th percentile for each channel')
+            for query_data in data:
+                for ch in range(query_data.shape[1]):
+                    # Get the 5th and 95th percentile and channel
+                    p5 = np.percentile(query_data[:, ch, :], 5)
+                    p95 = np.percentile(query_data[:, ch, :], 95)
+                    query_data[:, ch, :] = np.clip(query_data[:, ch, :], p5, p95)
+    except:
+        set_trace()
 
 
     # # add the temporal derivative of each channel as new feature
@@ -325,6 +336,7 @@ def load_data(args, fn, query_1, query_2):
         epochs = [epo.apply_baseline((tmin, 0), verbose=0) for epo in epochs]
 
 
+
     test_split_query_indices = []
     for split_query in args.split_queries: # get the indices of each of the categories to split during test
         metadatas = [epo.metadata for epo in epochs]
@@ -334,6 +346,8 @@ def load_data(args, fn, query_1, query_2):
         # offset the second query indices by the length of the first epochs.get_data() to get final indices (X is the concatenation of both epochs data)
         split_local_indices[1] += len(metadatas[0])
         test_split_query_indices.append(np.concatenate(split_local_indices))
+        if not len(test_split_query_indices[-1]):
+            raise RuntimeError(f"split queries did not yield any trial for query: {split_query}")
 
     return epochs, test_split_query_indices #, pd.concat(metadatas)
 
@@ -366,10 +380,13 @@ def get_data(args, epochs, sfreq):
     if args.shuffle:
         np.random.suffle(y)
 
+
     print(f'Using {len(data[0][0])} examples for class {1}')
     print(f'Using {len(data[1][0])} examples for class {2}')
 
+
     return X, y, nchan, ch_names
+
 
 
 def smooth(x, window_len=11, window='hanning'):
@@ -453,6 +470,7 @@ def decode(args, X, y, clf, n_times, test_split_query_indices):
     all_models = []
     if args.timegen:
         AUC = np.zeros((n_times, n_times))
+        accuracy = np.zeros((n_times, n_times))
         mean_preds = np.zeros((n_times, n_times))
         if test_split_query_indices: # split the test indices according to the query
             AUC_test_query_split = np.zeros((n_times, n_times, len(test_split_query_indices)))
@@ -469,15 +487,22 @@ def decode(args, X, y, clf, n_times, test_split_query_indices):
                 for tgen in range(n_times):
                     if test_split_query_indices: # split the test indices according to the query
                         for i_query, split_indices in enumerate(test_split_query_indices):
-                            test_query = test[np.isin(test, split_indices)]
-                            pred = predict(pipeline, X[test_query, :, tgen])
-                            AUC_test_query_split[t, tgen, i_query] += roc_auc_score(y_true=y[test_query], y_score=pred) / args.n_folds
-                            mean_preds_test_query_split[t, tgen, i_query] += np.mean(pred) / args.n_folds
+                            try:
+                                test_query = test[np.isin(test, split_indices)]
+                                pred = predict(pipeline, X[test_query, :, tgen])
+                                AUC_test_query_split[t, tgen, i_query] += roc_auc_score(y_true=y[test_query], y_score=pred) / args.n_folds
+                                mean_preds_test_query_split[t, tgen, i_query] += np.mean(pred) / args.n_folds
+                            except ValueError: # in case of "ValueError: Only one class present in y_true. ROC AUC score is not defined in that case."
+                                # defaults to just adding the mean perf and pred
+                                print("\n!!! could not find 2 classes in the split queries ... defaults to adding the mean perf and pred !!!\n")
+                                AUC_test_query_split[t, tgen, i_query] += 0.5 / args.n_folds
+                                mean_preds_test_query_split[t, tgen, i_query] += 0.5 / args.n_folds
                         
                     # normal test
                     pred = predict(pipeline, X[test, :, tgen])
                     AUC[t, tgen] += roc_auc_score(y_true=y[test], y_score=pred) / args.n_folds
                     mean_preds[t, tgen] += np.mean(pred) / args.n_folds
+                    accuracy[t, tgen] += accuracy_score(y[test], pred>0.5) / args.n_folds
 
     # TODO: implement generalization over conditions for the non-timegen case
     else:
@@ -505,7 +530,7 @@ def decode(args, X, y, clf, n_times, test_split_query_indices):
             raise
         all_models = get_averaged_clf(args, all_models, n_times)
 
-    return all_models, AUC, AUC_test_query_split
+    return all_models, AUC, accuracy, AUC_test_query_split
 
 
 def get_averaged_clf(args, all_models, n_times):
@@ -545,7 +570,7 @@ def get_averaged_clf(args, all_models, n_times):
     # print('\n')
             
 
-def test_decode(args, X, y, all_models):
+def test_decode(args, X, y, all_models, test_split_query_indices):
     n_folds = len(all_models)
     n_times_test = X.shape[2]
     n_times_train = len(all_models[0])
@@ -553,6 +578,9 @@ def test_decode(args, X, y, all_models):
     if args.timegen:
         AUC = np.zeros((n_times_train, n_times_test))
         mean_preds = np.zeros((n_times_train, n_times_test))
+        accuracy = np.zeros((n_times_train, n_times_test))
+        if test_split_query_indices: # split the test indices according to the query
+            AUC_test_query_split = np.zeros((n_times_train, n_times_test, len(test_split_query_indices)))
         for tgen in trange(n_times_test):
             t_data = X[:, :, tgen]
             for t in range(n_times_train):
@@ -560,8 +588,22 @@ def test_decode(args, X, y, all_models):
                 for i_fold in range(n_folds):
                     pipeline = all_models[i_fold][t]
                     all_folds_preds.append(predict(pipeline, t_data))
-                AUC[t, tgen] = roc_auc_score(y_true=y, y_score=np.mean(all_folds_preds, 0))
+
+                all_folds_preds = np.mean(all_folds_preds, 0)
+                if test_split_query_indices: # split the test indices according to the query
+                    for i_query, split_indices in enumerate(test_split_query_indices):
+                        try:
+                            # pred = predict(pipeline, X[split_indices, :, tgen])
+                            AUC_test_query_split[t, tgen, i_query] += roc_auc_score(y_true=y[split_indices], y_score=all_folds_preds[split_indices])
+                        except ValueError: # in case of "ValueError: Only one class present in y_true. ROC AUC score is not defined in that case."
+                            # defaults to just adding the mean perf and pred
+                            print("\n!!! could not find 2 classes in the split queries ... defaults to adding the mean perf!!!\n")
+                            AUC_test_query_split[t, tgen, i_query] += 0.5
+
+                AUC[t, tgen] = roc_auc_score(y_true=y, y_score=all_folds_preds)
                 mean_preds[t, tgen] = np.mean(all_folds_preds)
+                accuracy[t, tgen] += accuracy_score(y, all_folds_preds>0.5)
+                # accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1))
 
     else: # diag only
         AUC = np.zeros(n_times_train)
@@ -578,7 +620,7 @@ def test_decode(args, X, y, all_models):
     print('mean AUC: ', AUC.mean())
     print('max AUC: ', AUC.max())
 
-    return AUC, mean_preds
+    return AUC, accuracy, mean_preds, AUC_test_query_split
 
 
 def test_decode_all_sentence(args, X, y, all_models):
@@ -656,60 +698,16 @@ def permutation_test_single_chan(args, X, y, clf):
     return pvals, AUC
 
 
-def gridsearch_decode(args, X, y, clf, n_times):
-    '''
-    get best parameters over a family of classifiers. 
-    through nested crossval. 
-    typically called by test_classifiers_decoding.py
-    '''
-    cv = StratifiedKFold(n_splits=args.n_folds, shuffle=False, random_state=42)
-    # cv = StratifiedShuffleSplit(n_splits=50, test_size=0.2)
-
-    if args.reduc_dim:
-        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
-    else:
-        pipeline = make_pipeline(RobustScaler(), clf)
-
-    all_models = []
-    if args.timegen:
-        AUC = np.zeros((n_times, n_times))
-        for train, test in cv.split(X, y):
-            all_models.append([])
-            for t in trange(n_times):
-                pipeline.fit(X[train, :, t], y[train])
-                all_models[-1].append(deepcopy(pipeline))
-                for tgen in range(n_times):                    
-                    # normal test
-                    pred = predict(pipeline, X[test, :, tgen])
-                    AUC[t, tgen] += roc_auc_score(y_true=y[test], y_score=pred) / args.n_folds
-    else:
-        AUC = np.zeros(n_times)                
-        for train, test in cv.split(X, y):
-            all_models.append([])
-            for t in trange(n_times):
-                pipeline.fit(X[train, :, t], y[train])
-                all_models[-1].append(deepcopy(pipeline))
-                pred = predict(pipeline, X[test, :, t])
-                AUC[t] += roc_auc_score(y_true=y[test], y_score=pred) / args.n_folds
-
-    print('mean AUC: ', AUC.mean())
-    print('max AUC: ', AUC.max())
-
-    return all_models, AUC
-
-
 # ///////////////////////////////////////////////////////// #
 #################### SAVING AND PLOTTING ####################
 # ///////////////////////////////////////////////////////// #
 
-def save_results(args, out_fn, AUC, all_models=None):
+def save_results(out_fn, results, all_models=None, fn_end="AUC.npy"):
     print('Saving results')
-    if args.timegen:
-        AUC_diag = np.diag(AUC)
-        np.save(out_fn + '_AUC.npy', AUC)
+    if results.ndim > 1:
+        np.save(f"{out_fn}_{fn_end}", results)
     else:
-        AUC_diag = AUC
-        np.save(out_fn + '_AUC_diag.npy', AUC_diag)
+        np.save(f"{out_fn}_{fn_end}_diag", results)
     if all_models:
         pickle.dump(all_models, open(out_fn + '_all_models.p', 'wb'))
     return
@@ -761,6 +759,12 @@ def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=No
 
     # DIAGONAL PLOT
     fig, ax = plt.subplots()
+    for w_onset in word_onsets:
+         fig.axes[0].axvline(x=w_onset, linestyle='--', color='k')
+    for img_onset in image_onset:
+         fig.axes[0].axvline(x=img_onset, linestyle='-', color='k')
+    fig.axes[0].axhline(y=0.5, color='k', linestyle='-', alpha=.5)
+    
     if data_mean.ndim > 1: # we have the full timegen
         data_mean_diag = np.diag(data_mean)
     else: # already have the diagonal
@@ -775,12 +779,57 @@ def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=No
     plt.ylabel(ylabel)
     plt.xlabel("Time (s)")
 
+    plt.savefig(f'{out_fn}_{ylabel}_diag.png')
+    plt.close()
+
+
+def plot_multi_diag(data, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", contrast=False, version="v1", cmap_name='hsv', cmap_groups=[], labels=[]):
+    word_onsets, image_onset = get_onsets(train_cond, version=version)
+    n_plots = data.shape[0]
+    n_times_train = data.shape[1]
+    times_train = np.linspace(train_tmin, train_tmax, n_times_train)
+    if len(cmap_groups): # give the same color for each member of the group, typically for each subjects
+        cmap = plt.cm.get_cmap(cmap_name, len(np.unique(cmap_groups)))
+    else: # classical 1 color per plot
+        cmap = plt.cm.get_cmap(cmap_name, n_plots)
+
+    # DIAGONAL PLOT
+    fig, ax = plt.subplots()
     for w_onset in word_onsets:
          fig.axes[0].axvline(x=w_onset, linestyle='--', color='k')
     for img_onset in image_onset:
          fig.axes[0].axvline(x=img_onset, linestyle='-', color='k')
+    fig.axes[0].axhline(y=0.5, color='k', linestyle='-', alpha=.5)
+    
+    if data.ndim > 2: # we have the full timegen
+        data_diag = np.array([np.diag(d) for d in data])
+    else: # already have the diagonal
+        data_diag = data
+    if data_std is not None:
+        if data_std.ndim > 2: # we have the full timegen
+            data_std_diag = np.array([np.diag(d) for d in data_std])
+        else: # already have the diagonal
+            data_std_diag = data_std
 
-    plt.savefig(f'{out_fn}_{ylabel}_diag.png')
+    for i_plot in range(n_plots):
+        color = cmap(i_plot) if not len(cmap_groups) else cmap(cmap_groups[i_plot])
+        if len(labels):
+            ax.plot(times_train, data_diag[i_plot], c=cmap(i_plot), alpha=0.5, lw=1/(n_plots/10), label=labels[i_plot])
+        else:
+            ax.plot(times_train, data_diag[i_plot], c=cmap(i_plot), alpha=0.5, lw=1/(n_plots/10))
+        if data_std is not None:
+            ax.fill_between(times_train, data_diag[i_plot]-data_std_diag[i_plot], data_diag[i_plot]+data_std_diag[i_plot], alpha=0.2, color=cmap(i_plot))
+
+    # plot mean
+    ax.plot(times_train, np.mean(data_diag, 0), c='k', alpha=0.8, lw=1, label="Mean")
+
+    plt.ylabel(ylabel)
+    plt.xlabel("Time (s)")
+    if len(labels): plt.legend()
+    plt.tight_layout()
+    
+    cmap_groups_str = f"_{len(np.unique(cmap_groups))}groups" if len(cmap_groups) else ""
+    plt.savefig(f'{out_fn}_{ylabel}_all_diags{cmap_groups_str}.png')
     plt.close()
 
 
@@ -809,7 +858,6 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
         vmin = 0.4
         vmax = 0.6
     divnorm = matplotlib.colors.TwoSlopeNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
-
 
     # FULL TIMEGEN PLOT
     fig, ax = plt.subplots()

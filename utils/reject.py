@@ -6,13 +6,15 @@ from scipy import signal
 from copy import deepcopy
 from ipdb import set_trace
 import seaborn as sns
+import pandas as pd
+import matplotlib.pyplot as plt
 
 
-def plot_deviant_maxwell(scores):
+def plot_deviant_maxwell(scores, out_fn):
 	for ch_type in ['grad', 'mag']:
 		ch_subset = scores['ch_types'] == ch_type
 		ch_names = scores['ch_names'][ch_subset]
-		scores = scores['scores_noisy'][ch_subset]
+		scores_data = scores['scores_noisy'][ch_subset]
 		limits = scores['limits_noisy'][ch_subset]
 		bins = scores['bins']  # The the windows that were evaluated.
 		# We will label each segment by its start and stop time, with up to 3
@@ -22,9 +24,7 @@ def plot_deviant_maxwell(scores):
 		# We store the data in a Pandas DataFrame. The seaborn heatmap function
 		# we will call below will then be able to automatically assign the correct
 		# labels to all axes.
-		data_to_plot = pd.DataFrame(data=scores,
-		                            columns=pd.Index(bin_labels, name='Time (s)'),
-		                            index=pd.Index(ch_names, name='Channel'))
+		data_to_plot = pd.DataFrame(data=scores_data, columns=pd.Index(bin_labels, name='Time (s)'), index=pd.Index(ch_names, name='Channel'))
 
 		# First, plot the "raw" scores.
 		fig, ax = plt.subplots(1, 2, figsize=(12, 8))

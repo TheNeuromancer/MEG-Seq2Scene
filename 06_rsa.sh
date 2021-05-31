@@ -6,8 +6,9 @@ do
 		do
 			for rsa_metric in pearson regression # spearman 
 			do
-				echo "python 06_rsa.py -s $sub --train-cond $cond --rsa_metric $rsa_metric --distance_metric $dist_metric -c v7config  "
-				# --xdawn
+				echo "python 06_rsa.py -s $sub --train-cond $cond --rsa_metric $rsa_metric --distance_metric $dist_metric -w --xdawn "
+				# -c v8config --filter \"Matching=='match'\" "
+				# 
 			done
 		done
 	done
