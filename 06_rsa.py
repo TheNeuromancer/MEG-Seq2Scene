@@ -28,7 +28,7 @@ parser.add_argument('--label', default='', help='help to identify the result lat
 parser.add_argument('--filter', default='', help='md query to filter trials before anything else (eg to use only matching trials')
 
 parser.add_argument('--distance_metric', default='confusion', help='Metric to compute RSA')
-parser.add_argument('--rsa_metric', default='spearman', help='Metric to compute RSA')
+parser.add_argument('--rsa_metric', default=[], action='append', help='Metric to compute RSA')
 parser.add_argument('--min-nb-trial', default=2, type=int, help='minimum number of trial in a class to keep it in the decoding to get confusion matrices')
 parser.add_argument('-x', '--xdawn', action='store_true',  default=False, help='Whether to apply Xdawn spatial filtering before training decoder')
 
@@ -56,7 +56,7 @@ start_time = time.time()
 print('\nLoading epochs')
 
 train_fn, base_out_fn = get_paths_rsa(args)
-out_fn = f"{base_out_fn}_{args.distance_metric}_{args.rsa_metric}"
+out_fn = f"{base_out_fn}_{args.distance_metric}"
 print(f"full out fn: {out_fn}")
 epochs = load_data_rsa(args, train_fn)
 if args.train_cond == "two_objects":
@@ -97,18 +97,14 @@ if args.distance_metric == "confusion":
     class_queries = get_class_queries(args.train_cond)
     for factor in factors:
         dsm_models.append(get_dsm_from_queries(factor, class_queries))
-
 else: # any other distance metric
     factor_values = []
     for factor in factors:
-        # if "+" in factor: # joint factor
-        #     # factor_values.append("_".join([md[subfac] for subfac in factor.split("+")]))
         factor_values.append(np.sum([md[subfac] for subfac in factor.split("+")], 0))
-        # else: # simple factor
-        #     factor_values.append(md[factor])
 
     for factor_val in factor_values:
-        dsm_models.append(squareform(mne_rsa.compute_dsm(factor_val, metric=lambda x1, x2: 1 if x1!=x2 else 0)))
+        # dsm_models.append(squareform(mne_rsa.compute_dsm(factor_val, metric=lambda x1, x2: 1 if x1!=x2 else 0)))
+        dsm_models.append(mne_rsa.compute_dsm(factor_val, metric=lambda x1, x2: 1 if x1!=x2 else 0))
 
     # PLOT reduced models dsms
     reduced_dsm_models = []
@@ -135,9 +131,9 @@ n_times = data.shape[2]
 times = np.linspace(epochs.tmin, epochs.tmax, n_times)
 version = "v1" if int(args.subject[0:2]) < 8 else "v2" # first 8 subjects, different timings
 
-# n_times=2
 if args.distance_metric == "confusion":
     path2confusions = f"{base_out_fn}_confusions.npy"
+    print(f"Looking for existing confusion matrices in: {path2confusions}")
     if op.exists(path2confusions):
         print("Loading confusion matrices from disk")
         confusion_matrices = np.load(path2confusions)
@@ -152,42 +148,59 @@ if args.distance_metric == "confusion":
               train_tmin=times[0], train_tmax=times[-1], ylabel='AUC', version=version)
     # confusion_matrices is of shape (n_times*n_classes*n_classes)
     
-    if args.rsa_metric != "regression":
-        scoring_fn = spearmanr if args.rsa_metric=="spearman" else pearsonr
-        rsa_results = np.zeros((n_factors, n_times))
-        for i_fac, factor in enumerate(factors):
-            print(f"doing factor {factor}")
+for metric in args.rsa_metric:
+    if args.distance_metric == "confusion":
+        if "regression" not in metric:
+            scoring_fn = spearmanr if metric=="spearman" else pearsonr
+            rsa_results = np.zeros((n_factors, n_times))
+            for i_fac, factor in enumerate(factors):
+                print(f"doing factor {factor}")
+                for t in range(n_times):
+                    rsa_results[i_fac, t] = scoring_fn(1 - confusion_matrices[t].ravel(), dsm_models[i_fac].ravel())[0]
+                
+                fig = mne_rsa.plot_dsms(np.mean(confusion_matrices, 0), names=factor)
+                plt.savefig(f'{out_fn}_dsms_confusion_{factor}_{metric}.png')
+                plt.close()
+
+        elif metric == "regression": # classical regression
+            dsm_models_for_reg = np.array([d.ravel() for d in dsm_models]).T
+            rsa_results = np.zeros((n_factors, n_times))
             for t in range(n_times):
-                rsa_results[i_fac, t] = scoring_fn(1 - confusion_matrices[t].ravel(), dsm_models[i_fac].ravel())[0]
+                rsa_results[:,t] = regression_score(confusion_matrices[t].ravel(), dsm_models_for_reg)
+            # normalize betas
+            # scaler = MinMaxScaler()
+            # rsa_results = scaler.fit_transform(rsa_results.T).T
+
+        elif metric == "RF_regression":
+            dsm_models_for_reg = np.array([d.ravel() for d in dsm_models]).T
+            rsa_results = np.zeros((n_factors, n_times))
+            for t in range(n_times):
+                rsa_results[:,t] = random_forest_regression_score(confusion_matrices[t].ravel(), dsm_models_for_reg)
             
-            fig = mne_rsa.plot_dsms(np.mean(confusion_matrices, 0), names=factor)
-            plt.savefig(f'{out_fn}_dsms_confusion_{factor}.png')
-            plt.close()
 
-    elif args.rsa_metric == "regression":
-        dsm_models_for_reg = np.array([d.ravel() for d in dsm_models]).T
-        rsa_results = np.zeros((n_factors, n_times))
-        for t in range(n_times):
-            rsa_results[:,t] = regression_score(confusion_matrices[t].ravel(), dsm_models_for_reg)
-        # normalize betas
-        # scaler = MinMaxScaler()
-        # rsa_results = scaler.fit_transform(rsa_results.T).T
+    else: # anything else that confusion matrices
 
-else: # anything else that confusion matrices
-    def generate_meg_dsms():
-        """Generate DSMs for each time sample."""
-        for t in range(n_times):
-            # yield mne_rsa.compute_dsm_cv(data[:, :, t], metric='correlation')
-            yield mne_rsa.compute_dsm(data[:, :, t], metric=args.distance_metric)
+        def generate_meg_dsms():
+            """Generate DSMs for each time sample."""
+            for t in range(n_times):
+                yield mne_rsa.compute_dsm(data[:, :, t], metric=args.distance_metric)
+        
+        if metric == "RF_regression":
+            dsm_models_for_reg = np.array([d.ravel() for d in dsm_models]).T
+            rsa_results = np.zeros((n_factors, n_times))
+            generator = generate_meg_dsms()
+            for t in range(n_times):
+                rsa_results[:,t] = random_forest_regression_score(next(generator), dsm_models_for_reg)
+        
+        else:
+            rsa_results = mne_rsa.rsa(generate_meg_dsms(), dsm_models, metric=metric, verbose=True, n_data_dsms=n_times, n_jobs=-1)
+            rsa_results = rsa_results.T # transpose to get n_factors as the first dimension
 
-    rsa_results = mne_rsa.rsa(generate_meg_dsms(), dsm_models, metric=args.rsa_metric, verbose=True, n_data_dsms=n_times, n_jobs=-1)
-    rsa_results = rsa_results.T # transpose to get n_factors as the first dimension
+    ## PLOT RESULTS
+    plot_rsa(rsa_results, factors, f"{out_fn}_{metric}", times, cond=args.train_cond, data_std=None, ylabel=metric, version=version)
+    if len(factors) > 1:
+        multi_plot_rsa(rsa_results, factors, f"{out_fn}_{metric}", times, cond=args.train_cond, ylabel=metric, version=version)
 
-## PLOT RESULTS
-plot_rsa(rsa_results, factors, out_fn, times, cond=args.train_cond, data_std=None, ylabel=args.rsa_metric, version=version)
-if len(factors) > 1:
-    multi_plot_rsa(rsa_results, factors, out_fn, times, cond=args.train_cond, ylabel=args.rsa_metric, version=version)
-
-## SAVE RESULTS
-save_rsa_results(args, out_fn, rsa_results, factors)
+    ## SAVE RESULTS
+    save_rsa_results(args, f"{out_fn}_{metric}", rsa_results, factors)
 

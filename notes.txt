@@ -53,6 +53,9 @@ v15: same with 100 repeats
 v16: Decoding same colour, shape, or object. 10folds.
 v17: OVR with LR (no CV), 5folds. Also all conditions. 
 v18: sklearn's confusion matric func for RSA. 
+v19: + reducdim 0.99 + LRCV
+v20: same but with left and right queries for RSA. Also SVC with gridsearch for decoding window. 
+
 
 
 TODO: add split queries for test queries as well (currently only for training queries).

@@ -81,8 +81,10 @@ all_filenames = natsorted(glob(in_dir + '/*AUC*.npy'))
 if args.subject == "v1":
     all_filenames = [fn for fn in all_filenames if int(op.basename(op.dirname(fn))[0:2]) < 9]
     version = "v1"
-elif args.subject in ["v2", "all"]:
-    all_filenames = [fn for fn in all_filenames if int(op.basename(op.dirname(fn))[0:2]) > 8]
+elif args.subject == "v2":
+    all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) > 8]
+    version = "v2"
+elif args.subject == "all":
     version = "v2"
 elif args.subject == "goods":
     all_filenames = [fn for fn in all_filenames if not op.basename(op.dirname(fn))[0:2] in bad_subjects]

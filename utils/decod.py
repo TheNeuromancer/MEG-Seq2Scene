@@ -24,6 +24,9 @@ from sklearn.multiclass import OneVsRestClassifier
 from scipy.signal import savgol_filter
 from scipy.stats import ttest_1samp
 from scipy.ndimage import gaussian_filter1d
+import seaborn as sns
+from statannot import add_stat_annotation
+
 
 # local import
 from .params import *
@@ -69,7 +72,7 @@ def get_out_fn(args, dirname='Decoding'):
     # smooth_str = f"_{args.smooth}smooth" if args.smooth else ""
     shuffle_str = '_shuffled' if args.shuffle else ''
     fband_str = f'_{args.freq_band}' if args.freq_band else ''
-    cond_str = f"_cond-{args.train_cond}-"
+    cond_str = f"_cond-{args.train_cond}-" if isinstance(args.train_cond, str) else "" # empty string if we have a list of training conditions.
     if hasattr(args, 'train_query_1'):
         if args.train_query_1 and args.train_query_2:
             train_query_1 = '_'.join(args.train_query_1.split())
@@ -99,6 +102,9 @@ def shorten_filename(fn):
     fn = fn.replace('Colour', 'C')
     fn = fn.replace('Shape', 'S')
     fn = fn.replace('Binding', 'Bd')
+    fn = fn.replace('Object', 'Obj')
+    # fn = fn.replace('two_objects', 'scenes')
+    # fn = fn.replace('one_object', 'obj')
     fn = fn.replace('cercle', 'cl')
     fn = fn.replace('carre', 'ca')
     fn = fn.replace('triangle', 'tr')
@@ -713,6 +719,11 @@ def save_results(out_fn, results, all_models=None, fn_end="AUC.npy"):
     return
 
 
+def save_pickle(out_fn, results):
+    print(f'Saving results to {out_fn}')
+    pickle.dump(results, open(out_fn, 'wb'))
+
+
 def save_preds(args, out_fn, preds):
     print('Saving predictions')
     if args.timegen:
@@ -1025,94 +1036,113 @@ def get_ylabel_from_fn(fn):
 
 
 
-def plot_gridseach_parameters(args, out_fn, params, times, AUC):
-    '''
-    plotting the best parameters for each time point after a gridsearch, 
-    canonically called in test_classifiers_decoding.py
-    '''
-    n_colors = 100
-    cmap = plt.cm.get_cmap('hsv', n_colors)
+# def plot_gridseach_parameters(args, out_fn, params, times, AUC):
+#     '''
+#     plotting the best parameters for each time point after a gridsearch, 
+#     canonically called in test_classifiers_decoding.py
+#     '''
+#     n_colors = 100
+#     cmap = plt.cm.get_cmap('hsv', n_colors)
 
-    for param in params:
-        fig, ax1 = plt.subplots()
-        color = cmap(np.random.randint(n_colors))
-        # if param in ['alpha', 'C', 'learning_rate']: # logspaced values
-        #     ax1.plot(times, params[param], color=color)
-        #     ax1.set_yscale('log')
-        # else: # plot dummy values so as to have constant spacing in the yaxis
+#     for param in params:
+#         fig, ax1 = plt.subplots()
+#         color = cmap(np.random.randint(n_colors))
+#         # if param in ['alpha', 'C', 'learning_rate']: # logspaced values
+#         #     ax1.plot(times, params[param], color=color)
+#         #     ax1.set_yscale('log')
+#         # else: # plot dummy values so as to have constant spacing in the yaxis
 
-        # orig_entries = []
-        # for i_fold in range(len(params[param])): 
-        #     orig_entries.append([str(val) for val in params[param][i_fold]])
-        # labels = sorted(np.unique(orig_entries))
+#         # orig_entries = []
+#         # for i_fold in range(len(params[param])): 
+#         #     orig_entries.append([str(val) for val in params[param][i_fold]])
+#         # labels = sorted(np.unique(orig_entries))
 
-        labels = sorted(np.unique(params[param])) # all entries are already string
+#         labels = sorted(np.unique(params[param])) # all entries are already string
         
-        values = [] # get the corresponding indices
-        for i_fold in range(args.n_folds):
-            values.append([labels.index(params[param][i_fold, t]) for t in range(len(times))])
+#         values = [] # get the corresponding indices
+#         for i_fold in range(args.n_folds):
+#             values.append([labels.index(params[param][i_fold, t]) for t in range(len(times))])
         
-        mean_values = np.mean(values, axis=0)
-        std_values = np.std(values, axis=0)
+#         mean_values = np.mean(values, axis=0)
+#         std_values = np.std(values, axis=0)
 
-        ax1.plot(times, mean_values, color=color)
-        ax1.fill_between(times, mean_values-std_values, mean_values+std_values, color=color, alpha=0.2)
+#         ax1.plot(times, mean_values, color=color)
+#         ax1.fill_between(times, mean_values-std_values, mean_values+std_values, color=color, alpha=0.2)
 
-        ax1.set_yticks(ticks=range(len(labels)))
-        ax1.set_yticklabels(labels=[l.decode('UTF-8') for l in labels])
-        ax1.set_ylabel(param, color=color)
-        ax1.tick_params(axis='y', labelcolor=color)
+#         ax1.set_yticks(ticks=range(len(labels)))
+#         ax1.set_yticklabels(labels=[l.decode('UTF-8') for l in labels])
+#         ax1.set_ylabel(param, color=color)
+#         ax1.tick_params(axis='y', labelcolor=color)
 
-        ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-        ax2.plot(times, AUC, color='k')
-        ax2.set_ylabel('AUC', color='k')
-        ax2.tick_params(axis='y', labelcolor='k')
+#         ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+#         ax2.plot(times, AUC, color='k')
+#         ax2.set_ylabel('AUC', color='k')
+#         ax2.tick_params(axis='y', labelcolor='k')
 
-        ax1.set_xlabel('time (s)')
-        plt.tight_layout()
-        plt.savefig(f'{out_fn}_best_{param}.png')
+#         ax1.set_xlabel('time (s)')
+#         plt.tight_layout()
+#         plt.savefig(f'{out_fn}_best_{param}.png')
 
 
 
-def get_decod_onset(AUC, th=0.6, n_min=5):
-    ''' Get the onset of significant decoding performance,
-    ie at least n_min consecutive time points above threshold th.
-    returns 0 if there is no significant cluster.
-    '''
-    if len(AUC.shape) == 2:
-        AUC = np.diag(AUC)
+# def get_decod_onset(AUC, th=0.6, n_min=5):
+#     ''' Get the onset of significant decoding performance,
+#     ie at least n_min consecutive time points above threshold th.
+#     returns 0 if there is no significant cluster.
+#     '''
+#     if len(AUC.shape) == 2:
+#         AUC = np.diag(AUC)
 
-    above_th = AUC > th
-    consec_tp = 0
-    signif = False
-    for t in range(len(AUC)):
-        if above_th[t]:
-            consec_tp += 1
-        else:
-            consec_tp = 0
-        if consec_tp == n_min:
-            signif = True
-            break
+#     above_th = AUC > th
+#     consec_tp = 0
+#     signif = False
+#     for t in range(len(AUC)):
+#         if above_th[t]:
+#             consec_tp += 1
+#         else:
+#             consec_tp = 0
+#         if consec_tp == n_min:
+#             signif = True
+#             break
 
-    if signif:
-        return t - n_min
-    else:
-        return None
+#     if signif:
+#         return t - n_min
+#     else:
+#         return None
 
-def get_decod_spread(AUC, onset, th=0.6):
-    '''get the spread of the decoding performance,
-    ie the normalized area ofthe square starting at the onset of significant decoding
-    '''
-    square = AUC[onset::, onset::]
-    above_th_square = square > th
-    spread = np.sum(above_th_square) / np.prod(above_th_square.shape)
-    return spread
+# def get_decod_spread(AUC, onset, th=0.6):
+#     '''get the spread of the decoding performance,
+#     ie the normalized area ofthe square starting at the onset of significant decoding
+#     '''
+#     square = AUC[onset::, onset::]
+#     above_th_square = square > th
+#     spread = np.sum(above_th_square) / np.prod(above_th_square.shape)
+#     return spread
 
-    # consecutive_timepoints = np.diff(np.where(np.concatenate(([above_th[0]], above_th[:-1] != above_th[1:], [True])))[0])[::2]
+#     # consecutive_timepoints = np.diff(np.where(np.concatenate(([above_th[0]], above_th[:-1] != above_th[1:], [True])))[0])[::2]
 
-    # if np.any(consecutive_timepoints > n_min):
+#     # if np.any(consecutive_timepoints > n_min):
 
-    # chance = np.ones_like(AUC) * 0.5
-    # # Compute statistic
-    # fvalues, clusters, cluster_p_values, H0 = \
-    #     permutation_cluster_test([AUC, chance], n_permutations=1000, tail=1, n_jobs=-1, verbose=False)
+#     # chance = np.ones_like(AUC) * 0.5
+#     # # Compute statistic
+#     # fvalues, clusters, cluster_p_values, H0 = \
+#     #     permutation_cluster_test([AUC, chance], n_permutations=1000, tail=1, n_jobs=-1, verbose=False)
+
+
+def make_sns_barplot(df, x, y, hue=None, box_pairs=[], out_fn="tmp.png", ymin=None, hline=None):
+    fig, ax = plt.subplots(figsize=(18,14))
+    g = sns.barplot(x=x, y=y, hue=hue, data=df, ax=ax, ci=68) # ci=68 <=> standard error
+    ax.set_xlabel(x,fontsize=25)
+    ax.set_ylabel(y, fontsize=25)
+    if box_pairs:
+        _ = add_stat_annotation(ax, plot="barplot", data=df, x=x, hue=hue, y=y, line_offset_to_box=0, \
+                                text_format='star', test='Wilcoxon', box_pairs=box_pairs, verbose=0, use_fixed_offset=True) 
+    if hue is not None:
+        leg = plt.gca().get_legend()
+        leg.set_title(hue, prop={'size':25})
+    if ymin is not None:
+        ax.set_ylim(ymin)
+    if hline is not None:
+        ax.axhline(y=hline, lw=1, ls='--', c='grey', zorder=-10)
+    plt.savefig(out_fn, transparent=True, dpi=400, bbox_inches='tight')
+    plt.close()

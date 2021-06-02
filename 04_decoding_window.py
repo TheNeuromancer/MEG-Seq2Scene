@@ -9,9 +9,10 @@ import pickle
 import time
 import importlib
 from sklearn.metrics.pairwise import cosine_similarity
+from itertools import permutations, combinations
 
 from utils.decod import *
-from utils.RSA import load_data_rsa, get_paths_rsa, decode_ovr, test_decode_ovr, decode_window, angle_between ## TO CHANGE
+from utils.RSA import load_data_rsa, get_paths_rsa, decode_ovr, test_decode_ovr, decode_window, test_decode_window, angle_between ## TO CHANGE
 
 parser = argparse.ArgumentParser(description='MEG Decoding analysis')
 parser.add_argument('-c', '--config', default='config', help='path to config file')
@@ -66,12 +67,9 @@ start_time = time.time()
 
 ### GET EPOCHS FILENAMES ###
 print("TODO: make own utils for this script ... here we do not have the test condition saved in the fn AND WE NEED TO BE ABLE TO LOAD DIFFERENT BLOCK TYPES TO COMPARE THEM")
-train_fn, base_out_fn = get_paths_rsa(args, "Decoding_window")
-out_fn = f"{base_out_fn}"
+train_fns, out_fn = get_paths_rsa(args, "Decoding_window")
 print(f"full out fn: {out_fn}")
-clf_idx = 2 if args.reduc_dim_window else 1
-colors = ["vert", "bleu", "rouge"]
-shapes = ["triangle", "cercle", "carre"]
+clf_idx = 2 if args.reduc_dim_win else 1
 
 
 ###########################
@@ -81,11 +79,15 @@ shapes = ["triangle", "cercle", "carre"]
 ### DECODE ###
 all_windows_models = []
 all_hyperplans = {}
+all_windows_epochs = []
+all_windows_queries = []
+all_windows_AUC = []
+all_windows_accuracy = []
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
-for window_str, query, cond in zip(args.windows, args.train_query, args.train_cond):
+for window_str, query, cond, train_fn in zip(args.windows, args.train_query, args.train_cond, train_fns):
     window = tuple([float(x) for x in window_str.split(",")])
     all_hyperplans[window] = {}
-    print(f"Doing window : {window}")
+    print(f"Doing window : {window}, {train_fn}")
 
     ### LOAD EPOCHS ###
     epochs = load_data_rsa(args, train_fn)
@@ -93,137 +95,121 @@ for window_str, query, cond in zip(args.windows, args.train_query, args.train_co
     if args.train_cond == "two_objects":
         epochs.metadata = complement_md(epochs.metadata)
     epo_window = epochs.copy().crop(*window)
+    all_windows_epochs.append(epo_window)
     
-    ## get queries
-    print("hardcoded queries ... prety bad")
-    if "Left" in args.train_query or "Right" in args.train_query:
-        class_queries = [f"{args.train_query}=='{s}_{c}'" for s in shapes for c in colors]
-    elif args.train_query == "Shape1+Colour1":
+    ## GET QUERIES
+    if query == "Colour1": 
+        class_queries = [f"Colour1=='{c}'" for c in colors]
+    elif query == "Shape1":
+        class_queries = [f"Shape1=='{s}'" for s in shapes]
+    elif query == "Colour2": 
+        class_queries = [f"Colour2=='{c}'" for c in colors]
+    elif query == "Shape2":
+        class_queries = [f"Shape2=='{s}'" for s in shapes]
+    elif query == "Shape1+Colour1":
         class_queries = [f"Shape1=='{s}' and Colour1=='{c}'" for s in shapes for c in colors]
-    elif args.train_query == "Shape2+Colour2":
+    elif query == "Shape2+Colour2":
         class_queries = [f"Shape2=='{s}' and Colour2=='{c}'" for s in shapes for c in colors]
     else:
-        raise RuntimeError(f"Wrong query: {args.train_query}")
+        raise RuntimeError(f"Wrong query: {query}")
+    all_windows_queries.append(class_queries)
     print(class_queries)
 
     ## DECODE
     AUC, accuracy, ovr_model = decode_window(args, epo_window, class_queries)
     all_windows_models.append(ovr_model)
+    all_windows_accuracy.append(accuracy)
+    all_windows_AUC.append(AUC)
     
-    
-    # inter-fold consistency
-    for i_class, classe in enumerate(class_queries):
-        print(f"\n doing class {classe}")
-        all_angles = []
-        all_cos = []
-        all_hyperplans[window][classe] = []
-        for i1 in range(args.n_folds):
-            all_hyperplans[window][classe].append(ovr_model[i1][clf_idx].estimators_[i_class].coef_.ravel())
-            for i2 in range(i1, args.n_folds):
-                a1, a2 = ovr_model[i1][clf_idx].estimators_[i_class].coef_.ravel(), ovr_model[i2][clf_idx].estimators_[i_class].coef_.ravel()
-                all_angles.append(np.degrees(angle_between(a1, a2)))
-                all_cos.append(cosine_similarity(a1[np.newaxis,:], a2[np.newaxis,:])[0][0])
-        print(f"inter folds consistency for query: {classe}: {np.mean(all_angles)} +/- {np.std(all_cos)} degrees and {np.mean(all_cos)} +/- {np.std(all_cos)}")
+    # # inter-fold consistency
+    # for i_class, classe in enumerate(class_queries):
+    #     print(f"\n doing class {classe}")
+    #     all_angles = []
+    #     all_cos = []
+    #     all_hyperplans[window][classe] = []
+    #     for i1 in range(args.n_folds):
+    #         all_hyperplans[window][classe].append(ovr_model[i1][clf_idx].estimators_[i_class].coef_.ravel())
+    #         for i2 in range(i1, args.n_folds):
+    #             a1, a2 = ovr_model[i1][clf_idx].estimators_[i_class].coef_.ravel(), ovr_model[i2][clf_idx].estimators_[i_class].coef_.ravel()
+    #             all_angles.append(np.degrees(angle_between(a1, a2)))
+    #             all_cos.append(cosine_similarity(a1[np.newaxis,:], a2[np.newaxis,:])[0][0])
+    #     print(f"inter folds consistency for query: {classe}: {np.mean(all_angles)} +/- {np.std(all_angles)} degrees and {np.mean(all_cos)} +/- {np.std(all_cos)}")
 
-    # inter-condition angles
-    all_cond_hyperplans = []
-    for i_class, classe in enumerate(class_queries):
-        all_cond_hyperplans.append(np.mean([ovr_model[i][clf_idx].estimators_[i_class].coef_.ravel() for i in range(args.n_folds)], 0))
-            
-    for i_c1, classe1 in enumerate(class_queries):
-        for i_c2, classe2 in enumerate(class_queries):
-            a1, a2 = all_cond_hyperplans[i_c1], all_cond_hyperplans[i_c2]
-            print(f"\n doing classes {classe1} vs {classe2}: {np.degrees(angle_between(a1, a2))} degrees")
-            print(f"and cosine_similarity: {cosine_similarity(a1[np.newaxis,:], a2[np.newaxis,:])[0][0]}")
+    # # inter-condition angles
+    # all_cond_hyperplans = []
+    # for i_class, classe in enumerate(class_queries):
+    #     all_cond_hyperplans.append(np.mean([ovr_model[i][clf_idx].estimators_[i_class].coef_.ravel() for i in range(args.n_folds)], 0))
+    # for i_c1, classe1 in enumerate(class_queries):
+    #     for i_c2, classe2 in enumerate(class_queries):
+    #         a1, a2 = all_cond_hyperplans[i_c1], all_cond_hyperplans[i_c2]
+    #         print(f"\n doing classes {classe1} vs {classe2}: {np.degrees(angle_between(a1, a2))} degrees")
+    #         print(f"and cosine_similarity: {cosine_similarity(a1[np.newaxis,:], a2[np.newaxis,:])[0][0]}")
 
 print(f'Finished training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
 
-set_trace()
+## TEST DECODING
+gen_AUC = {}
+gen_accuracy = {}
+for i_m, model in enumerate(all_windows_models):
+    gen_AUC[f"{args.train_query[i_m]}-{args.train_cond[i_m]}"] = {}
+    gen_accuracy[f"{args.train_query[i_m]}-{args.train_cond[i_m]}"] = {}
+    for i_c, (epo_window, class_queries) in enumerate(zip(all_windows_epochs, all_windows_queries)):
+        if i_m == i_c:  # already tested using cval
+            test_AUC = all_windows_AUC[i_m]
+            test_accuracy = all_windows_accuracy[i_m]
+        else:
+            test_AUC, test_accuracy = test_decode_window(args, epo_window, class_queries, model)
+        gen_AUC[f"{args.train_query[i_m]}-{args.train_cond[i_m]}"][f"{args.train_query[i_c]}-{args.train_cond[i_c]}"] = test_AUC
+        gen_accuracy[f"{args.train_query[i_m]}-{args.train_cond[i_m]}"][f"{args.train_query[i_c]}-{args.train_cond[i_c]}"] = test_accuracy
+        print(f"Generalization perf from {args.train_query[i_m]} {args.train_cond[i_m]} {args.windows[i_m]}s \
+to {args.train_query[i_c]} {args.train_cond[i_c]} {args.windows[i_c]}s: AUC = {test_AUC} ; accuracy = {test_accuracy}")
 
-## ACROSS WINDOWS 
-all_hyperplans_all_windows = []
-for i_win, (window, window_models) in enumerate(zip(args.windows, all_windows_models)):
-    all_hyperplans_all_windows.append([])
-    for i_class, classe in enumerate(class_queries):
-        all_hyperplans_all_windows[-1].append(np.mean([window_models[i][clf_idx].estimators_[i_class].coef_.ravel() for i in range(args.n_folds)], 0))
-
-for i_c, classe in enumerate(class_queries):
-        class_hyperplanes = [hyperplan[i_c] for hyperplan in all_hyperplans_all_windows]
-        print(f"\n doing windows {args.windows} for classe {classe}: {np.degrees(angle_between(*class_hyperplanes))}")
-        print(f"and cosine_similarity: {cosine_similarity(class_hyperplanes)}") #a1[np.newaxis,:], a2[np.newaxis,:])}")
-
-set_trace()
-
-
-
-if not args.dummy:
-    ### SAVE RESULTS ###
-    save_results(out_fn, AUC) #, all_models)
-    save_results(out_fn, accuracy, fn_end="acc.npy")
-    # save_preds(args, out_fn, mean_preds)
-    # save_patterns(args, out_fn, all_models)
-    # pickle.dump(ch_names, open(out_fn + '_ch_names.p', 'wb'))
-
-    ### PLOT PERFORMANCE ###
-    version = "v1" if int(args.subject[0:2]) < 8 else "v2"
-    plot_perf(args, out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
+save_pickle(f"{out_fn}_AUC.p", gen_AUC)
+save_pickle(f"{out_fn}_accuracy.p", gen_accuracy)
 
 
-print(f'Done with saving training plots and data. Elasped time since the script began: {(time.time()-start_time)/60:.2f}min')
+# # ## ACROSS WINDOWS AVERAGING COSINES 
+# # all_hyperplans_all_windows = []
+# # for i_win, (window, window_models) in enumerate(zip(args.windows, all_windows_models)):
+# #     all_hyperplans_all_windows.append([])
+# #     for i_class, classe in enumerate(class_queries):
+# #         all_hyperplans_all_windows[-1].append([window_models[i][clf_idx].estimators_[i_class].coef_.ravel() for i in range(args.n_folds)])
+# # for i_c, classe in enumerate(class_queries):
+# #         class_hyperplanes = np.array([hyperplan[i_c] for hyperplan in all_hyperplans_all_windows])
+# #         shapes = class_hyperplanes.shape[0:2]
+# #         class_hyperplanes = class_hyperplanes.reshape((-1, class_hyperplanes.shape[-1]))
+# #         cos_sim = cosine_similarity(class_hyperplanes)
+# #         cos_sim = cos_sim.reshape((*shapes, *shapes))
+# #         cos_sim = cos_sim.mean(1).mean(2) # average over folds
+# #         print(f"(cosine average) cosine_similarity: {cos_sim}") #a1[np.newaxis,:], a2[np.newaxis,:])}")
 
+# ## ACROSS WINDOWS AVERAGING HYPERPLANES
+# all_hyperplans_all_windows = []
+# for i_win, (window, window_models) in enumerate(zip(args.windows, all_windows_models)):
+#     all_hyperplans_all_windows.append([])
+#     for i_class, classe in enumerate(class_queries):
+#         all_hyperplans_all_windows[-1].append(np.mean([window_models[i][clf_idx].estimators_[i_class].coef_.ravel() for i in range(args.n_folds)], 0))
+# all_cos_sims = []
+# for i_c, classe in enumerate(class_queries):
+#     class_hyperplanes = [hyperplan[i_c] for hyperplan in all_hyperplans_all_windows]
+#     cos_sim = cosine_similarity(class_hyperplanes)
+#     print(f"(hyperplanes average) cosine_similarity: {cos_sim}")
+#     # print(f"\n doing windows {args.windows} for classe {classe}: {np.degrees(angle_between(*class_hyperplanes))}")
+#     all_cos_sims.append(cos_sim[np.triu_indices(len(cos_sim), k=1)])
 
+# ave_cos_sims = np.mean(all_cos_sims, 0)
 
-###########################
-######### TESTING #########
-###########################
+# n_conds = len(args.train_cond)
+# idx_conds_comb = [x for x in combinations(np.arange(n_conds), 2)]
+# conds_comb = [x for x in combinations(args.train_cond, 2)]
+# query_comb = [x for x in combinations(args.train_query, 2)]
+# window_comb = [x for x in combinations(args.windows, 2)]
+# cos_sims_results = {}
+# for (cond1, cond2), (query1, query2), (win1, win2), cos in zip(conds_comb, query_comb, window_comb, ave_cos_sims):
+#     # cos_sims_results[f"{cond1}_{query1}_{win1}-vs-{cond2}_{query2}_{win2}"] = cos
+#     cos_sims_results[f"{query1}-{cond1}--vs--{query2}-{cond2}"] = cos
+# save_pickle(f"{out_fn}_cosine.p", cos_sims_results)
 
-print('\n\nStarting testing')
-
-### GET TEST DATA ###
-for test_cond, test_query  in zip(args.test_cond, args.test_query):
-    test_out_fn = f"{base_out_fn}_tested_on_{test_cond}_with_cond_{test_cond}"
-    print(f'testing on {test_cond}, output path: {test_out_fn}')
-
-    #check that the test fn is ok
-    test_fn = f"{op.dirname(train_fn)}/{test_cond}-epo.fif" 
-    print(test_fn)
-
-    ### LOAD EPOCHS ###
-    epochs = load_data_rsa(args, test_fn)
-    test_tmin, test_tmax = epochs.tmin, epochs.tmax
-    if test_cond == "two_objects":
-        epochs.metadata = complement_md(epochs.metadata)
-
-    # if len(all_models) != args.n_folds:
-    #     print('\nWATCH OUT, inconsistency in the number of cv folds\n')
-    # if len(all_models[0]) != X.shape[2]:
-    #     print('\nWATCH OUT, inconsistency in the number of timepoints\n')
-    #     print(f"found {len(all_models[0])} trained models and {X.shape[2]} test time point")
-
-    print("hardcoded queries ... prety bad")
-    if "Left" in test_query or "Right" in test_query:
-        class_queries = [f"{test_query}=='{s}_{c}'" for s in shapes for c in colors]
-    elif test_query == "Shape1+Colour1":
-        class_queries = [f"Shape1=='{s}' and Colour1=='{c}'" for s in shapes for c in colors]
-    elif test_query == "Shape2+Colour2":
-        class_queries = [f"Shape2=='{s}' and Colour2=='{c}'" for s in shapes for c in colors]
-    else:
-        raise RuntimeError(f"Wrong query: {test_query}")
-    print(class_queries)
-
-    AUC, accuracy = test_decode_ovr(args, epochs, class_queries, all_models)
-
-    if not args.dummy:
-        ### SAVE RESULTS ###
-        save_results(test_out_fn, AUC)
-        save_results(out_fn, accuracy, fn_end="acc.npy")
-        # save_preds(args, test_out_fn, mean_preds)
-
-        ### PLOT PERFORMANCE ###
-        plot_perf(args, test_out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, test_tmax=test_tmax, gen_cond=test_cond, version=version)
-
-        # # # plot pred
-        # plot_perf(args, out_fn+f"_tested_on_{test_cond}", mean_preds, test_cond, ylabel='prediction')
 
 
 print(f'Total elasped time since the script began: {(time.time()-start_time)/60:.2f}min')

@@ -4,22 +4,23 @@ do
 	# do
 
 ## OBJECTS
-	echo "python 04_decoding_window.py -w \ -s $sub --label AllObjects \
+	echo "python 04_decoding_window.py -w \
+-s $sub --label AllObjects \
 --train-cond 'two_objects' \
 --train-query \"Shape1+Colour1\" \
---windows \"0., 1.8\" \
+--windows \"0.,1.4\" \
 --train-cond 'one_object' \
 --train-query \"Shape1+Colour1\" \
---windows \"0., 1.8\" \
+--windows \"0.,1.4\" \
 --train-cond 'two_objects' \
 --train-query \"Shape2+Colour2\" \
---windows \"1.8, 3.6\" "
-
+--windows \"1.8,3.2\" "
 
 
 
 ## COLORS
-	echo "python 04_decoding_window.py -w \ -s $sub --label AllColors \
+	echo "python 04_decoding_window.py -w \
+-s $sub --label AllColors \
 --train-cond 'two_objects' \
 --train-query \"Colour1\" \
 --windows \"0.6, 1.4\" \
@@ -33,16 +34,17 @@ do
 
 
 ## SHAPES
-	echo "python 04_decoding_window.py -w \ -s $sub --label AllShapes \
+	echo "python 04_decoding_window.py -w \
+-s $sub --label AllShapes \
 --train-cond 'two_objects' \
 --train-query \"Shape1\" \
---windows \"0., .8\" \
+--windows \"0.,.8\" \
 --train-cond 'one_object' \
 --train-query \"Shape1\" \
---windows \"0., .8\" \
+--windows \"0.,.8\" \
 --train-cond 'two_objects' \
 --train-query \"Shape2\" \
---windows \"1.8, 2.6\" "
+--windows \"1.8,2.6\" "
 
 
 

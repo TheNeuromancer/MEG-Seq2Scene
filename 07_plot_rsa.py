@@ -74,16 +74,19 @@ else:
     os.makedirs(out_dir)
 
 # list all .npy files in the directory
-all_filenames = glob(in_dir + '/*all_results.p')
+all_fns = glob(in_dir + '/*all_results.p')
 
 # keep the first 8 subjects for the 1st version, all the remaining for v2
 if args.subject == "v1":
-    all_filenames = [fn for fn in all_filenames if int(op.basename(op.dirname(fn))[0:2]) < 9]
+    all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) < 9]
     version = "v1"
-elif args.subject in ["v2", "all"]:
-    all_filenames = [fn for fn in all_filenames if int(op.basename(op.dirname(fn))[0:2]) > 8]
+elif args.subject == "v2":
+    all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) > 8]
+    version = "v2"
+elif args.subject == "all":
+    version = "v2"
 elif args.subject == "goods":
-    all_filenames = [fn for fn in all_filenames if not op.basename(op.dirname(fn))[0:2] in bad_subjects]
+    all_fns = [fn for fn in all_fns if not op.basename(op.dirname(fn))[0:2] in bad_subjects]
     version = "v2"
 elif int(args.subject[0:2]) < 9:
     version = "v1"
@@ -94,8 +97,8 @@ else:
 
 report = mne.report.Report()
 
-print(all_filenames)
-all_labels = np.unique([op.basename(fn).split('_all_results.p')[0] for fn in all_filenames])
+print(all_fns)
+all_labels = np.unique([op.basename(fn).split('_all_results.p')[0] for fn in all_fns])
 print(all_labels)
 for label in all_labels:
     if args.slices:
@@ -104,7 +107,7 @@ for label in all_labels:
         elif "two_objects" in label: slices = slices_two_obj
     all_subs_results = []
     all_subs_AUCs = []
-    for fn in all_filenames:
+    for fn in all_fns:
         # if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
         if label not in fn: continue
         print('loading file ', fn)
