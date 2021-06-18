@@ -1,14 +1,5 @@
-def num2sub_name(num, all_subjects):
-  if not num.isdigit():
-    return num
-  else: 
-    sub_name = [sub for sub in all_subjects if num == sub[0:2]]
-    print(all_subjects)
-    assert len(sub_name) == 1
-    return sub_name[0]
-
-# brginning and end of epochs for each block type
-tmin_tmax_dict = {"localizer": [-.5, 1.], "one_object": [-.5, 4.], "two_objects": [-.5, 8.]}
+# beginning and end of epochs for each block type
+tmin_tmax_dict = {"localizer": [-.5, 1.], "one_object": [-.5, 4.], "two_objects": [-.5, 8.], "obj": [-.5, 4.], "scenes": [-.5, 8.], "alltogether": [-.5, 8.]}
 
 # trigger values for each block type
 TRIG_DICT = {"localizer_block_start": 70,

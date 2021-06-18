@@ -29,11 +29,11 @@ from sklearn.utils.extmath import softmax
 from sklearn.inspection import permutation_importance
 from sklearn.ensemble import RandomForestRegressor
 
-
 # local import
 from .params import *
-from .decod import get_out_fn, smooth, get_onsets, predict, complement_md
-from .split import StratifiedGroupKFold, RepeatedStratifiedGroupKFold
+from .commons import *
+from .split import *
+
 
 class RidgeClassifierCVwithProba(RidgeClassifierCV):
     def predict_proba(self, X):
@@ -42,7 +42,6 @@ class RidgeClassifierCVwithProba(RidgeClassifierCV):
         return softmax(d_2d, copy=False)
 
 cmap = plt.cm.get_cmap('tab10', 10)
-
 
 short_to_long_cond = {"loc": "localizer", "one_obj": "one_object", "two_obj": "two_objects",
                       "localizer": "localizer", "one_object":"one_object"}
@@ -63,7 +62,7 @@ short_to_long_cond = {"loc": "localizer", "one_obj": "one_object", "two_obj": "t
 *                   { }         *
 *                               *
 *********************************
-"""
+Called in the main scripts """
 
 
 def get_paths_rsa(args, dirname='RSA'):
@@ -285,7 +284,6 @@ def multi_plot_rsa(results, factors, out_fn, times, cond, data_std=None, ylabel=
     plt.close()
 
 
-
 def decoder_confusion(args, epochs, class_queries, n_times):
     """ X: n_trials, n_sensors, n_times
         y: n_trials
@@ -348,7 +346,7 @@ def decoder_confusion(args, epochs, class_queries, n_times):
         for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
             pipeline.fit(X[train, :, t], y[train])
             # all_models[-1].append(deepcopy(pipeline))
-            preds = predict(pipeline, X[test, :, t])
+            preds = predict(pipeline, X[test, :, t], multiclass=True)
             if preds.ndim == 2:
                 preds = preds
             else:
@@ -358,302 +356,6 @@ def decoder_confusion(args, epochs, class_queries, n_times):
             AUC[t] += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
 
     return AUC, all_confusions
-
-
-
-def unit_vector(vector):
-    """ Returns the unit vector of the vector.  """
-    return vector / np.linalg.norm(vector)
-
-def angle_between(v1, v2):
-    """ Returns the angle in radians between vectors 'v1' and 'v2'::
-
-            >>> angle_between((1, 0, 0), (0, 1, 0))
-            1.5707963267948966
-            >>> angle_between((1, 0, 0), (1, 0, 0))
-            0.0
-            >>> angle_between((1, 0, 0), (-1, 0, 0))
-            3.141592653589793
-    """
-    v1_u = unit_vector(v1)
-    v2_u = unit_vector(v2)
-    return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
-
-
-def decode_window(args, epochs, class_queries):
-    """ X: n_trials, n_sensors
-        y: n_trials
-        class_queries: list of strings, pandas queries to get each class
-    """
-    md = epochs.metadata
-    X, y, groups = [], [], []
-    for i, class_query in enumerate(class_queries):
-        X.extend(epochs[class_query].get_data())
-        y.extend([i for qwe in range(len(md.query(class_query)))])
-        # rely on the indices in the metadata to get groups. Only useful to split scene trials 
-        groups.extend(md.query(class_query).index.values)
-
-    X, y = np.array(X), np.array(y)
-    n_trials = len(X)
-    X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
-    classes, counts = np.unique(y, return_counts=True)
-    n_classes = len(classes)
-    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
-    
-    if args.train_cond == "two_objects":
-        if args.crossval_win == 'shufflesplit':
-            cv = RepeatedStratifiedGroupKFold(n_splits=args.n_folds_win, n_repeats=10)
-        elif args.crossval_win == 'kfold':
-            cv = StratifiedGroupKFold(n_splits=args.n_folds_win)
-    elif args.crossval_win == 'shufflesplit':
-        cv = StratifiedShuffleSplit(n_splits=args.n_folds_win, test_size=0.5, random_state=42)
-    elif args.crossval_win == 'kfold':
-        cv = StratifiedKFold(n_splits=args.n_folds_win, shuffle=True, random_state=42)
-    else:
-        print('unknown specified cross-validation scheme ... exiting')
-        raise
-    
-    # clf = LogisticRegression(C=1, class_weight='balanced', solver='liblinear', multi_class='auto')
-    tuned_parameters = [{'kernel': ['linear'], 'C': np.logspace(-2, 4, 7)},
-                        {'kernel': ['rbf'], 'gamma': [1, .1, 1e-2, 1e-3, 1e-4], 'C': np.logspace(-1, 3, 5)},
-                        {'kernel': ['poly'], 'degree': [2, 3, 4, 5, 6], 'C': np.logspace(-1, 3, 5)}]
-    clf = SVC(class_weight='balanced')
-    clf = GridSearchCV(clf, tuned_parameters, scoring='roc_auc', cv=10, refit=True, verbose=1)
-    clf = OneVsRestClassifier(clf, n_jobs=1)
-
-    onehotenc = OneHotEncoder(sparse=False, categories='auto')
-    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
-
-    if args.reduc_dim_win:
-        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim_win), clf)
-    else:
-        pipeline = make_pipeline(RobustScaler(), clf)
-
-    models_all_folds = []
-    AUC, accuracy = 0, 0
-    for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
-        pipeline.fit(X[train], y[train])
-        models_all_folds.append(deepcopy(pipeline))
-
-        preds = predict(pipeline, X[test])
-        if preds.ndim == 2:
-            preds = preds
-        else:
-            preds = onehotenc.transform(preds.reshape((-1,1)))
-        
-        AUC += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds_win
-        accuracy += accuracy_score(y[test], preds.argmax(1)) / args.n_folds_win
-
-    return AUC, accuracy, models_all_folds
-
-
-def test_decode_window(args, epochs, class_queries, trained_models):
-    """ X: n_trials, n_sensors
-        y: n_trials
-        class_queries: list of strings, pandas queries to get each class
-        trained_models: list of sklearn estimators, one for each class
-    """
-    md = epochs.metadata
-    X, y, groups = [], [], []
-    for i, class_query in enumerate(class_queries):
-        X.extend(epochs[class_query].get_data())
-        y.extend([i for qwe in range(len(md.query(class_query)))])
-        # rely on the indices in the metadata to get groups. Only useful to split scene trials 
-        groups.extend(md.query(class_query).index.values)
-
-    X, y = np.array(X), np.array(y)
-    n_trials = len(X)
-    X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
-    classes, counts = np.unique(y, return_counts=True)
-    n_classes = len(classes)
-    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
-    
-    onehotenc = OneHotEncoder(sparse=False, categories='auto')
-    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
-
-    AUC, accuracy = 0, 0
-    for i_fold in range(args.n_folds_win):
-        pipeline = trained_models[i_fold]
-        preds = predict(pipeline, X)
-        if preds.ndim == 2:
-            preds = preds
-        else:
-            preds = onehotenc.transform(preds.reshape((-1,1)))
-        
-        AUC += roc_auc_score(y_true=y, y_score=preds, multi_class='ovr', average='weighted') / args.n_folds_win
-        accuracy += accuracy_score(y, preds.argmax(1)) / args.n_folds_win
-
-    # ## AVERAGE PREICTIONS OR PERFORMANCE?
-    # all_folds_preds.append(y_pred)
-    # mean_fold_pred = np.mean(all_folds_preds, 0)
-    # AUC[t, tgen] = roc_auc_score(y_true=y, y_score=mean_fold_pred, multi_class='ovr')                
-
-    return AUC, accuracy
-
-
-def decode_ovr(args, epochs, class_queries, n_times):
-    """ X: n_trials, n_sensors, n_times
-        y: n_trials
-        class_queries: list of strings, pandas queries to get each class
-    """
-    md = epochs.metadata
-    X, y, groups = [], [], []
-    for i, class_query in enumerate(class_queries):
-        X.extend(epochs[class_query].get_data())
-        y.extend([i for qwe in range(len(md.query(class_query)))])
-        # rely on the indices in the metadata to get groups. Only useful to split scene trials 
-        groups.extend(md.query(class_query).index.values)
-
-    X, y = np.array(X), np.array(y)
-    classes, counts = np.unique(y, return_counts=True)
-    n_classes = len(classes)
-    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
-
-    # if "Right_obj" in class_queries[0] or "Left_obj" in class_queries[0]: # special case, need groupedKFold
-    if args.train_cond == "two_objects":
-        if args.crossval == 'shufflesplit':
-            cv = RepeatedStratifiedGroupKFold(n_splits=args.n_folds, n_repeats=10)
-        elif args.crossval == 'kfold':
-            cv = StratifiedGroupKFold(n_splits=args.n_folds)
-    elif args.crossval == 'shufflesplit':
-        cv = StratifiedShuffleSplit(n_splits=args.n_folds, test_size=0.5, random_state=42)
-    elif args.crossval == 'kfold':
-        cv = StratifiedKFold(n_splits=args.n_folds, shuffle=True, random_state=42)
-    else:
-        print('unknown specified cross-validation scheme ... exiting')
-        raise
-    
-    clf = LogisticRegression(C=1, class_weight='balanced', solver='liblinear', multi_class='auto')
-    # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=cv, class_weight='balanced')
-    # clf = RidgeClassifier(class_weight='balanced')
-    # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
-    # clf = LogisticRegressionCV(Cs=10, solver='liblinear', multi_class='auto', n_jobs=-1, cv=5) #, max_iter=10000)
-    # clf = LogisticRegressionCV(Cs=10, class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False, cv=5, n_jobs=1)
-    # clf = SVC()
-    # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-2, 4, 7)})
-    clf = OneVsRestClassifier(clf, n_jobs=1)
-    # class_names = []
-    # for c in class_queries:
-    #     class_names.append(" ".join([c.split("'")[(i*2)+1] for i in range(c.count("'")//2)]))
-    # clf = ROCAUC(clf, encoder=dict(zip(classes, class_names)))
-    # clf.binary = False # prevents an error from yellowbrick
-
-    # set_trace()
-    onehotenc = OneHotEncoder(sparse=False, categories='auto')
-    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
-
-    if args.reduc_dim:
-        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
-    else:
-        pipeline = make_pipeline(RobustScaler(), clf)
-
-    all_models = []
-    if args.timegen:
-        AUC = np.zeros((n_times, n_times))
-        accuracy = np.zeros((n_times, n_times))
-        # AUC_all_classes = np.zeros((n_classes, n_times, n_times))
-        all_confusions = []
-        for t in trange(n_times):
-            all_models.append([])
-            for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
-                pipeline.fit(X[train, :, t], y[train])
-                all_models[-1].append(deepcopy(pipeline))
-
-                for tgen in range(n_times):
-                    preds = predict(pipeline, X[test, :, tgen])
-                    if preds.ndim == 2:
-                        preds = preds
-                    else:
-                        preds = onehotenc.transform(preds.reshape((-1,1)))
-                    # AUC[t, tgen] += roc_auc_score(y_true=onehotenc.transform(y[test].reshape(-1,1)), y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
-                    AUC[t, tgen] += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
-                    accuracy[t, tgen] += accuracy_score(y[test], preds.argmax(1)) / args.n_folds
-
-    else:
-        AUC = np.zeros(n_times)
-        for t in trange(n_times):
-            y_pred = np.zeros((len(y), n_classes))
-            for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
-                pipeline.fit(X[train, :, t], y[train])
-                accuracy[t] = pipeline.score(X[test, :, t], y[test])
-                preds = predict(pipeline, X[test, :, t])
-                if preds.ndim == 2:
-                    y_pred[test] = preds
-                else:
-                    y_pred[test] = onehotenc.transform(preds.reshape((-1,1)))
-            AUC[t] = roc_auc_score(y_true=y, y_score=y_pred, multi_class='ovr')
-
-    return AUC, accuracy, all_models
-
-
-def test_decode_ovr(args, epochs, class_queries, all_models):
-    n_folds = len(all_models[0])
-    n_times_test = len(epochs.times)
-    n_times_train = len(all_models)
-
-    md = epochs.metadata
-    X, y = [], []
-    for i, class_query in enumerate(class_queries):
-        X.extend(epochs[class_query].get_data())
-        y.extend([i for qwe in range(len(md.query(class_query)))])
-    X, y = np.array(X), np.array(y)
-    classes, counts = np.unique(y, return_counts=True)
-    n_classes = len(classes)
-    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
-
-    onehotenc = OneHotEncoder(sparse=False, categories='auto')
-    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
-    
-    if args.timegen:
-        AUC = np.zeros((n_times_train, n_times_test))
-        accuracy = np.zeros((n_times_train, n_times_test))
-        for tgen in trange(n_times_test):
-            t_data = X[:, :, tgen]
-            for t in range(n_times_train):
-                all_folds_preds = []
-                for i_fold in range(n_folds):
-                    pipeline = all_models[t][i_fold]
-                    preds = predict(pipeline, t_data)
-                    if preds.ndim == 2:
-                        y_pred = preds
-                    else:
-                        y_pred = onehotenc.transform(preds.reshape((-1,1)))
-                    all_folds_preds.append(y_pred)
-                mean_fold_pred = np.mean(all_folds_preds, 0)
-                AUC[t, tgen] = roc_auc_score(y_true=y, y_score=mean_fold_pred, multi_class='ovr')
-                accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1))
-
-        # for t in trange(n_times):
-        #     y_pred = np.zeros((n_times, len(y), n_classes))
-        #     # all_models.append([])
-        #     for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
-        #         pipeline.fit(X[train, :, t], y[train])
-
-        #         for tgen in range(n_times):
-        #             preds = predict(pipeline, X[test, :, tgen])
-        #             if preds.ndim == 2:
-        #                 y_pred[tgen, test] = preds
-        #             else:
-        #                 y_pred[tgen, test] = onehotenc.transform(preds.reshape((-1,1)))
-        #     for tgen in range(n_times):
-        #         AUC[t, tgen] += roc_auc_score(y_true=y, y_score=y_pred[tgen], multi_class='ovr')
-    
-    # else: # diag only
-    #     AUC = np.zeros(n_times_train)
-    #     mean_preds = np.zeros(n_times_train)
-    #     for t in range(n_times_train):
-    #         t_data = X[:, :, t]
-    #         all_folds_preds = []
-    #         for i_fold in range(n_folds):
-    #             pipeline = all_models[i_fold][t]
-    #             all_folds_preds.append(predict(pipeline, t_data))
-    #         AUC[t] = roc_auc_score(y_true=y, y_score=np.mean(all_folds_preds, 0))
-    #         mean_preds[t] = np.mean(all_folds_preds)
-
-    print('mean AUC: ', AUC.mean())
-    print('max AUC: ', AUC.max())
-
-    return AUC, accuracy
 
 
 
@@ -667,7 +369,7 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
 *  `----'                    `---'    *
 *                                     *
 ***************************************
-"""
+Called by main functions """
 
 
 def save_rsa_results(args, out_fn, results, factors):
@@ -675,21 +377,9 @@ def save_rsa_results(args, out_fn, results, factors):
     pickle.dump(dict(zip(factors, results)), open(out_fn + '_all_results.p', 'wb'))
 
 
-# def get_y_from_epo(epochs, factor):
-#     labenc = LabelEncoder()
-#     if "+" in factor:
-#         labels = np.array(['' for qwe in range(len(epochs))])
-#         for subfac in factor.split("+"):
-#             labels = np.char.add(labels, epochs.metadata[subfac].values)
-#         print(labels)
-#         y = labenc.fit_transform(labels)
-#     else:
-#         y = labenc.fit_transform(epochs.metadata[factor])
-#     return y
 
-
-def get_class_queries(cond):
-    """ get the query for each class
+def get_class_queries_rsa(cond, order_or_side='order'):
+    """ get the queries for each class
     depending on the condition
     6 classes for localizer
     9 for objects
@@ -703,11 +393,16 @@ def get_class_queries(cond):
     elif cond == "one_object":
         class_queries = [f"Shape1=='{s}' and Colour1=='{c}'" for s in shapes for c in colors]
     elif cond == "two_objects":
-        # class_queries = [f"Shape1=='{s}' and Colour1=='{c}'" for s in shapes for c in colors] + \
-        #                 [f"Shape2=='{s}' and Colour2=='{c}'" for s in shapes for c in colors]
-        class_queries = [f"Left_obj=='{s}_{c}'" for s in shapes for c in colors] + \
-                        [f"Right_obj=='{s}_{c}'" for s in shapes for c in colors]
+        if order_or_side == "order": # order of presentation
+            class_queries = [f"Shape1=='{s}' and Colour1=='{c}'" for s in shapes for c in colors] + \
+                            [f"Shape2=='{s}' and Colour2=='{c}'" for s in shapes for c in colors]
+        elif order_or_side == "side": # actual side that the object is in the corresponding image (with a matching trial)
+            class_queries = [f"Left_obj=='{s}_{c}'" for s in shapes for c in colors] + \
+                            [f"Right_obj=='{s}_{c}'" for s in shapes for c in colors]
+        else:
+            raise RuntimeError(f"Wrong query for scenes: {order_or_side}")
     return class_queries
+
 
 
 def get_dsm_from_queries(factor, class_queries):
@@ -776,23 +471,13 @@ def get_dsm_from_queries(factor, class_queries):
     return dsm
 
 
-def predict(clf, data):
-    """
-    wrapper for predicting from any sklearn classifier
-    """
-    try:
-        pred = clf.predict_proba(data)
-    except AttributeError: # no predict_proba method
-        pred = clf.predict(data)
-    return pred
-
-
 def regression_score(data_dsm, model_dsms):
     """ Compute regression coefficients 
     for each input matrices
     """
     reg = RidgeCV()
-    reg = make_pipeline(StandardScaler(), reg)
+    scaler = MinMaxScaler() # StandardScaler()
+    reg = make_pipeline(scaler, reg)
     reg.fit(model_dsms, data_dsm)
     coefs = reg[1].coef_
     return coefs
@@ -805,27 +490,9 @@ def random_forest_regression_score(data_dsm, model_dsms):
     # use permutation_importance instead? Better but need to do train-test split and refit the estimator many times.
     # do some crazy gridsearch over parameters?
     reg = RandomForestRegressor()
-    reg = make_pipeline(StandardScaler(), reg)
+    scaler = MinMaxScaler() # StandardScaler()
+    reg = make_pipeline(scaler, reg)
     reg.fit(model_dsms, data_dsm)
     feat_imp = reg[1].feature_importances_
-    print(feat_imp)
     return feat_imp
 
-
-def Xdawn(epochs4xdawn, epochs2transform, factor, n_comp=10):
-    md = epochs4xdawn.metadata
-    y = np.sum([md[subfac] for subfac in factor.split("+")], 0)
-    labencod = LabelEncoder()
-    y = labencod.fit_transform(y)
-    xdawn = mne.preprocessing.Xdawn(n_components=n_comp, correct_overlap=False)
-    xdawn.fit(epochs4xdawn, y=y)
-    epochs = xdawn.apply(epochs2transform)['1']
-    return epochs
-    # evo = epochs.average()
-    # plot = evo.plot(spatial_clors=True)
-    # plt.savefig('tmp2.png')
-
-    # epochs2 = xdawn.apply(epochs)
-    # evo = epochs2['1'].average()
-    # plot = evo.plot(spatial_colors=True)
-    # plt.savefig('tmp2.png')

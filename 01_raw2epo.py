@@ -11,6 +11,7 @@ import importlib
 
 from utils.params import *
 from utils.reject import *
+from utils.commons import *
 
 
 parser = argparse.ArgumentParser(description='Load and convert to MNE Raw, then preprocess, make Epochs and save')

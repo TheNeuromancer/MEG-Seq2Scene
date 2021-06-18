@@ -5,12 +5,12 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "13"
+    version: str = "20"
     root_path: str = "/neurospin/unicog/protocols/MEG/Seq2Scene/"
     epochs_dir: str = "Epochs"
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
                            '08_ch180036', '09_jl190711', '10_ma200371', '11_rb210035', '12_mb160165', '13_lg170436', '14_eb180237', \
-                           '15_ar160084', '16_er123987', '17', '18', '19')
+                           '15_ar160084', '16_er123987', '17', '18', '19', '20', '21')
 
     # Epochs preprocessing parameters
     baseline: bool = True # apply baseline correction if True
@@ -25,7 +25,11 @@ class Config:
     ## Decoding parameters
     n_folds: int = 5 # number of shuffle splits
     crossval: str = "kfold" # cross-validation scheme. "kfold" or "sufflesplit"
-    reduc_dim: float = 0 # dimensionality reduction
+    reduc_dim: float = 0.99 # dimensionality reduction
+    ## Decoding window parameters
+    n_folds_win: int = 10 # number of shuffle splits for the window decoding analysis 
+    crossval_win: str = "kfold" # cross-validation scheme for the window decoding analysis 
+    reduc_dim_win: float = 0 # dimensionality reduction for the window decoding analysis 
     cat: int = 0 # number of timepoints to concatenate
     mean: bool = False # Wether to average instead of concatenate if using the "cat" argument
     smooth: int = 21 # hanning smoothing window, in timesample,

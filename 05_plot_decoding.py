@@ -75,11 +75,13 @@ else:
     os.makedirs(out_dir)
 
 # list all .npy files in the directory
-all_filenames = natsorted(glob(in_dir + '/*AUC*.npy'))
+all_fns = natsorted(glob(in_dir + '/*AUC*.npy'))
+if not all_fns:
+    raise RuntimeError(f"Did not find any AUC files in {in_dir}/*AUC*.npy ... Did you pass the right config?")
 
 # keep the first 8 subjects for the 1st version, all the remaining for v2
 if args.subject == "v1":
-    all_filenames = [fn for fn in all_filenames if int(op.basename(op.dirname(fn))[0:2]) < 9]
+    all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) < 9]
     version = "v1"
 elif args.subject == "v2":
     all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) > 8]
@@ -87,7 +89,7 @@ elif args.subject == "v2":
 elif args.subject == "all":
     version = "v2"
 elif args.subject == "goods":
-    all_filenames = [fn for fn in all_filenames if not op.basename(op.dirname(fn))[0:2] in bad_subjects]
+    all_fns = [fn for fn in all_fns if not op.basename(op.dirname(fn))[0:2] in bad_subjects]
     version = "v2"
 elif int(args.subject[0:2]) < 9:
     version = "v1"
@@ -99,22 +101,23 @@ else:
 dummy_class_enc = LabelEncoder()
 dummy_labbin = LabelBinarizer()
 
-all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_filenames])
+all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
 max_auc_all_facconds = []
 all_faccond_names = []
-
+ave_auc_all_labels = {}
+std_auc_all_labels = {}
 for label in all_labels:
-    for train_cond in ["localizer", "one_object", "two_objects"]:
+    for train_cond in ["localizer", "obj", "scenes"]: # , "one_object", "two_objects", 
         if args.slices:
             if train_cond in ["localizer"]: slices = slices_loc
             if train_cond == "one_object": slices = slices_one_obj
         for match in ["match", "nonmatch", False]:
-            for gen_cond in [None, "localizer", "one_object", "two_objects"]:
+            for gen_cond in [None, "localizer", "obj", "scenes"]: # , "one_object", "two_objects", 
                 # if train_cond == gen_cond: continue # skip when we both have one object, it is not generalization
                 all_AUC = []
                 all_subs = []
                 all_items = []
-                for fn in all_filenames:
+                for fn in all_fns:
                     if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
                     if f"-{train_cond}-" not in fn: continue
                     if not match: # if not match or nonmatch markers, keep all
@@ -156,67 +159,95 @@ for label in all_labels:
                 AUC_mean = np.mean(all_AUC, 0)
                 AUC_std = np.std(all_AUC, 0)
 
+                # store values for all labels for multi plot
+                if train_cond=="scenes" and gen_cond is None and "win" not in label:
+                    ave_auc_all_labels[label] = np.diag(AUC_mean)
+                    std_auc_all_labels[label] = np.diag(AUC_std)
+                # else:
+                continue
+
                 # save max values to save to csv
                 max_auc_all_facconds.append(np.max(AUC_mean))
                 all_faccond_names.append(f"{label} trained on {train_cond}{' tested on ' if gen_cond is not None else ''}{gen_cond if gen_cond is not None else ''}")
 
-                train_tmin, train_tmax = tmin_tmax_dict[train_cond]
-                if gen_cond is not None:
-                    test_tmin, test_tmax = tmin_tmax_dict[gen_cond]
-                else:
-                    test_tmin, test_tmax = train_tmin, train_tmax
-                
+                if not "win" in label:
+                    window = False
+                    train_tmin, train_tmax = tmin_tmax_dict[train_cond]
+                    if gen_cond is not None:
+                        test_tmin, test_tmax = tmin_tmax_dict[gen_cond]
+                    else:
+                        test_tmin, test_tmax = train_tmin, train_tmax
+                else: # windowed
+                    train_tmin, train_tmax = [float(s) for s in fn.split("#")[1].split(",")]
+                    test_tmin, test_tmax = [float(s) for s in fn.split("#")[2].split(",")]
+                    window = True
+
                 n_times_train = AUC_mean.shape[0]
                 n_times_test = AUC_mean.shape[1]
                 
                 ylabel = get_ylabel_from_fn(fn)
                 is_contrast = True if (np.min(np.array(all_AUC)) < 0) or (np.max(np.array(all_AUC)) < .4) else False
 
-                if gen_cond is None:
-                    try:
+                if gen_cond is None or "win" in label:
+                    # try:
                         plot_diag(data_mean=AUC_mean, data_std=AUC_std, out_fn=out_fn, train_cond=train_cond, 
-                            train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
-                    except:
-                        continue
-                    ## plot all diags
-                    plot_multi_diag(data=all_AUC, data_std=None, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, 
-                                    train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
+                            train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, window=window)
+                    # except:
+                    #     continue
+                    # ## plot all diags
+                    # plot_multi_diag(data=all_AUC, data_std=None, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, 
+                    #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
 
-                    if args.subject in ["all", "goods", "v1", "v2"]:
-                        # same color for each subject
-                        plot_multi_diag(data=all_AUC, data_std=None, out_fn=f"{out_fn}_colsub", train_cond=train_cond, train_tmin=train_tmin, 
-                                        train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, cmap_groups=all_subs)
-                        # same color for each training condition
-                        plot_multi_diag(data=all_AUC, data_std=None, out_fn=f"{out_fn}_colitem", train_cond=train_cond, train_tmin=train_tmin, 
-                                        train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, cmap_groups=all_items)
+                    # if args.subject in ["all", "goods", "v1", "v2"]:
+                    #     # same color for each subject
+                    #     plot_multi_diag(data=all_AUC, data_std=None, out_fn=f"{out_fn}_colsub", train_cond=train_cond, train_tmin=train_tmin, 
+                    #                     train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, cmap_groups=all_subs)
+                    #     # same color for each training condition
+                    #     plot_multi_diag(data=all_AUC, data_std=None, out_fn=f"{out_fn}_colitem", train_cond=train_cond, train_tmin=train_tmin, 
+                    #                     train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, cmap_groups=all_items)
 
-                        ## plots diags for the average of each subjects
-                        all_subs_bin = dummy_labbin.fit_transform(all_subs).T.astype(bool)
-                        sub_ave_AUC = np.array([np.mean(all_AUC[indices], 0) for indices in all_subs_bin])
-                        # sub_std_AUC = np.array([np.std(all_AUC[indices], 0) for indices in all_subs_bin])
-                        plot_multi_diag(data=sub_ave_AUC, data_std=None, out_fn=f"{out_fn}_subave", train_cond=train_cond, train_tmin=train_tmin, 
-                                        train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, labels=all_subs_labels)
+                        # ## plots diags for the average of each subjects
+                        # all_subs_bin = dummy_labbin.fit_transform(all_subs).T.astype(bool)
+                        # sub_ave_AUC = np.array([np.mean(all_AUC[indices], 0) for indices in all_subs_bin])
+                        # # sub_std_AUC = np.array([np.std(all_AUC[indices], 0) for indices in all_subs_bin])
+                        # plot_multi_diag(data=sub_ave_AUC, data_std=None, out_fn=f"{out_fn}_subave", train_cond=train_cond, train_tmin=train_tmin, 
+                        #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, labels=all_subs_labels)
 
-                        ## plots diags for the average of training condition - implement get label for this?
-                        all_items_bin = dummy_labbin.fit_transform(all_items).T.astype(bool)
-                        item_ave_AUC = np.array([np.mean(all_AUC[indices], 0) for indices in all_items_bin])
-                        # item_std_AUC = np.array([np.std(all_AUC[indices], 0) for indices in all_items_bin])
-                        plot_multi_diag(data=item_ave_AUC, data_std=None, out_fn=f"{out_fn}_condave", train_cond=train_cond, train_tmin=train_tmin, 
-                                        train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
+                        # ## plots diags for the average of training condition - implement get label for this?
+                        # all_items_bin = dummy_labbin.fit_transform(all_items).T.astype(bool)
+                        # item_ave_AUC = np.array([np.mean(all_AUC[indices], 0) for indices in all_items_bin])
+                        # # item_std_AUC = np.array([np.std(all_AUC[indices], 0) for indices in all_items_bin])
+                        # plot_multi_diag(data=item_ave_AUC, data_std=None, out_fn=f"{out_fn}_condave", train_cond=train_cond, train_tmin=train_tmin, 
+                        #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
 
 
                 plot_GAT(data_mean=AUC_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, 
-                         test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, gen_cond=gen_cond, slices=slices, version=version)
+                         test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, gen_cond=gen_cond, slices=slices, version=version, window=window)
 
                 print(f"Finished {label} trained on {train_cond} with generalization {gen_cond} {'matching trials only' if match else ''}\n")
                 plt.close('all')
 
-x = PrettyTable()
-x.field_names = ["Factor", "max AUC"]
-order = np.argsort(max_auc_all_facconds)
-with open(f'{out_fn}_max_AUC.csv', 'w') as f:
-    for i in order:
-        x.add_row([all_faccond_names[i], f"{max_auc_all_facconds[i]:.3f}"])
-        f.write(f"{all_faccond_names[i]}, {max_auc_all_facconds[i]:.3f}")
-# print(x)
-# set_trace()
+
+## all basic decoders diagonals on the same plot
+tmin, tmax = tmin_tmax_dict["scenes"]
+times = np.arange(tmin, tmax+1e-10, 1./args.sfreq)
+word_onsets, image_onset = get_onsets("scenes", version=version)
+plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props_multi.png', word_onsets=word_onsets, image_onset=image_onset)
+plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props.png', word_onsets=word_onsets, image_onset=image_onset)
+
+plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=['S1','C1','R','S2','C2','All1stObj','All2ndObj'], times=times, out_fn=f'{out_fn}_scenes_props_multi_all.png', word_onsets=word_onsets, image_onset=image_onset)
+plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=['S1','C1','R','S2','C2','All1stObj','All2ndObj'], times=times, out_fn=f'{out_fn}_scenes_props_all.png', word_onsets=word_onsets, image_onset=image_onset)
+
+# plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=['S1','C1','R','S2','C2','AllObjScenes','All2ndObjScenes'], times=times, out_fn=f'{out_fn}_scenes_props_multi_all.png', word_onsets=word_onsets, image_onset=image_onset)
+# plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props_all.png', word_onsets=word_onsets, image_onset=image_onset)
+
+
+# x = PrettyTable()
+# x.field_names = ["Factor", "max AUC"]
+# order = np.argsort(max_auc_all_facconds)
+# with open(f'{out_fn}_max_AUC.csv', 'w') as f:
+#     for i in order:
+#         x.add_row([all_faccond_names[i], f"{max_auc_all_facconds[i]:.3f}"])
+#         f.write(f"{all_faccond_names[i]}, {max_auc_all_facconds[i]:.3f}")
+# # print(x)
+# # set_trace()

@@ -8,7 +8,7 @@ do
 			do
 				for xdawn_str in '' # --xdawn
 				do
-					echo "python 06_rsa.py -s $sub --train-cond $cond --distance_metric $dist_metric -w $xdawn_str --rsa_metric pearson --rsa_metric regression "
+					echo "python 06_rsa.py -s $sub --train-cond $cond --distance_metric $dist_metric -w $xdawn_str --rsa_metric pearson --rsa_metric $rsa_metric "
 					# -c v8config --filter \"Matching=='match'\" "
 					# 
 				done

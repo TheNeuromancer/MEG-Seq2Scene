@@ -56,6 +56,10 @@ v18: sklearn's confusion matric func for RSA.
 v19: + reducdim 0.99 + LRCV
 v20: same but with left and right queries for RSA. Also SVC with gridsearch for decoding window. 
 
+BACK TO V1
+c1: windows: .15-.3s for early and .4-.55 for late
+v2: windows now .1-.4s for early and .45-.75s for late.
+
 
 
 TODO: add split queries for test queries as well (currently only for training queries).

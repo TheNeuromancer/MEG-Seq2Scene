@@ -92,6 +92,7 @@ else:
 
 dummy_class_enc = LabelEncoder()
 dummy_labbin = LabelBinarizer()
+cmap10 = plt.cm.get_cmap('tab10', 10)
 
 all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
 max_auc_all_facconds = []
@@ -99,6 +100,7 @@ all_faccond_names = []
 
 for label in all_labels:
     all_AUC = []
+    all_AUC_allt = []
     all_accuracy = []
     all_cosines = []
     all_subs = []
@@ -107,7 +109,10 @@ for label in all_labels:
         print('loading file ', fn)
         all_AUC.append(pickle.load(open(fn, "rb")))
         all_accuracy.append(pickle.load(open(f"{fn[0:-5]}accuracy.p", "rb")))
-        all_cosines.append(pickle.load(open(f"{fn[0:-5]}cosine.p", "rb")))
+        if op.exists(f"{fn[0:-5]}cosine.p"):
+            all_cosines.append(pickle.load(open(f"{fn[0:-5]}cosine.p", "rb")))
+        if op.exists(f"{fn[0:-2]}_allt.p"):
+            all_AUC_allt.append(pickle.load(open(f"{fn[0:-2]}_allt.p", "rb")))
         all_subs.append(op.basename(op.dirname(fn))[0:2])
 
     print(f"\nDoing {label}")
@@ -117,8 +122,7 @@ for label in all_labels:
     all_subs = dummy_class_enc.fit_transform(all_subs)
     n_subs = len(all_subs)
 
-
-    conds = [x for x in all_AUC[0].keys()]
+    conds = natsorted([x for x in all_AUC[0].keys()])
     n_conds = len(conds)
 
     auc_dict = {"Trained on": [], "Tested on": [], "AUC": [], "subject": []}
@@ -132,10 +136,10 @@ for label in all_labels:
 
     df = pd.DataFrame.from_dict(auc_dict)
 
-    if label == "AllColors":
+    if "AllC" in label:
         cond_str1 = "Colour1"
         cond_str2 = "Colour2"
-    elif label == "AllSs":
+    elif "AllS" in label:
         cond_str1 = "Shape1"
         cond_str2 = "Shape2"
     else:
@@ -149,31 +153,66 @@ for label in all_labels:
     box_pairs += [((f"{cond_str1}-one_object", f"{cond_str1}-one_object"), (f"{cond_str1}-one_object", f"{cond_str2}-two_objects"))]
     box_pairs += [((f"{cond_str2}-two_objects", f"{cond_str2}-two_objects"), (f"{cond_str2}-two_objects", f"{cond_str1}-two_objects"))]
     box_pairs += [((f"{cond_str2}-two_objects", f"{cond_str2}-two_objects"), (f"{cond_str2}-two_objects", f"{cond_str1}-one_object"))]
-
     make_sns_barplot(df, x='Tested on', y='AUC', hue='Trained on', box_pairs=box_pairs, out_fn=f'{out_fn}_AUC.png', hline=0.5, ymin=0.45)
     
 
-
     ## COSINE SIMILARITY
-    cos_dict = {"Conditions": [], "subject": [], "cosine similarity": []}
-    for cond1 in conds:
-        for cond2 in conds:
-            if cond1==cond2: continue # same hyperplane
-            for i_sub in range(n_subs):
-                try:
-                    cos_dict["cosine similarity"].append(all_cosines[i_sub][f"{cond1}--vs--{cond2}"])
-                    cos_dict["Conditions"].append(shorten_filename(f"{cond1} vs {cond2}"))
-                    cos_dict["subject"].append(i_sub+1)
-                except: # that's ok, we only have one-way comparison (they are symmetrical)
-                    continue
-    df = pd.DataFrame.from_dict(cos_dict)
-    
+    if all_cosines:
+        cos_dict = {"Conditions": [], "subject": [], "cosine similarity": []}
+        for cond1 in conds:
+            for cond2 in conds:
+                if cond1==cond2: continue # same hyperplane
+                for i_sub in range(n_subs):
+                    try:
+                        cos_dict["cosine similarity"].append(all_cosines[i_sub][f"{cond1}--vs--{cond2}"])
+                        cos_dict["Conditions"].append(shorten_filename(f"{cond1} vs {cond2}"))
+                        cos_dict["subject"].append(i_sub+1)
+                    except: # that's ok, we only have one-way comparison (they are symmetrical)
+                        continue
+        df = pd.DataFrame.from_dict(cos_dict)
+        
 
-    cos_conds = [x for x in df.Conditions.unique()]
-    # box_pairs = [((c1, c1), (c1, c2)) for c1 in cos_conds for c2 i]
-    box_pairs = [x for x in combinations(cos_conds, 2)]
+        cos_conds = [x for x in df.Conditions.unique()]
+        # box_pairs = [((c1, c1), (c1, c2)) for c1 in cos_conds for c2 i]
+        box_pairs = [x for x in combinations(cos_conds, 2)]
+        make_sns_barplot(df, x='Conditions', y='cosine similarity', box_pairs=box_pairs, out_fn=f'{out_fn}_cos.png')
+    else:
+        print(f"did not find any file for cosines for label {label}")
 
-    make_sns_barplot(df, x='Conditions', y='cosine similarity', box_pairs=box_pairs, out_fn=f'{out_fn}_cos.png')
+
+    ## AUC gen to all time points
+    if all_AUC_allt and "windows" in all_AUC_allt[0].keys():
+        clr_ctr = 0
+        n_subs = len(all_AUC_allt)
+        fig, axes = plt.subplots(len(conds))
+        for i1, train_cond in enumerate(conds):
+            for i2, test_cond in enumerate(conds):
+                clr = cmap10(clr_ctr)
+                clr_ctr += 1
+                if train_cond==test_cond: # same training and testing, plot cval score in a hline
+                    win = all_AUC_allt[0]["windows"][train_cond]
+                    ave = np.mean([all_AUC[i_sub][train_cond][test_cond] for i_sub in range(n_subs)], 0)
+                    std = np.std([all_AUC[i_sub][train_cond][test_cond] for i_sub in range(n_subs)], 0)
+                    axes[i1].axhline(y=ave, xmin=win[0], xmax=win[1], color=clr, linestyle='-', alpha=.3)
+                    # axes[i1].fill_between(np.linspace(win[0], win[1], 2), ave-std, ave+std, alpha=0.2, zorder=-1, lw=0, color=clr)
+
+                else:
+                    n_times = len(all_AUC_allt[0][train_cond][test_cond])
+                    tmin, tmax = tmin_tmax_dict[test_cond.split("-")[1]]
+                    times = np.linspace(tmin, tmax, n_times)
+                    ave = np.mean([all_AUC_allt[i_sub][train_cond][test_cond] for i_sub in range(n_subs)], 0)
+                    std = np.std([all_AUC_allt[i_sub][train_cond][test_cond] for i_sub in range(n_subs)], 0)
+
+                    plot = axes[i1].plot(times, ave, alpha=0.8, lw=1, label=test_cond, c=clr)
+                    axes[i1].fill_between(times, ave-std, ave+std, alpha=0.2, zorder=-1, lw=0, color=plot[0].get_color())
+
+            axes[i1].axhline(y=0.5, color='k', linestyle='-', alpha=.3, lw=.1)
+            axes[i1].set_title(f"Trained on {train_cond}")
+            axes[i1].legend(title='Tested on', fontsize=8) #, fancybox=True)
+            axes[i1].set_ylabel("AUC")
+        axes[i1].set_xlabel("Times (s)")
+        plt.tight_layout()
+        plt.savefig(f"{out_fn}_AUC_allt.png")
 
     print(f"Finished {label}\n")
     plt.close('all')

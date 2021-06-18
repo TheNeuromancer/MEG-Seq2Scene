@@ -119,7 +119,7 @@ for label in all_labels:
         except EOFError:
             print("nope")
             continue
-
+        RF_reg = True if "RF_regression" in fn else False
 
     if len(all_subs_results) < 2: 
         # print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} {'matching trials only' if match else ''}")
@@ -141,6 +141,9 @@ for label in all_labels:
     ylabel = label.split('_')[-1]
     factors = ave_results.keys()
     rsa_results = np.array([val for val in ave_results.values()])
+
+    if RF_reg:
+        rsa_results = np.array([x - np.median(x) for x in rsa_results])
 
     tmin, tmax = tmin_tmax_dict[cond]
     n_times = rsa_results.shape[1]

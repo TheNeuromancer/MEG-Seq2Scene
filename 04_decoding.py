@@ -32,6 +32,7 @@ parser.add_argument('--t2', action='append', default=[], help="Metadata query fo
 parser.add_argument('--label', default='', help='help to identify the result latter')
 parser.add_argument('--dummy', action='store_true', default=False, help='Accelerates everything so that we can test that the pipeline is working. Will not yield any interesting result!!')
 parser.add_argument('--equalize_events', action='store_true', default=False, help='subsample majority event classes to get same number of trials as the minority class')
+parser.add_argument('-x', '--xdawn', action='store_true',  default=False, help='Whether to apply Xdawn spatial filtering before training decoder')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
@@ -70,10 +71,11 @@ train_fn, test_fns, out_fn, test_out_fns = get_paths(args)
 
 print('\nStarting training')
 ### LOAD EPOCHS ###
-epochs, test_split_query_indices = load_data(args, train_fn, args.train_query_1, args.train_query_2)
+epochs = load_data(args, train_fn, args.train_query_1, args.train_query_2)
+test_split_query_indices = get_split_indices(args.split_queries, epochs)
 train_tmin, train_tmax = epochs[0].tmin, epochs[0].tmax
 ### GET DATA AND CONSTRUCT LABELS ###
-X, y, nchan, ch_names = get_data(args, epochs, args.sfreq)
+X, y, nchan, ch_names = get_X_y_from_epochs_list(args, epochs, args.sfreq)
 del epochs
 
 n_times = X.shape[2]

@@ -15,8 +15,6 @@ do
 
 	# train on localizer words only
 	echo "python 04_decoding.py --train-cond 'localizer' --label Colour \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
 --timegen -s $sub \
 --train-query-1 \"Loc_word=='${colours[0]}'\" \
 --train-query-2 \"Loc_word in ['${colours[1]}', '${colours[2]}']\" \
@@ -29,8 +27,6 @@ do
 
 	# train on localizer words + images
 	echo "python 04_decoding.py --train-cond 'localizer' --label Colour \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
 --timegen -s $sub \
 --train-query-1 \"Loc_word in ['${colours[0]}', 'img_${colours[0]}']\" \
 --train-query-2 \"Loc_word in ['${colours[1]}', '${colours[2]}', 'img_${colours[1]}', 'img_${colours[2]}']\" \
@@ -45,11 +41,11 @@ do
 	echo "python 04_decoding.py \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
- --train-cond 'one_object' --label Colour \
+--train-cond 'one_object' --label Colour \
 --timegen -s $sub \
 --train-query-1 \"Colour1=='${colours[0]}'\" \
 --train-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\" \
- --test-cond 'two_objects' \
+--test-cond 'two_objects' \
 --test-query-1 \"Colour1=='${colours[0]}'\" \
 --test-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\""
 
@@ -57,7 +53,7 @@ do
 	echo "python 04_decoding.py \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
- --train-cond 'two_objects' --label Colour \
+--train-cond 'two_objects' --label Colour \
 --timegen -s $sub \
 --train-query-1 \"Colour1=='${colours[0]}'\" \
 --train-query-2 \"Colour1 in ['${colours[1]}', '${colours[2]}']\" \
@@ -80,8 +76,6 @@ do
 
 	# train on localizer words only
 	echo "python 04_decoding.py --train-cond 'localizer' --label Shape \
---split-queries \"Matching=='loc-match'\" \
---split-queries \"Matching=='loc-nonmatch'\" \
 --timegen -s $sub \
 --train-query-1 \"Loc_word=='${shapes[0]}'\" \
 --train-query-2 \"Loc_word in ['${shapes[1]}', '${shapes[2]}']\" \
@@ -94,8 +88,6 @@ do
 
 	# train on localizer words + images
 	echo "python 04_decoding.py --train-cond 'localizer' --label Shape \
---split-queries \"Matching=='loc-match'\" \
---split-queries \"Matching=='loc-nonmatch'\" \
 --timegen -s $sub \
 --train-query-1 \"Loc_word in ['${shapes[0]}', 'img_${shapes[0]}']\" \
 --train-query-2 \"Loc_word in ['${shapes[1]}', '${shapes[2]}', 'img_${shapes[1]}', 'img_${shapes[2]}']\" \
@@ -110,7 +102,7 @@ do
 	echo "python 04_decoding.py \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
- --train-cond 'one_object' --label Shape \
+--train-cond 'one_object' --label Shape \
 --timegen -s $sub --test-cond 'two_objects' \
 --train-query-1 \"Shape1=='${shapes[0]}'\" \
 --train-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\" \
@@ -121,7 +113,7 @@ do
 	echo "python 04_decoding.py \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
- --train-cond 'two_objects' --label Shape \
+--train-cond 'two_objects' --label Shape \
 --timegen -s $sub --test-cond 'one_object' \
 --train-query-1 \"Shape1=='${shapes[0]}'\" \
 --train-query-2 \"Shape1 in ['${shapes[1]}', '${shapes[2]}']\" \
@@ -366,10 +358,10 @@ do
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --label AllRightObject --timegen -s $sub \
- --train-cond 'two_objects' \
+--train-cond 'two_objects' \
 --train-query-1 \"Right_obj=='${shape}_$colour'\" \
 --train-query-2 \"Right_obj!='${shape}_$colour'\" \
- --test-cond 'one_object' \
+--test-cond 'one_object' \
 --test-query-1 \"Shape1=='$shape' and Colour1=='$colour'\" \
 --test-query-2 \"Shape1!='$shape' or Colour1!='$colour'\" "
 	
@@ -378,10 +370,10 @@ do
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --label AllLeftObject --timegen -s $sub \
- --train-cond 'two_objects' \
+--train-cond 'two_objects' \
 --train-query-1 \"Left_obj=='${shape}_$colour'\" \
 --train-query-2 \"Left_obj!='${shape}_$colour'\" \
- --test-cond 'one_object' \
+--test-cond 'one_object' \
 --test-query-1 \"Shape1=='$shape' and Colour1=='$colour'\" \
 --test-query-2 \"Shape1!='$shape' or Colour1!='$colour'\" "
 
@@ -392,10 +384,10 @@ do
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --label AllRightObjNotLeft --timegen -s $sub \
- --train-cond 'two_objects' \
+--train-cond 'two_objects' \
 --train-query-1 \"Right_obj=='${shape}_$colour'\" \
 --train-query-2 \"Right_obj!='${shape}_$colour' and Left_obj!='${shape}_$colour'\" \
- --test-cond 'one_object' \
+--test-cond 'one_object' \
 --test-query-1 \"Shape1=='$shape' and Colour1=='$colour'\" \
 --test-query-2 \"Shape1!='$shape' or Colour1!='$colour'\" "
 
@@ -404,10 +396,10 @@ do
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --label AllLeftObjNotRight --timegen -s $sub \
- --train-cond 'two_objects' \
+--train-cond 'two_objects' \
 --train-query-1 \"Left_obj=='${shape}_$colour'\" \
 --train-query-2 \"Left_obj!='${shape}_$colour' and Right_obj!='${shape}_$colour'\" \
- --test-cond 'one_object' \
+--test-cond 'one_object' \
 --test-query-1 \"Shape1=='$shape' and Colour1=='$colour'\" \
 --test-query-2 \"Shape1!='$shape' or Colour1!='$colour'\" "
 
@@ -442,6 +434,29 @@ echo "python 04_decoding.py \
 --train-cond 'two_objects' \
 --train-query-1 \"Shape1==Shape2\" \
 --train-query-2 \"Shape1!=Shape2\" "
+
+
+
+
+
+## RELATION
+echo "python 04_decoding.py -c v1 \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--label Relation --timegen -s $sub \
+--train-cond 'two_objects' \
+--train-query-1 \"Relation=='à gauche d\''\" \
+--train-query-2 \"Relation=='à droite d\''\" "
+
+
+
+
+
+
+
+
+
+
 
 ## that is shit, we have some negative class that are positive on the test set ... 
 # # IMG LOCALIZER  TRAIN ON IMAGES AND TEST ON WORDS

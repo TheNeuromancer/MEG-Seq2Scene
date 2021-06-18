@@ -15,7 +15,7 @@ if [ -z "$1" ]; then
 	exit
 fi
 
-max_running_jobs=700 # max nb of jobs running at the same time
+max_running_jobs=500 # max nb of jobs running at the same time
 
 # load commands from file
 IFS=$'\r\n' GLOBIGNORE='*' command eval  'job_array=($(cat $1))'
@@ -44,7 +44,7 @@ cat <<EOT >> $file_qsub
 #PBS -N $i
 #PBS -l walltime=99:59:00
 #PBS -l ncpus=1
-#PBS -l mem=5G
+#PBS -l mem=10G
 #PBS -q Nspin_long
 #PBS -o $out_file
 #PBS -e $err_file

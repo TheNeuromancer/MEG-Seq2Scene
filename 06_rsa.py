@@ -21,9 +21,7 @@ parser.add_argument('--seed', default=42, type=int, help='random seed')
 parser.add_argument('--shuffle', action='store_true', default=False, help='Whether to shuffle sentence labels before training')
 parser.add_argument('--freq-band', default='', help='name of frequency band to use for filtering (theta, alpha, beta, gamma)')
 # parser.add_argument('--timegen', action='store_true', default=False, help='Whether to test probe trained at one time point also on all other timepoints')
-# parser.add_argument('--query', default='Colour1', help='Metadata query for training classes')
 parser.add_argument('--train-cond', default='localizer', help='localizer, one_object or two_objects')
-parser.add_argument('--test-cond', default=[], action='append', help='localizer, one_object or two_objects')
 parser.add_argument('--label', default='', help='help to identify the result latter')
 parser.add_argument('--filter', default='', help='md query to filter trials before anything else (eg to use only matching trials')
 
@@ -31,6 +29,10 @@ parser.add_argument('--distance_metric', default='confusion', help='Metric to co
 parser.add_argument('--rsa_metric', default=[], action='append', help='Metric to compute RSA')
 parser.add_argument('--min-nb-trial', default=2, type=int, help='minimum number of trial in a class to keep it in the decoding to get confusion matrices')
 parser.add_argument('-x', '--xdawn', action='store_true',  default=False, help='Whether to apply Xdawn spatial filtering before training decoder')
+
+# not used, kept for consistency
+parser.add_argument('--test-query', default=[], action='append', help='Metadata query for training classes')
+parser.add_argument('--test-cond', default=[], action='append', help='localizer, one_object or two_objects')
 
 # not implemented
 parser.add_argument('--localizer', action='store_true', default=False, help='Whether to use only electrode that were significant in the localizer')
@@ -94,7 +96,7 @@ in any case, we can use the other as a dsm predictor ...")
 
 dsm_models = []
 if args.distance_metric == "confusion":
-    class_queries = get_class_queries(args.train_cond)
+    class_queries = get_class_queries_rsa(args.train_cond)
     for factor in factors:
         dsm_models.append(get_dsm_from_queries(factor, class_queries))
 else: # any other distance metric
