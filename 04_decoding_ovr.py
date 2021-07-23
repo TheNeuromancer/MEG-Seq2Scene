@@ -23,6 +23,7 @@ parser.add_argument('--timegen', action='store_true', default=False, help='Wheth
 parser.add_argument('--label', default='', help='help to identify the result latter')
 parser.add_argument('--dummy', action='store_true', default=False, help='Accelerates everything so that we can test that the pipeline is working. Will not yield any interesting result!!')
 parser.add_argument('-x', '--xdawn', action='store_true',  default=False, help='Whether to apply Xdawn spatial filtering before training decoder')
+parser.add_argument('--test_quality', action='store_true', default=False, help='Change the out directory name, used for testing the quality of single runs.')
 parser.add_argument('--filter', default='', help='md query to filter trials before anything else (eg to use only matching trials')
 parser.add_argument('--train-cond', default='localizer', help='localizer, one_object or two_objects')
 parser.add_argument('--train-query', help='Metadata query for training classes')
@@ -69,8 +70,8 @@ start_time = time.time()
 ###########################
 
 ### GET EPOCHS FILENAMES ###
-print("TODO: make own utils for this script ... here we do not have the test condition saved in the fn")
-train_fn, test_fns, out_fn, test_out_fns = get_paths(args, "Decoding_ovr")
+out_dir_name = "Decoding_ovr" if not args.test_quality else "Decoding_test_quality"
+train_fn, test_fns, out_fn, test_out_fns = get_paths(args, out_dir_name)
 if args.windows:
     args.windows = [w.replace(" ", "") for w in args.windows] # remove spaces
     wins = [f"#{'#'.join([args.windows[0], w])}#" for w in args.windows] # string to add to the out fns

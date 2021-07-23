@@ -113,7 +113,7 @@ def fn2blocktype(fn):
 for i_run, raw_fn_in in enumerate(all_runs_fns):
     # if not "1obj" in raw_fn_in:
     #     continue
-    if "run10" in raw_fn_in: continue
+    # if "run10" in raw_fn_in: continue
 
     print("doing file ", raw_fn_in)
     run_nb = op.basename(raw_fn_in).split("run")[1].split("_")[0]
@@ -140,11 +140,12 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
 
     # MAXWELL FILTERING
     mne.channels.fix_mag_coil_types(raw.info)
-    noisy_chs, flat_chs, scores = mne.preprocessing.find_bad_channels_maxwell(raw, origin=head_origin, coord_frame='head', calibration=sss_cal_fn, cross_talk=ct_sparse_fn, return_scores=True, verbose="warning")
+    if raw.info['dev_head_t'] is None: raw.info['dev_head_t'] = ref_run_head_pos # bug for sub
+    noisy_chs, flat_chs, scores = mne.preprocessing.find_bad_channels_maxwell(raw, origin=head_origin, coord_frame='head', calibration=sss_cal_fn, cross_talk=ct_sparse_fn, return_scores=True, verbose='warning', bad_condition='ignore')
     if args.plot: plot_deviant_maxwell(scores, f"{out_dir_plots}/run_{run_nb}")
     raw.info['bads'] = list(bads) + noisy_chs + flat_chs
     print(f"bad channels automatically detected and interpolated based on Maxwell filtering: {raw.info['bads']}")
-    raw = mne.preprocessing.maxwell_filter(raw, origin=head_origin, coord_frame='head', calibration=sss_cal_fn, cross_talk=ct_sparse_fn, destination=ref_run_head_pos, verbose='DEBUG')
+    raw = mne.preprocessing.maxwell_filter(raw, origin=head_origin, coord_frame='head', calibration=sss_cal_fn, cross_talk=ct_sparse_fn, destination=ref_run_head_pos, verbose='warning', bad_condition='ignore')
     
     raw = raw.del_proj("all")
     
@@ -189,8 +190,8 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
     ## get events
     min_duration = 0.002
     if block_type == "two_objects": # for some reason the two objects block do not zork with Chrsitos panacea
-        if args.subject == "05_mb140004" and "run6_2obj" in raw_fn_in:
-            min_duration = 0.002
+        # if args.subject == "05_mb140004" and "run6_2obj" in raw_fn_in:
+        #     min_duration = 0.002
         events = mne.find_events(raw, stim_channel='STI101', verbose=True, min_duration=min_duration)
     else:
         # load events with Christos' panacea code to correctly get all triggers
@@ -204,12 +205,20 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
 
     if args.subject[0:2]=="16" and ("run1_loc" in raw_fn_in or "run9_2obj" in raw_fn_in):
         print("\n\nNEEDS TO INVESTIGATE, MISSING ONE TRIGGER ON RUN 1 and 9AND DO NOT KNOW YET WHERE IT IS SUPPOSED TO BE. Passing for now\n\n")
+        set_trace()
         continue
 
-    elif args.subject[0:2] == "17" and "run7_2obj" in raw_fn_in:
+    elif (args.subject[0:2] == "17" and "run7_2obj" in raw_fn_in) \
+      or (args.subject[0:2] == "22" and "run5_2obj" in raw_fn_in) \
+      or (args.subject[0:2] == "22" and "run9_2obj" in raw_fn_in) \
+      or (args.subject[0:2] == "23" and "run5_2obj" in raw_fn_in) \
+      or (args.subject[0:2] == "23" and "run7_2obj" in raw_fn_in):
             # missing one 205 triggers at trial 32. Adding it based on the triggers 30 (= image presentation)
             # found with np.argmax(np.diff(np.where(events[:,2]==205)[0]))
-            missing_trial = 32
+            missing_trial = np.argmax(np.diff(np.where(events[:,2]==205)[0])) + 1# should be 32 for sub17
+
+            if args.subject[0:2] == "17" and missing_trial != 32: set_trace()
+
             image_presentation_time = events[np.where(events[:,2]==20)[0][missing_trial], 0]
             trig_img_delay = 5165 # average time between trial start and image presentation (tiny jitter when the screen skips an image)
             new_event = np.array([image_presentation_time-trig_img_delay, 0, 205])
@@ -224,14 +233,29 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
             #         break
 
     elif (args.subject[0:2] == "19" and ("run2_1obj" in raw_fn_in or "run4_1obj" in raw_fn_in)) \
-                        or (args.subject[0:2] == "21" and "run6_1obj" in raw_fn_in):
-        missing_trial = np.argmax(np.diff(np.where(events[:,2]==trig)[0]))
+                        or (args.subject[0:2] == "21" and "run6_1obj" in raw_fn_in) \
+                        or (args.subject[0:2] == "22" and "run2_1obj" in raw_fn_in) \
+                        or (args.subject[0:2] == "22" and "run4_1obj" in raw_fn_in) \
+                        or (args.subject[0:2] == "22" and "run8_1obj" in raw_fn_in) \
+                        or (args.subject[0:2] == "23" and "run2_1obj" in raw_fn_in) \
+                        or (args.subject[0:2] == "27" and "run5_2obj" in raw_fn_in) \
+                        : # correcting missing trig for 1obj
+        missing_trial = np.argmax(np.diff(np.where(events[:,2]==trig)[0])) + 1
         image_presentation_time = events[np.where(events[:,2]==20)[0][missing_trial], 0]
         # trig_img_delay = np.mean(events[events[:,2]==20, 0][0:50] - events[events[:,2]==trig, 0][0:50], 0) # 2266 or 2299
         trig_img_delay = 2284 # ave time between first word of image.
         new_event = np.array([image_presentation_time-trig_img_delay, 0, trig])
         events = np.concatenate([[ev for ev in events if ev[0]<new_event[0]],[new_event],[ev for ev in events if ev[0]>new_event[0]]])
-            
+
+    elif args.subject[0:2] == "25" and "run1_loc" in raw_fn_in: # correcting missing trig for localizer 
+        missing_trial = np.argmax(np.diff(np.where(events[:,2]==trig)[0])) + 1
+        inter_img_dealy = 963 # mean of (950,   966,   950,   983,   949,   950, 982,   950,   949,   983,   983,   949,   966, 950,   983,   950,   983,   949,   983)
+        presentation_time = events[missing_trial-1, 0] + inter_img_dealy
+        new_event = np.array([presentation_time, 0, trig])
+        events = np.concatenate([[ev for ev in events if ev[0]<new_event[0]],[new_event],[ev for ev in events if ev[0]>new_event[0]]])
+
+    elif args.subject[0:2] == "28" and "run5_2obj" in raw_fn_in: # only the end of the block was saved
+        md = md.iloc[-21::]
 
     if args.subject == "05_mb140004" and "run8" in raw_fn_in:
         # missing the 12th trial_start trigger: fix works
@@ -256,7 +280,8 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
     # print(f"found {len(events)} triggers")
     events = events[events[:,2]==trig]
     nb_ev_per_block = {"localizer": 360, "one_object": 135, "two_objects": 81}
-    if events.shape[0] != nb_ev_per_block[block_type]:
+    # if events.shape[0] != nb_ev_per_block[block_type]:
+    if events.shape[0] != len(md):
         set_trace()
 
     if block_type == 'localizer':

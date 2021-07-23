@@ -59,6 +59,13 @@ v20: same but with left and right queries for RSA. Also SVC with gridsearch for 
 BACK TO V1
 c1: windows: .15-.3s for early and .4-.55 for late
 v2: windows now .1-.4s for early and .45-.75s for late.
+v3: cat10, no reduc dim. All launching all decoding. 
+
+
+FOR SUB 25: NOW CORRECTLY CORRECTING FOR MISSING TRIAL (BEFORE THE INDEX WAS WRONG)
+
+Use principal angles between subspaces? https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.subspace_angles.html
+
 
 
 

@@ -4,7 +4,7 @@ do
 	do
 		for dist_metric in confusion correlation
 		do
-			for rsa_metric in regression RF_regression # spearman pearson
+			for rsa_metric in regression # RF_regression # spearman pearson
 			do
 				for xdawn_str in '' # --xdawn
 				do

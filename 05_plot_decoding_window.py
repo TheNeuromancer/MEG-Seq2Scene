@@ -182,8 +182,24 @@ for label in all_labels:
 
     ## AUC gen to all time points
     if all_AUC_allt and "windows" in all_AUC_allt[0].keys():
-        clr_ctr = 0
+
         n_subs = len(all_AUC_allt)
+        print(len(all_AUC_allt))
+        # remove non-matched times
+        print("\nRemoving subjects with a number of timepoints that do not match the first one")
+        to_del = []
+        for i1, train_cond in enumerate(conds):
+            for i2, test_cond in enumerate(conds):
+                if train_cond!=test_cond:
+                    n_times = len(all_AUC_allt[0][train_cond][test_cond])
+                    for i_sub in range(n_subs):
+                        if len(all_AUC_allt[i_sub][train_cond][test_cond]) != n_times:
+                            to_del.append(i_sub)
+                            print(f"Dropping subject {i_sub+1}")
+        all_AUC_allt = [all_AUC_allt[i_sub] for i_sub in range(n_subs) if i_sub not in to_del]
+        n_subs = len(all_AUC_allt)
+
+        clr_ctr = 0
         fig, axes = plt.subplots(len(conds))
         for i1, train_cond in enumerate(conds):
             for i2, test_cond in enumerate(conds):
@@ -200,7 +216,11 @@ for label in all_labels:
                     n_times = len(all_AUC_allt[0][train_cond][test_cond])
                     tmin, tmax = tmin_tmax_dict[test_cond.split("-")[1]]
                     times = np.linspace(tmin, tmax, n_times)
-                    ave = np.mean([all_AUC_allt[i_sub][train_cond][test_cond] for i_sub in range(n_subs)], 0)
+                    try:
+                        # print([all_AUC_allt[i_sub][train_cond][test_cond].shape for i_sub in range(n_subs)])
+                        ave = np.mean([all_AUC_allt[i_sub][train_cond][test_cond] for i_sub in range(n_subs)], 0)
+                    except:
+                        set_trace()
                     std = np.std([all_AUC_allt[i_sub][train_cond][test_cond] for i_sub in range(n_subs)], 0)
 
                     plot = axes[i1].plot(times, ave, alpha=0.8, lw=1, label=test_cond, c=clr)

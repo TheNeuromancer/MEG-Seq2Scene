@@ -137,7 +137,7 @@ do
 
 
 ## RELATION
-	echo "python 04_decoding_ovr.py -w -c v1 \
+	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label Relation \
 --train-cond 'two_objects' \
 --train-query \"Relation\" "
@@ -256,6 +256,8 @@ do
 	# train on scenes 2nd obj
 	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label winAll2ndObj \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
 --windows \"1.8,3.2\" \
 --train-query \"Shape2+Colour2\" \

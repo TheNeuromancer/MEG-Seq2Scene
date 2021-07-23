@@ -84,8 +84,6 @@ elif int(args.subject[0:2]) > 8:
 else:
     qwe
 
-# report = mne.report.Report()
-
 print(all_fns)
 # all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
 unique_fns = np.unique([op.basename(fn) for fn in all_fns])
@@ -108,6 +106,8 @@ for unique_fn in unique_fns:
     # label_fn = f'{fn.split("_all_betas.npy")[0]}_labels.p'
     label_fn = unique_fn.replace("betas", "labels").replace(".npy", ".p") 
     legend_labels = pickle.load(open(f"{op.dirname(fn)}/{label_fn}", "rb"))
+    cond = label.split('-')[0].lower()
+    cond = "scenes" if cond=="alltogether" else cond
 
     # average results from all subjects
     try:
@@ -121,7 +121,8 @@ for unique_fn in unique_fns:
     times = np.linspace(tmin, tmax, n_times)
     version = "v1" if args.subject=="v1" else "v2"
 
-    plot_betas(betas=ave_betas, std=std_betas, times=times, labels=legend_labels, out_fn=out_fn)
+    plot_betas(betas=ave_betas, std=std_betas, times=times, cond=cond, labels=legend_labels, out_fn=out_fn, version=version)
+    multi_plot_betas(betas=ave_betas, std=std_betas, times=times, cond=cond, labels=legend_labels, out_fn=f'{out_fn}_multi', version=version)
 
     print(f"Finished {label}\n")
     plt.close('all')

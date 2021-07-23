@@ -99,4 +99,47 @@ do
 --train-query \"Shape2\" \
 --windows \"2.25,2.55\" "
 
+
+## During the delay
+## OBJECTS
+	echo "python 04_decoding_window.py -w \
+-s $sub --test-all-times --label Objectsdelay \
+--train-cond 'two_objects' \
+--train-query \"Shape1+Colour1\" \
+--windows \"3.5,5.\" \
+--train-cond 'two_objects' \
+--train-query \"Shape2+Colour2\" \
+--windows \"3.5,5.\" "
+
+## SHAPES
+	echo "python 04_decoding_window.py -w \
+-s $sub --test-all-times --label Shapesdelay \
+--train-cond 'two_objects' \
+--train-query \"Shape1\" \
+--windows \"3.5,5.\" \
+--train-cond 'two_objects' \
+--train-query \"Shape2\" \
+--windows \"3.5,5.\" "
+
+## COLORS
+	echo "python 04_decoding_window.py -w \
+-s $sub --test-all-times --label Coloursdelay \
+--train-cond 'two_objects' \
+--train-query \"Colour1\" \
+--windows \"3.5,5.\" \
+--train-cond 'two_objects' \
+--train-query \"Colour2\" \
+--windows \"3.5,5.\" "
+
+
+	echo "python 04_decoding_window.py -w \
+-s $sub --test-all-times --label SideObjectsdelay \
+--train-cond 'two_objects' \
+--train-query \"Left_obj\" \
+--windows \"3.5,5.\" \
+--train-cond 'two_objects' \
+--train-query \"Right_obj\" \
+--windows \"3.5,5.\" "
+
+
 done

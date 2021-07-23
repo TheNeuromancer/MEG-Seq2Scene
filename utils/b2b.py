@@ -1,3 +1,5 @@
+import matplotlib as mpl
+from matplotlib.font_manager import FontProperties
 import numpy as np
 from scipy import linalg
 from copy import deepcopy
@@ -93,7 +95,9 @@ def get_X_y_from_queries_b2b(epochs_list, class_queries):
 def get_X(epochs_list):
     Xs = [epo.get_data() for epo in epochs_list]
     max_len = max([X.shape[2] for X in Xs])
-    Xs = [np.append(X, np.zeros((X.shape[0], X.shape[1], 426-X.shape[2])), 2) for X in Xs]
+    print(max_len)
+    exit()
+    Xs = [np.append(X, np.zeros((X.shape[0], X.shape[1], max_len-X.shape[2])), 2) for X in Xs]
     return np.concatenate(Xs)
 
 
@@ -108,11 +112,10 @@ def class_queries2legend_labels(class_queries, get_position=False):
 
     return legend_labels
 
-def plot_betas(betas, times, labels, out_fn, std=None, ylabel='Betas', dpi=200):
+
+def plot_betas(betas, times, labels, out_fn, cond, std=None, ylabel='Betas', dpi=200, version="v1"):
     """ Plot betas from b2b
     """
-    import matplotlib as mpl
-    from matplotlib.font_manager import FontProperties
     fontP = FontProperties()
     fontP.set_size('xx-small')
     mpl.rcParams['axes.prop_cycle'] = mpl.cycler(color=['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink', 'brown', 'orange', 'teal', 'coral', 'lightblue', 'lime', 'lavender', 'turquoise', 'darkgreen', 'tan', 'salmon', 'gold'])
@@ -122,11 +125,40 @@ def plot_betas(betas, times, labels, out_fn, std=None, ylabel='Betas', dpi=200):
     if std is not None:
         for i, plot in enumerate(plots):
             ax.fill_between(times, betas[:,i]-std[:,i], betas[:,i]+std[:,i], alpha=0.2, color=plot.get_color(), lw=0)
+    word_onsets, image_onset = get_onsets(cond, version=version)
+    for w_onset in word_onsets:
+         ax.axvline(x=w_onset, linestyle='--', color='k', zorder=-1)
+    for img_onset in image_onset:
+         ax.axvline(x=img_onset, linestyle='-', color='k', zorder=-1)
     plt.xlabel("Time (s)")
     plt.ylabel(ylabel)
     plt.tight_layout()
     plt.savefig(out_fn)
 
+
+def multi_plot_betas(betas, times, labels, out_fn, cond, std=None, ylabel='Betas', xlabel='Time (s)', dpi=200, version="v1", cmap_name='hsv'):
+    """ Plot betas from b2b, one per subplot
+    """
+    word_onsets, image_onset = get_onsets(cond, version=version)
+    n_times = len(times)
+    n_plots = betas.shape[1]
+    cmap = plt.cm.get_cmap(cmap_name, n_plots)
+    fig, axes = plt.subplots(n_plots, 1, figsize=(8, 3*n_plots), sharex=True, dpi=dpi)
+    for i, beta in enumerate(betas.T):
+        axes[i].set_ylabel(ylabel)
+        axes[i].set_xlabel(xlabel)
+        axes[i].set_title(labels[i])
+        for w_onset in word_onsets:
+             axes[i].axvline(x=w_onset, linestyle='--', color='k')
+        for img_onset in image_onset:
+             axes[i].axvline(x=img_onset, linestyle='-', color='k')
+        axes[i].axhline(y=0, linestyle='-', color='grey')
+        plot = axes[i].plot(times, beta, label=labels[i], c=cmap(i))[0]
+        if std is not None:
+            axes[i].fill_between(times, beta-std[:,i], beta+std[:,i], alpha=0.2, color=plot.get_color(), lw=0)
+    plt.tight_layout()
+    plt.savefig(out_fn)
+    plt.close()
 
 
 ## </TD> ##

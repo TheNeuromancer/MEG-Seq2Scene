@@ -144,7 +144,7 @@ for label in all_labels:
                     all_items.append(op.basename(fn))
 
                 if not all_AUC: 
-                    # print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} {'matching trials only' if match else ''}")
+                    print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} {'matching trials only' if match else ''}")
                     continue
                 print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} {'matching trials only' if match else ''}")
                 gen_str = f"_tested_on_{gen_cond}" if gen_cond is not None else ""
@@ -164,7 +164,7 @@ for label in all_labels:
                     ave_auc_all_labels[label] = np.diag(AUC_mean)
                     std_auc_all_labels[label] = np.diag(AUC_std)
                 # else:
-                continue
+                # continue
 
                 # save max values to save to csv
                 max_auc_all_facconds.append(np.max(AUC_mean))
@@ -235,11 +235,10 @@ word_onsets, image_onset = get_onsets("scenes", version=version)
 plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props_multi.png', word_onsets=word_onsets, image_onset=image_onset)
 plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props.png', word_onsets=word_onsets, image_onset=image_onset)
 
-plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=['S1','C1','R','S2','C2','All1stObj','All2ndObj'], times=times, out_fn=f'{out_fn}_scenes_props_multi_all.png', word_onsets=word_onsets, image_onset=image_onset)
-plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=['S1','C1','R','S2','C2','All1stObj','All2ndObj'], times=times, out_fn=f'{out_fn}_scenes_props_all.png', word_onsets=word_onsets, image_onset=image_onset)
-
-# plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=['S1','C1','R','S2','C2','AllObjScenes','All2ndObjScenes'], times=times, out_fn=f'{out_fn}_scenes_props_multi_all.png', word_onsets=word_onsets, image_onset=image_onset)
-# plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props_all.png', word_onsets=word_onsets, image_onset=image_onset)
+# plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=ave_auc_all_labels.keys(), times=times, out_fn=f'{out_fn}_scenes_props_multi_all.png', word_onsets=word_onsets, image_onset=image_onset) # ['S1','C1','R','S2','C2','All1stObj','All2ndObj']
+# plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=ave_auc_all_labels.keys(), times=times, out_fn=f'{out_fn}_scenes_props_all.png', word_onsets=word_onsets, image_onset=image_onset) # ['S1','C1','R','S2','C2','All1stObj','All2ndObj']
+plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=['S1','C1','R','S2','C2','AllObjScenes','All2ndObjScenes'], times=times, out_fn=f'{out_fn}_scenes_props_multi_all.png', word_onsets=word_onsets, image_onset=image_onset)
+plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props_all.png', word_onsets=word_onsets, image_onset=image_onset)
 
 
 # x = PrettyTable()

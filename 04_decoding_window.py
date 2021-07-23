@@ -26,6 +26,7 @@ parser.add_argument('--train-query', default=[], action='append', help='Metadata
 parser.add_argument('--label', default='', help='help to identify the result latter')
 parser.add_argument('--dummy', action='store_true', default=False, help='Accelerates everything so that we can test that the pipeline is working. Will not yield any interesting result!!')
 parser.add_argument('-x', '--xdawn', action='store_true',  default=False, help='Whether to apply Xdawn spatial filtering before training decoder')
+parser.add_argument('--test_quality', action='store_true', default=False, help='Change the out directory name, used for testing the quality of single runs.')
 parser.add_argument('--filter', default='', help='md query to filter trials before anything else (eg to use only matching trials')
 
 parser.add_argument('--windows', action='append', default=[], help='list of time windows to train classifiers, test generalization and compute angles')

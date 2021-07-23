@@ -46,7 +46,8 @@ n_runs = len(all_runs_fns)
 
 for i_run, raw_fn_in in enumerate(all_runs_fns):
     print("doing file ", raw_fn_in)
-    out_fn = f"{in_dir}/run{i_run+1}_bads.p"
+    run_nb = op.basename(raw_fn_in).split("_")[0].split("run")[1]
+    out_fn = f"{in_dir}/run{run_nb}_bads.p"
     if op.exists(out_fn):
         print("output file alreay exists")
         if args.overwrite:
@@ -86,4 +87,4 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         bads = []
     
     pickle.dump(bads, open(out_fn, "wb"))
-    print(f"Done with run {i_run+1}\n\n")
+    print(f"Done with run {run_nb}\n\n")

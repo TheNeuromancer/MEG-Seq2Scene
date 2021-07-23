@@ -20,6 +20,7 @@ parser.add_argument('--shuffle', action='store_true', default=False, help='Wheth
 parser.add_argument('--freq-band', default='', help='name of frequency band to use for filtering (theta, alpha, beta, gamma)')
 # parser.add_argument('--C', default=1, type=float, help='Regularization parameter')
 parser.add_argument('--timegen', action='store_true', default=False, help='Whether to test probe trained at one time point also on all other timepoints')
+parser.add_argument('--filter', default='', help='md query to filter trials before anything else (eg to use only matching trials')
 parser.add_argument('--train-cond', default='localizer', help='localizer, one_object or two_objects')
 parser.add_argument('--train-query-1', help='Metadata query for training classes')
 parser.add_argument('--train-query-2', help='Metadata query for training classes')

@@ -330,3 +330,42 @@ def group_conds(properties):
     groups_indices = [np.where(idx==conds_indices)[0] for idx in np.unique(conds_indices)]
     return unique_conds, groups_indices
     # return all_conds, unique_conds, conds_indices, groups_indices
+
+
+
+
+def win_ave_smooth(data, nb_cat, mean=True):
+    """ smoothing throughmoving average window
+    data should be a list if np arrays of shape
+    n_epochs * n_ch * n_times
+    """
+    if nb_cat == 0: return data
+
+    # needs a list of epochs data
+    if not isinstance(data, list): data = [data]
+
+    # loop over datum
+    for i_d, query_data in enumerate(data):
+        sz = query_data.shape
+        if mean:
+            new_data = np.zeros_like(query_data)
+        else:
+            new_data = np.zeros((sz[0], sz[1]*nb_cat, sz[2]))
+
+        for t in range(sz[2]):
+            nb_to_cat = nb_cat if t>nb_cat else t
+            if mean: # average consecutive timepoints
+                new_data[:,:,t] = query_data[:,:,t-nb_to_cat:t+1].mean(axis=2)
+            else: # concatenate
+                if nb_to_cat < nb_cat: # we miss some data points before tmin 
+                    # just take the first timesteps and copy them
+                    dat = query_data[:,:,t-nb_to_cat:t+1]
+                    # dat = dat.reshape(sz[0], sz[1] * dat.shape[2])
+                    while dat.shape[2] < nb_cat:
+                        idx = np.random.choice(nb_to_cat+1) # take a random number below the current timepoint
+                        dat = np.concatenate((dat, dat[:,:,idx,np.newaxis]), axis=2) # add it to the data
+                    new_data[:,:,t] = dat.reshape(sz[0], sz[1] * nb_cat)
+                else:
+                    new_data[:,:,t] = query_data[:,:,t-nb_to_cat:t].reshape(sz[0], sz[1] * nb_to_cat)
+        data[i_d] = new_data
+    return data

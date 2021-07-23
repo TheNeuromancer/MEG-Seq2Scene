@@ -56,6 +56,14 @@ Called in the main scripts """
 
 def load_data(args, fn, query_1='', query_2=''):
     epochs = mne.read_epochs(fn, preload=True, verbose=False)
+    if args.filter: # filter metadata before anything else
+        print(epochs.metadata)
+        epochs = epochs[args.filter]
+        if not len(epochs): 
+            print(f"No event left after filtering with {args.filter}. Exiting smoothly")
+            exit()
+        else:
+            print(f"We have {len(epochs)} events left after filtering with {args.filter}")
     if args.subtract_evoked:
         epochs = epochs.subtract_evoked(epochs.average())
     if "Right_obj" in query_1 or "Left_obj" in query_1 or "two_objects" in fn:
@@ -117,20 +125,6 @@ def load_data(args, fn, query_1='', query_2=''):
 
     metadatas = [epo.metadata for epo in epochs]
 
-    # CLIP THE DATA
-    try:
-        if args.clip:
-            print('clipping the data at the 5th and 95th percentile for each channel')
-            for query_data in data:
-                for ch in range(query_data.shape[1]):
-                    # Get the 5th and 95th percentile and channel
-                    p5 = np.percentile(query_data[:, ch, :], 5)
-                    p95 = np.percentile(query_data[:, ch, :], 95)
-                    query_data[:, ch, :] = np.clip(query_data[:, ch, :], p5, p95)
-    except:
-        set_trace()
-
-
     # # add the temporal derivative of each channel as new feature
     # X = np.concatenate([X, np.gradient(X, axis=1)], axis=1)
 
@@ -146,13 +140,24 @@ def load_data(args, fn, query_1='', query_2=''):
     # if args.cat:
     #     X = savgol_filter(X, window_length=51, polyorder=3, deriv=0, delta=1.0, axis=-1, mode='interp', cval=0.0)
 
-    data = win_ave_smooth(data, nb_cat=args.cat, mean=args.mean)
+    if args.cat:
+        data = win_ave_smooth(data, nb_cat=args.cat, mean=args.mean)
+        new_info = epochs[0].info.copy()
+        old_ch_names = deepcopy(new_info['ch_names'])
+        for i in range(args.cat-1): new_info['ch_names'] += [f"{ch}_{i}" for ch in old_ch_names]
+        new_info['nchan'] = new_info['nchan'] * args.cat
+        old_info_chs = deepcopy(new_info['chs'])
+        for i in range(args.cat-1): new_info['chs'] += deepcopy(old_info_chs)
+        for i in range(new_info['nchan']): new_info['chs'][i]['ch_name'] = new_info['ch_names'][i] 
+    else:
+        new_info = epochs[0].info
 
     # print('zscoring each epoch')
     # for idx in range(X.shape[0]):
     #     for ch in range(X.shape[1]):
     #         X[idx, ch, :] = (X[idx, ch] - np.mean(X[idx, ch])) / np.std(X[idx, ch])
-    epochs = [mne.EpochsArray(data, old_epo.info, metadata=meta, tmin=old_epo.times[0], verbose="warning") for data, meta, old_epo in zip(data, metadatas, epochs)]
+
+    epochs = [mne.EpochsArray(datum, new_info, metadata=meta, tmin=old_epo.times[0], verbose="warning") for datum, meta, old_epo in zip(data, metadatas, epochs)]
 
     # crop after getting high gammas and smoothing to avoid border issues
     block_type = op.basename(fn).split("-epo.fif")[0]
@@ -161,10 +166,31 @@ def load_data(args, fn, query_1='', query_2=''):
     print('cropping to final tmin and tmax: ', tmin, tmax)
     epochs = [epo.crop(tmin, tmax) for epo in epochs]
 
+
+    # CLIP THE DATA
+    if args.clip:
+        print('clipping the data at the 5th and 95th percentile for each channel')
+        for query_data in data:
+            for ch in range(query_data.shape[1]):
+                # Get the 5th and 95th percentile and channel
+                p5 = np.percentile(query_data[:, ch, :], 5)
+                p95 = np.percentile(query_data[:, ch, :], 95)
+                query_data[:, ch, :] = np.clip(query_data[:, ch, :], p5, p95)
+
     ### BASELINING
     if args.baseline:
         print('baselining...')
         epochs = [epo.apply_baseline((tmin, 0), verbose=0) for epo in epochs]
+
+    # CLIP THE DATA
+    if args.clip:
+        print('clipping the data at the 5th and 95th percentile for each channel')
+        for query_data in data:
+            for ch in range(query_data.shape[1]):
+                # Get the 5th and 95th percentile and channel
+                p5 = np.percentile(query_data[:, ch, :], 5)
+                p95 = np.percentile(query_data[:, ch, :], 95)
+                query_data[:, ch, :] = np.clip(query_data[:, ch, :], p5, p95)
 
     return epochs
     
@@ -1074,39 +1100,3 @@ def get_X_y_from_queries(epochs, class_queries):
     X, y = np.array(X), np.array(y)
     return X, y, groups
 
-
-def win_ave_smooth(data, nb_cat, mean=True):
-    """ smoothing throughmoving average window
-    data should be a list if np arrays of shape
-    n_epochs * n_ch * n_times
-    """
-    if nb_cat == 0: return data
-
-    # needs a list of epochs data
-    if not isinstance(data, list): data = [data]
-
-    # loop over datum
-    for i_d, query_data in enumerate(data):
-        sz = query_data.shape
-        if mean:
-            new_data = np.zeros_like(query_data)
-        else:
-            new_data = np.zeros((sz[0], sz[1]*nb_cat, sz[2]))
-
-        for t in range(sz[2]):
-            nb_to_cat = nb_cat if t>nb_cat else t
-            if mean: # average consecutive timepoints
-                new_data[:,:,t] = query_data[:,:,t-nb_to_cat:t+1].mean(axis=2)
-            else: # concatenate
-                if nb_to_cat < nb_cat: # we miss some data points before tmin 
-                    # just take the first timesteps and copy them
-                    dat = query_data[:,:,t-nb_to_cat:t+1]
-                    # dat = dat.reshape(sz[0], sz[1] * dat.shape[2])
-                    while dat.shape[2] < nb_cat:
-                        idx = np.random.choice(nb_to_cat+1) # take a random number below the current timepoint
-                        dat = np.concatenate((dat, dat[:,:,idx,np.newaxis]), axis=2) # add it to the data
-                    new_data[:,:,t] = dat.reshape(sz[0], sz[1] * nb_cat)
-                else:
-                    new_data[:,:,t] = query_data[:,:,t-nb_to_cat:t].reshape(sz[0], sz[1] * nb_to_cat)
-        data[i_d] = new_data
-    return data

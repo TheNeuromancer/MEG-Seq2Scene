@@ -173,35 +173,23 @@ def load_data_rsa(args, fn, filter=''):
     # if args.cat:
     #     X = savgol_filter(X, window_length=51, polyorder=3, deriv=0, delta=1.0, axis=-1, mode='interp', cval=0.0)
 
-    if args.cat: # old way to smooth, moving average window
-        sz = data.shape
-        if args.mean:
-            new_data = np.zeros_like(data)
-        else:
-            new_data = np.zeros((sz[0], sz[1]*args.cat, sz[2]))
-
-        for t in range(sz[2]):
-            nb_to_cat = args.cat if t>args.cat else t
-            if args.mean: # average consecutive timepoints
-                new_data[:,:,t] = data[:,:,t-nb_to_cat:t+1].mean(axis=2)
-            else: # concatenate
-                if nb_to_cat < args.cat: # we miss some data points before tmin 
-                    # just take the first timesteps and copy them
-                    dat = data[:,:,t-nb_to_cat:t+1]
-                    # dat = dat.reshape(sz[0], sz[1] * dat.shape[2])
-                    while dat.shape[2] < args.cat:
-                        idx = np.random.choice(nb_to_cat+1) # take a random number below the current timepoint
-                        dat = np.concatenate((dat, dat[:,:,idx,np.newaxis]), axis=2) # add it to the data
-                    new_data[:,:,t] = dat.reshape(sz[0], sz[1] * args.cat)
-                else:
-                    new_data[:,:,t] = data[:,:,t-nb_to_cat:t].reshape(sz[0], sz[1] * nb_to_cat)
-        data = new_data
+    if args.cat:
+        data = win_ave_smooth(data, nb_cat=args.cat, mean=args.mean)[0]
+        new_info = epochs.info.copy()
+        old_ch_names = deepcopy(new_info['ch_names'])
+        for i in range(args.cat-1): new_info['ch_names'] += [f"{ch}_{i}" for ch in old_ch_names]
+        new_info['nchan'] = new_info['nchan'] * args.cat
+        old_info_chs = deepcopy(new_info['chs'])
+        for i in range(args.cat-1): new_info['chs'] += deepcopy(old_info_chs)
+        for i in range(new_info['nchan']): new_info['chs'][i]['ch_name'] = new_info['ch_names'][i] 
+    else:
+        new_info = epochs.info
 
     # print('zscoring each epoch')
     # for idx in range(X.shape[0]):
     #     for ch in range(X.shape[1]):
     #         X[idx, ch, :] = (X[idx, ch] - np.mean(X[idx, ch])) / np.std(X[idx, ch])
-    epochs = mne.EpochsArray(data, epochs.info, metadata=epochs.metadata, tmin=epochs.times[0], verbose="warning")
+    epochs = mne.EpochsArray(data, new_info, metadata=epochs.metadata, tmin=epochs.times[0], verbose="warning")
 
 
     # crop after getting high gammas and smoothing to avoid border issues
@@ -251,6 +239,7 @@ def plot_rsa(results, factors, out_fn, times, cond, data_std=None, ylabel="Spear
 
 def multi_plot_rsa(results, factors, out_fn, times, cond, data_std=None, ylabel="Spearman", version="v1", dpi=50):
     """ Plot traces of RSA correlation between empirical and a bunch of theoretical matrices
+    one per subplot
     results = n_factors * n_times
     """
     word_onsets, image_onset = get_onsets(cond, version=version)
