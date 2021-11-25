@@ -1,6 +1,7 @@
 import mne
 import matplotlib.pyplot as plt
 import matplotlib
+import matplotlib as mpl
 import numpy as np
 from ipdb import set_trace
 from glob import glob
@@ -552,6 +553,7 @@ def decode_ovr(args, clf, epochs, class_queries, n_times):
                         accuracy[t, tgen] += accuracy_score(y[test], preds.argmax(1)) / args.n_folds
     else:
         AUC = np.zeros(n_times)
+        accuracy = np.zeros(n_times)
         for t in trange(n_times):
             y_pred = np.zeros((len(y), n_classes))
             for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
@@ -616,6 +618,79 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
     return AUC, accuracy
 
 
+
+def decode_single_ch_ovr(args, clf, epochs, class_queries):
+    """ X: n_trials, n_sensors, n_times
+        y: n_trials
+        class_queries: list of strings, pandas queries to get each class
+    """
+    X, y, groups = get_X_y_from_queries(epochs, class_queries)
+    nchan = X.shape[1]
+    classes, counts = np.unique(y, return_counts=True)
+    n_classes = len(classes)
+    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+
+    cv = get_cv(args.train_cond, args.crossval, args.n_folds)
+
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
+
+    if args.reduc_dim_sing:
+        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim_sing), clf)
+    else:
+        pipeline = make_pipeline(RobustScaler(), clf)
+
+    all_models = []
+    AUC = np.zeros(nchan)
+    accuracy = np.zeros(nchan)
+    for ch in trange(nchan):
+        all_models.append([])
+        for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
+            pipeline.fit(X[train, ch, :], y[train])
+            all_models[-1].append(deepcopy(pipeline))
+            preds = predict(pipeline, X[test, ch, :], multiclass=True)
+            if preds.ndim == 2:
+                preds = preds
+            else:
+                preds = onehotenc.transform(preds.reshape((-1,1)))
+            if n_classes == 2: preds = preds[:,1]
+            AUC[ch] += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
+            # accuracy[ch] = pipeline.score(X[test, ch, :], y[test])
+            # if not n_classes == 2: # then single set of probabilities...
+            #     accuracy[ch] += accuracy_score(y[test], preds.argmax(1)) / args.n_folds
+
+    return AUC, accuracy, all_models
+
+
+def test_decode_single_ch_ovr(args, epochs, class_queries, all_models):
+    n_folds = len(all_models[0])
+    nchan = len(all_models)
+    X, y, _ = get_X_y_from_queries(epochs, class_queries)
+    classes, counts = np.unique(y, return_counts=True)
+    n_classes = len(classes)
+    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
+
+    AUC = np.zeros(nchan)
+    accuracy = np.zeros(nchan)
+    for ch in range(nchan):
+        ch_data = X[:, ch, :]
+        all_folds_preds = []
+        for i_fold in range(n_folds):
+            pipeline = all_models[ch][i_fold]
+            preds = predict(pipeline, ch_data, multiclass=True)
+            if preds.ndim == 2:
+                preds = preds
+            else:
+                preds = onehotenc.transform(preds.reshape((-1,1)))
+            all_folds_preds.append(preds)
+        mean_fold_pred = np.mean(all_folds_preds, 0)
+        AUC[ch] = roc_auc_score(y_true=y, y_score=mean_fold_pred, multi_class='ovr')
+        accuracy[ch] = accuracy_score(y, mean_fold_pred.argmax(1))
+    print('mean AUC: ', AUC.mean())
+    print('max AUC: ', AUC.max())
+    return AUC, accuracy
 
 ### FROM THE MARSEILLE SCRIPT. NOT USED YET HERE.
 # def test_decode_all_sentence(args, X, y, all_models):
@@ -698,13 +773,13 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
 # ///////////////////////////////////////////////////////// #
 
 
-def save_results(out_fn, results, all_models=None, fn_end="AUC.npy"):
+def save_results(out_fn, results, time=True, all_models=None, fn_end="AUC"):
     """ Generic results saving to .npy func """
     print('Saving results')
-    if results.ndim > 1:
-        np.save(f"{out_fn}_{fn_end}", results)
+    if results.ndim > 1 or not time:
+        np.save(f"{out_fn}_{fn_end}.npy", results)
     else:
-        np.save(f"{out_fn}_{fn_end}_diag", results)
+        np.save(f"{out_fn}_{fn_end}_diag.npy", results)
     if all_models:
         pickle.dump(all_models, open(out_fn + '_all_models.p', 'wb'))
     return
@@ -750,8 +825,9 @@ def plot_perf(args, out_fn, data_mean, train_cond, train_tmin, train_tmax, test_
         plot_diag(data_mean=data_mean, data_std=None, out_fn=out_fn, train_cond=train_cond, 
             train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=contrast, version=version, window=window)
 
-    plot_GAT(data_mean=data_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, 
-             test_tmax=test_tmax, ylabel=ylabel, contrast=contrast, gen_cond=gen_cond, slices=[], version=version, window=window)
+    if args.timegen:
+        plot_GAT(data_mean=data_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, 
+                 test_tmax=test_tmax, ylabel=ylabel, contrast=contrast, gen_cond=gen_cond, slices=[], version=version, window=window)
     return
 
 
@@ -855,8 +931,11 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
         orientation = "vertical"
         shrink = 1.
 
-    n_times_train = data_mean.shape[0]
-    n_times_test = data_mean.shape[1]
+    try:
+        n_times_train = data_mean.shape[0]
+        n_times_test = data_mean.shape[1]
+    except:
+        set_trace()
     times_train = np.linspace(train_tmin, train_tmax, n_times_train)
     times_test = np.linspace(test_tmin, test_tmax, n_times_test)
 
@@ -945,7 +1024,7 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
     return
 
 
-def make_sns_barplot(df, x, y, hue=None, box_pairs=[], out_fn="tmp.png", ymin=None, hline=None):
+def make_sns_barplot(df, x, y, hue=None, box_pairs=[], out_fn="tmp.png", ymin=None, hline=None, rotate_ticks=False, tight=False, ncol=1):
     fig, ax = plt.subplots(figsize=(18,14))
     g = sns.barplot(x=x, y=y, hue=hue, data=df, ax=ax, ci=68) # ci=68 <=> standard error
     ax.set_xlabel(x,fontsize=25)
@@ -960,6 +1039,14 @@ def make_sns_barplot(df, x, y, hue=None, box_pairs=[], out_fn="tmp.png", ymin=No
         ax.set_ylim(ymin)
     if hline is not None:
         ax.axhline(y=hline, lw=1, ls='--', c='grey', zorder=-10)
+    if rotate_ticks:
+        for tick in ax.get_xticklabels():
+            tick.set_rotation(45)
+            tick.set_ha('right')
+    if tight:
+        plt.tight_layout()
+    if ncol > 1:
+        plt.legend(ncol=ncol)
     plt.savefig(out_fn, transparent=True, dpi=400, bbox_inches='tight')
     plt.close()
 
@@ -1005,6 +1092,23 @@ def plot_all_props_multi(ave_dict, std_dict, times, out_fn, labels=['S1', 'C1', 
     axes[i].set_xlabel("Time (s)")
     plt.tight_layout()
     plt.savefig(out_fn)
+
+
+def plot_single_ch_perf(scores, info, out_fn, cmap_name='bwr', vmin=.4, vmax=.6, score_label='AUC', title=None, ticksize=14):
+    from .plot_channels import plot_ch_scores
+    cmap = matplotlib.cm.get_cmap(cmap_name)
+    ## add dummy image for the cbar
+    img = plt.imshow([scores, scores], cmap=cmap, vmin=vmin, vmax=vmax)
+    plt.gca().set_visible(False)
+    fig, ax = plt.subplots()
+    fig = plot_ch_scores(info, scores, cmap, ch_type='all', axes=ax)
+    cbar_ax = fig.add_axes([0.8, 0.1, 0.1, 0.05])
+    cbar = fig.colorbar(img, orientation="horizontal", cax=cbar_ax)
+    cbar_ax.set_title(score_label)
+    cbar.ax.tick_params(labelsize=ticksize)
+    if title is not None:
+        ax.set_title(title)
+    plt.savefig(out_fn, dpi=200)
 
 
 """

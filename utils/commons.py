@@ -1,6 +1,7 @@
 import mne
 from sklearn.preprocessing import LabelEncoder
 from natsort import natsorted
+from ipdb import set_trace
 import numpy as np
 from glob import glob
 import time
@@ -296,6 +297,10 @@ def get_ylabel_from_fn(fn):
         ylabel = 'AUC'
     elif fn[-9:-4] == 'preds': # or fn[-12:-9] == 'AUC':
         ylabel = 'prediction'
+    elif 'Accuracy' in fn:
+        ylabel = 'Accuracy'
+    elif 'AUC' in fn:
+        ylabel = 'AUC'
     else:
         print('\n\nDid not find a correct label in the filename')
         set_trace()

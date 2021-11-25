@@ -77,7 +77,8 @@ clf_idx = 2 if args.reduc_dim_win else 1
 ######## TRAINING #########
 ###########################
 
-clf = LogisticRegression(C=1, class_weight='balanced', solver='liblinear', multi_class='auto')
+# clf = LogisticRegression(C=1, class_weight='balanced', solver='liblinear', multi_class='auto')
+clf = LogisticRegressionCV(Cs=10, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=5, max_iter=10000)
 # tuned_parameters = [{'kernel': ['linear'], 'C': np.logspace(-2, 4, 7)},
 #                     {'kernel': ['rbf'], 'gamma': [1, .1, 1e-2, 1e-3, 1e-4], 'C': np.logspace(-1, 3, 5)},
 #                     {'kernel': ['poly'], 'degree': [2, 3, 4, 5, 6], 'C': np.logspace(-1, 3, 5)}]
@@ -139,6 +140,7 @@ for window_str, query, cond, train_fn in zip(args.windows, args.train_query, arg
     #         a1, a2 = all_cond_hyperplans[i_c1], all_cond_hyperplans[i_c2]
     #         print(f"\n doing classes {classe1} vs {classe2}: {np.degrees(angle_between(a1, a2))} degrees")
     #         print(f"and cosine_similarity: {cosine_similarity(a1[np.newaxis,:], a2[np.newaxis,:])[0][0]}")
+
 
 print(f'Finished training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
 

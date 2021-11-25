@@ -60,6 +60,14 @@ BACK TO V1
 c1: windows: .15-.3s for early and .4-.55 for late
 v2: windows now .1-.4s for early and .45-.75s for late.
 v3: cat10, no reduc dim. All launching all decoding. 
+v4: now clipping - baselining - clipping again. All conds, including delay windowing 
+v5: reduc dim for single ch decoding + smaller time window
+
+
+does split-queries work for OVR??
+LOOKS LIKE NOT
+
+
 
 
 FOR SUB 25: NOW CORRECTLY CORRECTING FOR MISSING TRIAL (BEFORE THE INDEX WAS WRONG)

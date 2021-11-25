@@ -31,8 +31,6 @@ parser.add_argument('-c', '--config', default='config', help='path to config fil
 parser.add_argument('-s', '--subject', default='01_js180232',help='subject name')
 parser.add_argument('-o', '--out-dir', default='agg', help='output directory')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
-parser.add_argument('--ovr', action='store_true',  default=False, help='Whether to get the one versus rest directory or classic decoding')
-parser.add_argument('--slices', action='store_true',  default=False, help='Whether to make horizontal slice plots of single decoder')
 args = parser.parse_args()
 
 # import config parameters
@@ -46,15 +44,9 @@ start_time = time.time()
 
 feat2feats = {"Shape": ['carre', 'cercle', 'triangle', 'ca', 'cl', 'tr'], "Colour": ['rouge', 'bleu', 'vert', 'vr', 'bl', 'rg']}
 
-if args.slices:
-    slices_loc = [0.17, 0.3, 0.43, 0.5, 0.72, 0.85]
-    slices_one_obj = [0.2, 0.85, 1.1, 2.5, 2.75]
-else:
-    slices = []
-
 
 print('This script lists all the .npy files in all the subjects decoding output directories, takes the set of this and the averages all unique filenames to get on plot for all subjects per condition')
-decoding_dir = f"Decoding_ovr_v{args.version}" if args.ovr else f"Decoding_v{args.version}"
+decoding_dir = f"Decoding_single_ch_v{args.version}"
 if args.subject in ["all", "v1", "v2",  "goods"]: # for v1 and v2 we filter later
     in_dir = f"{args.root_path}/Results/{decoding_dir}/{args.epochs_dir}/*/"
 else:
@@ -108,9 +100,6 @@ ave_auc_all_labels = {}
 std_auc_all_labels = {}
 for label in all_labels:
     for train_cond in ["localizer", "obj", "scenes"]: # , "one_object", "two_objects", 
-        if args.slices:
-            if train_cond in ["localizer"]: slices = slices_loc
-            if train_cond == "one_object": slices = slices_one_obj
         for match in ["match", "nonmatch", False]:
             for gen_cond in [None, "localizer", "obj", "scenes"]: # , "one_object", "two_objects", 
                 # if train_cond == gen_cond: continue # skip when we both have one object, it is not generalization
@@ -163,88 +152,45 @@ for label in all_labels:
                 if train_cond=="scenes" and gen_cond is None and "win" not in label:
                     ave_auc_all_labels[label] = np.diag(AUC_mean)
                     std_auc_all_labels[label] = np.diag(AUC_std)
-                # else:
-                # continue
 
                 # save max values to save to csv
                 max_auc_all_facconds.append(np.max(AUC_mean))
                 all_faccond_names.append(f"{label} trained on {train_cond}{' tested on ' if gen_cond is not None else ''}{gen_cond if gen_cond is not None else ''}")
 
-                if not "win" in label and not "delay" in label:
-                    window = False
-                    train_tmin, train_tmax = tmin_tmax_dict[train_cond]
-                    if gen_cond is not None:
-                        test_tmin, test_tmax = tmin_tmax_dict[gen_cond]
-                    else:
-                        test_tmin, test_tmax = train_tmin, train_tmax
-                else: # windowed
-                    train_tmin, train_tmax = [float(s) for s in fn.split("#")[1].split(",")]
-                    test_tmin, test_tmax = [float(s) for s in fn.split("#")[2].split(",")]
-                    window = True
+                ## get epochs info
+                # print("CHECK THAT ALL EPOCHS INFO ARE THE SAME, and that the fb is correct")
+                # set_trace()
+                # epo_info = pickle.load(open(f"{op.basename(fn)}/{train_cond}_epo_info.p", "rb"))
+                epo_info = pickle.load(open(f"{fn.split('-_AUC')[0]}-_epo_info.p", "rb"))
+                 
 
-                # n_times_train = AUC_mean.shape[0]
-                # n_times_test = AUC_mean.shape[1]
                 
                 ylabel = get_ylabel_from_fn(fn)
                 is_contrast = True if (np.min(np.array(all_AUC)) < 0) or (np.max(np.array(all_AUC)) < .4) else False
 
-                if gen_cond is None or "win" in label:
-                        plot_diag(data_mean=AUC_mean, data_std=AUC_std, out_fn=out_fn, train_cond=train_cond, 
-                            train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, window=window)
-                    
-                    # ## plot all diags
-                    # plot_multi_diag(data=all_AUC, data_std=None, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, 
-                    #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
 
-                    # if args.subject in ["all", "goods", "v1", "v2"]:
-                    #     # same color for each subject
-                    #     plot_multi_diag(data=all_AUC, data_std=None, out_fn=f"{out_fn}_colsub", train_cond=train_cond, train_tmin=train_tmin, 
-                    #                     train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, cmap_groups=all_subs)
-                    #     # same color for each training condition
-                    #     plot_multi_diag(data=all_AUC, data_std=None, out_fn=f"{out_fn}_colitem", train_cond=train_cond, train_tmin=train_tmin, 
-                    #                     train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, cmap_groups=all_items)
+                plot_single_ch_perf(AUC_mean, epo_info, f"{out_fn}.png", title=f"{op.basename(out_fn).split(str(len(all_AUC))+'ave')[0]}".replace("_", " "), vmin=.45, vmax=.55)
 
-                        # ## plots diags for the average of each subjects
-                        # all_subs_bin = dummy_labbin.fit_transform(all_subs).T.astype(bool)
-                        # sub_ave_AUC = np.array([np.mean(all_AUC[indices], 0) for indices in all_subs_bin])
-                        # # sub_std_AUC = np.array([np.std(all_AUC[indices], 0) for indices in all_subs_bin])
-                        # plot_multi_diag(data=sub_ave_AUC, data_std=None, out_fn=f"{out_fn}_subave", train_cond=train_cond, train_tmin=train_tmin, 
-                        #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, labels=all_subs_labels)
+                # if gen_cond is None or "win" in label:
+                #     # try:
+                #         plot_diag(data_mean=AUC_mean, data_std=AUC_std, out_fn=out_fn, train_cond=train_cond, 
+                #             train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, window=window)
 
-                        # ## plots diags for the average of training condition - implement get label for this?
-                        # all_items_bin = dummy_labbin.fit_transform(all_items).T.astype(bool)
-                        # item_ave_AUC = np.array([np.mean(all_AUC[indices], 0) for indices in all_items_bin])
-                        # # item_std_AUC = np.array([np.std(all_AUC[indices], 0) for indices in all_items_bin])
-                        # plot_multi_diag(data=item_ave_AUC, data_std=None, out_fn=f"{out_fn}_condave", train_cond=train_cond, train_tmin=train_tmin, 
-                        #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
-
-                if not window:
-                    plot_GAT(data_mean=AUC_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, 
-                             test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, gen_cond=gen_cond, slices=slices, version=version, window=window)
+                # plot_GAT(data_mean=AUC_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, 
+                #          test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, gen_cond=gen_cond, slices=slices, version=version, window=window)
 
                 print(f"Finished {label} trained on {train_cond} with generalization {gen_cond} {'matching trials only' if match else ''}\n")
                 plt.close('all')
 
 
-## all basic decoders diagonals on the same plot
-tmin, tmax = tmin_tmax_dict["scenes"]
-times = np.arange(tmin, tmax+1e-10, 1./args.sfreq)
-word_onsets, image_onset = get_onsets("scenes", version=version)
-plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props_multi.png', word_onsets=word_onsets, image_onset=image_onset)
-plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props.png', word_onsets=word_onsets, image_onset=image_onset)
+# ## all basic decoders diagonals on the same plot
+# tmin, tmax = tmin_tmax_dict["scenes"]
+# times = np.arange(tmin, tmax+1e-10, 1./args.sfreq)
+# word_onsets, image_onset = get_onsets("scenes", version=version)
+# plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props_multi.png', word_onsets=word_onsets, image_onset=image_onset)
+# plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props.png', word_onsets=word_onsets, image_onset=image_onset)
 
-# plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=ave_auc_all_labels.keys(), times=times, out_fn=f'{out_fn}_scenes_props_multi_all.png', word_onsets=word_onsets, image_onset=image_onset) # ['S1','C1','R','S2','C2','All1stObj','All2ndObj']
-# plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=ave_auc_all_labels.keys(), times=times, out_fn=f'{out_fn}_scenes_props_all.png', word_onsets=word_onsets, image_onset=image_onset) # ['S1','C1','R','S2','C2','All1stObj','All2ndObj']
-plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=['S1','C1','R','S2','C2','AllObjScenes','All2ndObjScenes'], times=times, out_fn=f'{out_fn}_scenes_props_multi_all.png', word_onsets=word_onsets, image_onset=image_onset)
-plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props_all.png', word_onsets=word_onsets, image_onset=image_onset)
-
-
-# x = PrettyTable()
-# x.field_names = ["Factor", "max AUC"]
-# order = np.argsort(max_auc_all_facconds)
-# with open(f'{out_fn}_max_AUC.csv', 'w') as f:
-#     for i in order:
-#         x.add_row([all_faccond_names[i], f"{max_auc_all_facconds[i]:.3f}"])
-#         f.write(f"{all_faccond_names[i]}, {max_auc_all_facconds[i]:.3f}")
-# # print(x)
-# # set_trace()
+# # plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=ave_auc_all_labels.keys(), times=times, out_fn=f'{out_fn}_scenes_props_multi_all.png', word_onsets=word_onsets, image_onset=image_onset) # ['S1','C1','R','S2','C2','All1stObj','All2ndObj']
+# # plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=ave_auc_all_labels.keys(), times=times, out_fn=f'{out_fn}_scenes_props_all.png', word_onsets=word_onsets, image_onset=image_onset) # ['S1','C1','R','S2','C2','All1stObj','All2ndObj']
+# plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=['S1','C1','R','S2','C2','AllObjScenes','All2ndObjScenes'], times=times, out_fn=f'{out_fn}_scenes_props_multi_all.png', word_onsets=word_onsets, image_onset=image_onset)
+# plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props_all.png', word_onsets=word_onsets, image_onset=image_onset)

@@ -29,7 +29,9 @@ def run_b2b(args, all_epochs, class_queries):
         y: n_trials
         class_queries: list of strings, pandas queries to get each class
     """
+    print("pwet")
     X, y = get_X_y_from_queries_b2b(all_epochs, class_queries)
+    print("pwet")
     classes = np.arange(y.shape[1])
     n_classes = len(classes)
     counts = y.sum(0)
@@ -96,7 +98,6 @@ def get_X(epochs_list):
     Xs = [epo.get_data() for epo in epochs_list]
     max_len = max([X.shape[2] for X in Xs])
     print(max_len)
-    exit()
     Xs = [np.append(X, np.zeros((X.shape[0], X.shape[1], max_len-X.shape[2])), 2) for X in Xs]
     return np.concatenate(Xs)
 

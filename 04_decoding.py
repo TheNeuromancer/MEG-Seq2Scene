@@ -101,7 +101,7 @@ print(f'Finished training. Elapsed time since the script began: {(time.time()-st
 if not args.dummy:
     ### SAVE RESULTS ###
     save_results(out_fn, AUC) #, all_models)
-    save_results(out_fn, accuracy, fn_end="acc.npy")
+    save_results(out_fn, accuracy, fn_end="acc")
     # save_preds(args, out_fn, mean_preds)
     # save_patterns(args, out_fn, all_models)
     pickle.dump(ch_names, open(out_fn + '_ch_names.p', 'wb'))
@@ -182,7 +182,7 @@ for test_cond, test_fn, test_out_fn, test_query_1, test_query_2  in zip(args.tes
     if not args.dummy:
         ### SAVE RESULTS ###
         save_results(test_out_fn, AUC)
-        save_results(out_fn, accuracy, fn_end="acc.npy")
+        save_results(out_fn, accuracy, fn_end="acc")
         # save_preds(args, test_out_fn, mean_preds)
 
         ### PLOT PERFORMANCE ###

@@ -83,7 +83,7 @@ for fn in fns:
 # get time from longest epochs
 longest_epo_idx = np.argmax([len(epo.times) for epo in all_epochs])
 times = all_epochs[longest_epo_idx].times
-print(times)
+# print(times)
 
 # if args.windows:
 #     args.windows = [w.replace(" ", "") for w in args.windows] # remove spaces

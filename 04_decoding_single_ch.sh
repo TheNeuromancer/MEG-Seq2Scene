@@ -8,10 +8,10 @@ do
 ## COLORS
 ## Not the same query ...
 # 	# train on localizer words only
-# 	echo "python 04_decoding_ovr.py -w --train-cond 'localizer' --label Colour \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w --train-cond 'localizer' --label Colour \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
-# --timegen -s $sub \
+# -s $sub \
 # --train-query \"Loc_word\" \
 # --test-cond 'one_object' \
 # --test-query-1 \"Colour1\" \
@@ -19,91 +19,91 @@ do
 # --train-query \"Loc_word in ['${colours[0]}', 'img_${colours[0]}']\" \
 
 	# train on one object
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Colour \
+	echo "python 04_decoding_single_ch.py -c v5_config -w \
+-s $sub --label Colour \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-cond 'one_object' \
---train-query \"Colour1\" \
---test-cond 'two_objects' \
---test-query \"Colour1\" \
---test-cond 'two_objects' \
---test-query \"Colour2\" "
+--train-query \"Colour1\" "
+# --test-cond 'two_objects' \
+# --test-query \"Colour1\" \
+# --test-cond 'two_objects' \
+# --test-query \"Colour2\" "
 
 	# train on two objects
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Colour1 \
+	echo "python 04_decoding_single_ch.py -c v5_config -w \
+-s $sub --label Colour1 \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
 --train-query \"Colour1\" \
---test-cond 'one_object' \
---test-query \"Colour1\" \
 --test-cond 'two_objects' \
 --test-query \"Colour2\" "
+# --test-cond 'one_object' \
+# --test-query \"Colour1\" \
 
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Colour2 \
+	echo "python 04_decoding_single_ch.py -c v5_config -w \
+-s $sub --label Colour2 \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
 --train-query \"Colour2\" \
 --test-cond 'two_objects' \
---test-query \"Colour1\" \
---test-cond 'one_object' \
 --test-query \"Colour1\" "
+# --test-cond 'one_object' \
+# --test-query \"Colour1\" 
 
 ## SHAPE
 ## Not the same query ...
 # 	# train on localizer words only
-# 	echo "python 04_decoding_ovr.py -w --train-cond 'localizer' --label Shape \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w --train-cond 'localizer' --label Shape \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
-# --timegen -s $sub \
+# -s $sub \
 # --train-query \"Loc_word\" \
 # --test-cond 'one_object' \
 # --test-cond 'two_objects' "
 
 	# train on one object
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Shape \
+	echo "python 04_decoding_single_ch.py -c v5_config -w \
+-s $sub --label Shape \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-cond 'one_object' \
---train-query \"Shape1\" \
---test-cond 'two_objects' \
---test-query \"Shape1\" \
---test-cond 'two_objects' \
---test-query \"Shape2\" "
+--train-query \"Shape1\" "
+# --test-cond 'two_objects' \
+# --test-query \"Shape1\" \
+# --test-cond 'two_objects' \
+# --test-query \"Shape2\" "
 
 	# train on two objects
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Shape1 \
+	echo "python 04_decoding_single_ch.py -c v5_config -w \
+-s $sub --label Shape1 \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
 --train-query \"Shape1\" \
---test-cond 'one_object' \
---test-query \"Shape1\" \
 --test-cond 'two_objects' \
 --test-query \"Shape2\" "
+# --test-cond 'one_object' \
+# --test-query \"Shape1\" \
 
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Shape2 \
+	echo "python 04_decoding_single_ch.py -c v5_config -w \
+-s $sub --label Shape2 \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
 --train-query \"Shape2\" \
---test-cond 'one_object' \
---test-query \"Shape1\" \
 --test-cond 'two_objects' \
 --test-query \"Shape1\" "
+# --test-cond 'one_object' \
+# --test-query \"Shape1\" 
 
 
 ## OBJECTS
 		# train on all other trials, gen to first, then to 2nd object
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --train-cond 'one_object' --label AllObject \
+	echo "python 04_decoding_single_ch.py -c v5_config -w \
+-s $sub --train-cond 'one_object' --label AllObject \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-query \"Shape1+Colour1\" \
@@ -117,54 +117,54 @@ do
 --test-query \"Left_obj\" "
 
 		# train on scenes 1st obj
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --train-cond 'two_objects' --label All1stObj \
+	echo "python 04_decoding_single_ch.py -c v5_config -w \
+-s $sub --train-cond 'two_objects' --label All1stObj \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-query \"Shape1+Colour1\" \
---test-cond 'one_object' \
---test-query \"Shape1+Colour1\" \
 --test-cond 'two_objects' \
 --test-query \"Shape2+Colour2\" "
+# --test-cond 'one_object' \
+# --test-query \"Shape1+Colour1\" \
 
 		# train on scenes 2nd obj
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --train-cond 'two_objects' --label All2ndObj \
+	echo "python 04_decoding_single_ch.py -c v5_config -w \
+-s $sub --train-cond 'two_objects' --label All2ndObj \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-query \"Shape2+Colour2\" \
---test-cond 'one_object' \
---test-query \"Shape1+Colour1\" \
 --test-cond 'two_objects' \
 --test-query \"Shape1+Colour1\" "
+# --test-cond 'one_object' \
+# --test-query \"Shape1+Colour1\" \
 
 
 ## TRAIN OBJECTS ON SCENES (ORDER OF THE VISUAL SCENE)
 
 		# RIGHT OBJECT
-	echo "python 04_decoding_ovr.py -w \
---label AllRightObject --timegen -s $sub \
+	echo "python 04_decoding_single_ch.py -c v5_config -w \
+--label AllRightObject -s $sub \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
---train-query \"Right_obj\" \
---test-cond 'one_object' \
---test-query \"Shape1+Colour1\" "
+--train-query \"Right_obj\" "
+# --test-cond 'one_object' \
+# --test-query \"Shape1+Colour1\" "
 	
 		# LEFT OBJECT
-	echo "python 04_decoding_ovr.py -w \
---label AllLeftObject --timegen -s $sub \
+	echo "python 04_decoding_single_ch.py -c v5_config -w \
+--label AllLeftObject -s $sub \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
---train-query \"Left_obj\" \
---test-cond 'one_object' \
---test-query \"Shape1+Colour1\" "
+--train-query \"Left_obj\" "
+# --test-cond 'one_object' \
+# --test-query \"Shape1+Colour1\" "
 
 
 ## RELATION
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Relation \
+	echo "python 04_decoding_single_ch.py -c v5_config -w \
+-s $sub --label Relation \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
@@ -173,11 +173,12 @@ do
 
 
 ## USE WINDOWS AROUND EACH COND
+## maybe later ? 
 
 # 	## COLOUR
 # 	# train on one object
-# 	echo "python 04_decoding_ovr.py -w \
-# --timegen -s $sub --label winColour \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
+# -s $sub --label winColour \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
 # --train-cond 'one_object' \
@@ -191,8 +192,8 @@ do
 # --test-query \"Colour2\" "
 
 # 	# train on two objects
-# 	echo "python 04_decoding_ovr.py -w \
-# --timegen -s $sub --label winColour1 \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
+# -s $sub --label winColour1 \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
 # --train-cond 'two_objects' \
@@ -205,8 +206,8 @@ do
 # --windows \"2.4, 3.2\" \
 # --test-query \"Colour2\" "
 
-# 	echo "python 04_decoding_ovr.py -w \
-# --timegen -s $sub --label winColour2 \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
+# -s $sub --label winColour2 \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
 # --train-cond 'two_objects' \
@@ -222,8 +223,8 @@ do
 
 # 	## SHAPES
 # 	# train on one object
-# 	echo "python 04_decoding_ovr.py -w \
-# --timegen -s $sub --label winShape \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
+# -s $sub --label winShape \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
 # --train-cond 'one_object' \
@@ -237,8 +238,8 @@ do
 # --test-query \"Shape2\" "
 
 # 	# train on two objects
-# 	echo "python 04_decoding_ovr.py -w \
-# --timegen -s $sub --label winShape1 \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
+# -s $sub --label winShape1 \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
 # --train-cond 'two_objects' \
@@ -251,8 +252,8 @@ do
 # --windows \"1.8,2.6\" \
 # --test-query \"Shape2\" "
 
-# 	echo "python 04_decoding_ovr.py -w \
-# --timegen -s $sub --label winShape2 \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
+# -s $sub --label winShape2 \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
 # --train-cond 'two_objects' \
@@ -268,8 +269,8 @@ do
 
 # 	## OBJECTS
 # 	# train on all other trials, gen to first, then to 2nd object
-# 	echo "python 04_decoding_ovr.py -w \
-# --timegen -s $sub --label winAllObject \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
+# -s $sub --label winAllObject \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
 # --train-cond 'one_object' \
@@ -283,8 +284,8 @@ do
 # --test-query \"Shape2+Colour2\" "
 
 # 	# train on scenes 1st obj
-# 	echo "python 04_decoding_ovr.py -w \
-# --timegen -s $sub --label winAll1stObj \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
+# -s $sub --label winAll1stObj \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
 # --train-cond 'two_objects' \
@@ -298,8 +299,8 @@ do
 # --test-query \"Shape2+Colour2\" "
 
 # 	# train on scenes 2nd obj
-# 	echo "python 04_decoding_ovr.py -w \
-# --timegen -s $sub --label winAll2ndObj \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
+# -s $sub --label winAll2ndObj \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
 # --train-cond 'two_objects' \
@@ -316,7 +317,7 @@ do
 
 # ## During the delay
 # ## OBJECTS
-# 	echo "python 04_decoding_ovr.py -w \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
 # -s $sub --label winObjectsdelay \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
@@ -328,7 +329,7 @@ do
 # --windows \"3.5,5.\" "
 
 # ## SHAPES
-# 	echo "python 04_decoding_ovr.py -w \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
 # -s $sub --label winShapesdelay \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
@@ -340,7 +341,7 @@ do
 # --windows \"3.5,5.\" "
 
 # ## COLORS
-# 	echo "python 04_decoding_ovr.py -w \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
 # -s $sub --label winColoursdelay \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
@@ -352,7 +353,7 @@ do
 # --windows \"3.5,5.\" "
 
 
-# 	echo "python 04_decoding_ovr.py -w \
+# 	echo "python 04_decoding_single_ch.py -c v5_config -w \
 # -s $sub --label SideObjectsdelay \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \

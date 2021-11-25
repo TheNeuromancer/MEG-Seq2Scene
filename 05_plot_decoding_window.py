@@ -136,10 +136,10 @@ for label in all_labels:
 
     df = pd.DataFrame.from_dict(auc_dict)
 
-    if "AllC" in label:
+    if "AllC" in label: # or "Csdelay" in label:
         cond_str1 = "Colour1"
         cond_str2 = "Colour2"
-    elif "AllS" in label:
+    elif "AllS" in label: # or "Ssdelay" in label:
         cond_str1 = "Shape1"
         cond_str2 = "Shape2"
     else:
@@ -147,6 +147,7 @@ for label in all_labels:
         cond_str2 = "Shape2+Colour2"
     
     box_pairs = []
+    # try:
     box_pairs += [((f"{cond_str1}-two_objects", f"{cond_str1}-two_objects"), (f"{cond_str1}-two_objects", f"{cond_str1}-one_object"))]
     box_pairs += [((f"{cond_str1}-two_objects", f"{cond_str1}-two_objects"), (f"{cond_str1}-two_objects", f"{cond_str2}-two_objects"))]
     box_pairs += [((f"{cond_str1}-one_object", f"{cond_str1}-one_object"), (f"{cond_str1}-one_object", f"{cond_str1}-two_objects"))]
@@ -154,6 +155,8 @@ for label in all_labels:
     box_pairs += [((f"{cond_str2}-two_objects", f"{cond_str2}-two_objects"), (f"{cond_str2}-two_objects", f"{cond_str1}-two_objects"))]
     box_pairs += [((f"{cond_str2}-two_objects", f"{cond_str2}-two_objects"), (f"{cond_str2}-two_objects", f"{cond_str1}-one_object"))]
     make_sns_barplot(df, x='Tested on', y='AUC', hue='Trained on', box_pairs=box_pairs, out_fn=f'{out_fn}_AUC.png', hline=0.5, ymin=0.45)
+    # except:
+    #     print("\n\ncould not make all classical box pairs, can happen for the delay stuff where we used not to have one object block, but should be resolved now ... continuing for now\n\n")
     
 
     ## COSINE SIMILARITY
@@ -193,9 +196,13 @@ for label in all_labels:
                 if train_cond!=test_cond:
                     n_times = len(all_AUC_allt[0][train_cond][test_cond])
                     for i_sub in range(n_subs):
-                        if len(all_AUC_allt[i_sub][train_cond][test_cond]) != n_times:
+                        try:
+                            if len(all_AUC_allt[i_sub][train_cond][test_cond]) != n_times:
+                                to_del.append(i_sub)
+                                print(f"Dropping subject {i_sub+1}")
+                        except TypeError:
                             to_del.append(i_sub)
-                            print(f"Dropping subject {i_sub+1}")
+                            print(f"Dropping subject because it does not have multiple generalization timepoints {i_sub+1}")
         all_AUC_allt = [all_AUC_allt[i_sub] for i_sub in range(n_subs) if i_sub not in to_del]
         n_subs = len(all_AUC_allt)
 
