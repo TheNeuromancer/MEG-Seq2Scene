@@ -22,9 +22,6 @@ from sklearn.decomposition import PCA
 from sklearn.multiclass import OneVsRestClassifier
 from scipy.signal import savgol_filter
 from scipy.stats import ttest_1samp
-import seaborn as sns
-from statannot import add_stat_annotation
-from statannotations.Annotator import Annotator
 
 
 # local import
@@ -1036,7 +1033,7 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
 #         _ = add_stat_annotation(ax, plot="barplot", data=df, x=x, hue=hue, y=y, line_offset_to_box=0, \
 #                                 text_format='star', test='Wilcoxon', box_pairs=box_pairs, verbose=0, use_fixed_offset=True) 
 #     if hue is not None:
-#         leg = plt.gca().get_legend()
+#          = plt.gca().getax.legend().set_visible(False)
 #         leg.set_title(hue, prop={'size':25})
 #     if ymin is not None:
 #         ax.set_ylim(ymin)
@@ -1052,47 +1049,6 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
 #         plt.legend(ncol=ncol)
 #     plt.savefig(out_fn, transparent=True, dpi=400, bbox_inches='tight')
 #     plt.close()
-
-
-def make_sns_barplot(df, x, y, hue=None, box_pairs=[], kind='bar', col=None, out_fn="tmp.png", ymin=None, ymax=None, 
-                     hline=None, rotate_ticks=False, tight=False, ncol=1, order=None, hue_order=None, legend=True, dodge=True, jitter=True):
-    # fig, ax = plt.subplots(figsize=(9, 9))
-    sns.set(font_scale = 2)
-    # if kind == "bar":
-    #     g = sns.barplot(x=x, y=y, hue=hue, data=df, ax=ax, ci=68, order=order, hue_order=hue_order) # ci=68 <=> standard error
-    # else:
-        # g = sns.boxplot(x=x, y=y, hue=hue, data=df, ax=ax, order=order, hue_order=hue_order, showfliers = False) #, order=order, hue_order=hue_order) # ci=68 <=> standard error
-    if kind=="box":
-        g = sns.catplot(x=x, y=y, hue=hue, col=col, data=df, kind=kind, order=order, hue_order=hue_order, ci=68, legend=False, showfliers=False)# ci=68 <=> standard error
-    elif kind=="point":
-        g = sns.catplot(x=x, y=y, hue=hue, col=col, data=df, kind=kind, order=order, hue_order=hue_order, ci=68, legend=False, jitter=jitter, dodge=dodge, alpha=0.7)# ci=68 <=> standard error
-    else:
-        g = sns.catplot(x=x, y=y, hue=hue, col=col, data=df, kind=kind, order=order, hue_order=hue_order, ci=68, legend=False)# ci=68 <=> standard error
-    if ymin is not None or ymax is not None: ## SHOULD BE BEFORE CALLING ANNOTATOR!!
-        g.set(ylim=(ymin, ymax))
-    axes = g.axes[0] if col is not None else [g.ax]
-    for ax in axes:
-        ax.set_xlabel(x,fontsize=20)
-        ax.set_ylabel(y, fontsize=20)
-        ax.tick_params(axis='both', which='major', labelsize=14)
-        if hline is not None:
-            ax.axhline(y=hline, lw=1, ls='--', c='grey', zorder=-10)
-        if rotate_ticks:
-            for tick in ax.get_xticklabels():
-                tick.set_rotation(45)
-                tick.set_ha('right')
-        
-        if box_pairs and kind != "point":
-            annotator = Annotator(ax, box_pairs, plot=f'{kind}plot', data=df, x=x, hue=hue, col=col, y=y, text_format='star', order=order, hue_order=hue_order) #,), line_offset_to_box=-1
-            annotator.configure(test='Mann-Whitney', verbose=False, loc="inside", comparisons_correction="bonferroni", fontsize=12, use_fixed_offset=True).apply_and_annotate()
-            # , line_offset=.0001, line_offset_to_group=.0001
-
-        if tight:
-            plt.tight_layout()
-        if ncol > 1 or hue is not None and legend:
-            ax.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0., ncol=ncol, fontsize=12) # Put the legend out of the figure
-    plt.savefig(out_fn, transparent=True, bbox_inches='tight', dpi=400)
-    plt.close()
 
 
 def plot_all_props(ave_dict, std_dict, times, out_fn, labels=['S1', 'C1', 'R', 'S2', 'C2'], word_onsets=[], image_onset=[]): # 'R'
