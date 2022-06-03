@@ -1,7 +1,7 @@
 import os.path as op
 import os
 from glob import glob
-from ipdb import set_trace
+# from ipdb import set_trace
 import mne
 import argparse
 import pandas as pd
@@ -113,7 +113,8 @@ def fn2blocktype(fn):
 for i_run, raw_fn_in in enumerate(all_runs_fns):
     # if not "1obj" in raw_fn_in:
     #     continue
-    # if "run10" in raw_fn_in: continue
+    # if not ("run5" in raw_fn_in and '22' in raw_fn_in): 
+    #     continue
 
     print("doing file ", raw_fn_in)
     run_nb = op.basename(raw_fn_in).split("run")[1].split("_")[0]
@@ -203,26 +204,37 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         events = mne.find_events(raw, stim_channel='STI101', verbose=True, min_duration=min_duration, consecutive='increasing', uint_cast=True, mask=128 + 256 + 512 + 1024 + 2048 + 4096 + 8192 + 16384 + 32768, mask_type='not_and',)
 
 
-    if args.subject[0:2]=="16" and ("run1_loc" in raw_fn_in or "run9_2obj" in raw_fn_in):
-        print("\n\nNEEDS TO INVESTIGATE, MISSING ONE TRIGGER ON RUN 1 and 9AND DO NOT KNOW YET WHERE IT IS SUPPOSED TO BE. Passing for now\n\n")
-        set_trace()
+    if (args.subject[0:2]=="16" and ("run1_loc" in raw_fn_in or "run9_2obj" in raw_fn_in)) \
+        or (args.subject[0:2]=="07" and "run10_loc" in raw_fn_in) \
+        or (args.subject[0:2]=="10" and "run10_loc" in raw_fn_in) \
+        or (args.subject[0:2]=="20" and "run10_loc" in raw_fn_in) \
+        or (args.subject[0:2]=="22" and "run10_loc" in raw_fn_in) \
+        or (args.subject[0:2]=="01" and "run5_2obj" in raw_fn_in) \
+        :
+        print("\n\nNEEDS TO INVESTIGATE, MISSING ONE TRIGGERS SOME RUN AND DO NOT KNOW YET WHERE IT IS SUPPOSED TO BE. Passing for now\n\n")
+        # set_trace()
         continue
 
     elif (args.subject[0:2] == "17" and "run7_2obj" in raw_fn_in) \
       or (args.subject[0:2] == "22" and "run5_2obj" in raw_fn_in) \
+      or (args.subject[0:2] == "22" and "run7_2obj" in raw_fn_in) \
       or (args.subject[0:2] == "22" and "run9_2obj" in raw_fn_in) \
       or (args.subject[0:2] == "23" and "run5_2obj" in raw_fn_in) \
-      or (args.subject[0:2] == "23" and "run7_2obj" in raw_fn_in):
+      or (args.subject[0:2] == "23" and "run7_2obj" in raw_fn_in) \
+      or (args.subject[0:2] == "27" and "run5_2obj" in raw_fn_in) \
+      :
             # missing one 205 triggers at trial 32. Adding it based on the triggers 30 (= image presentation)
             # found with np.argmax(np.diff(np.where(events[:,2]==205)[0]))
-            missing_trial = np.argmax(np.diff(np.where(events[:,2]==205)[0])) + 1# should be 32 for sub17
+            while (events==205).sum() < 81:
+                missing_trial = np.argmax(np.diff(np.where(events[:,2]==205)[0])) + 1# should be 32 for sub17
+                print(f"adding trigger for trial {missing_trial}, based on {np.max(np.diff(np.where(events[:,2]==205)))} consecutive triggers without trial start")
 
-            if args.subject[0:2] == "17" and missing_trial != 32: set_trace()
+                if args.subject[0:2] == "17" and missing_trial != 32: set_trace()
 
-            image_presentation_time = events[np.where(events[:,2]==20)[0][missing_trial], 0]
-            trig_img_delay = 5165 # average time between trial start and image presentation (tiny jitter when the screen skips an image)
-            new_event = np.array([image_presentation_time-trig_img_delay, 0, 205])
-            events = np.concatenate([[ev for ev in events if ev[0]<new_event[0]],[new_event],[ev for ev in events if ev[0]>new_event[0]]])
+                image_presentation_time = events[np.where(events[:,2]==20)[0][missing_trial], 0]
+                trig_img_delay = 5165 # average time between trial start and image presentation (tiny jitter when the screen skips an image)
+                new_event = np.array([image_presentation_time-trig_img_delay, 0, 205])
+                events = np.concatenate([[ev for ev in events if ev[0]<new_event[0]],[new_event],[ev for ev in events if ev[0]>new_event[0]]])
 
             # # can also find nissing trigs with:
             # twenties = events[events[:,2]==20]
@@ -238,8 +250,9 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
                         or (args.subject[0:2] == "22" and "run4_1obj" in raw_fn_in) \
                         or (args.subject[0:2] == "22" and "run8_1obj" in raw_fn_in) \
                         or (args.subject[0:2] == "23" and "run2_1obj" in raw_fn_in) \
-                        or (args.subject[0:2] == "27" and "run5_2obj" in raw_fn_in) \
                         : # correcting missing trig for 1obj
+                        # or (args.subject[0:2] == "27" and "run5_2obj" in raw_fn_in) \
+                        # or (args.subject[0:2] == "09" and "run2_1obj" in raw_fn_in) \ ## trial is missing at the beginning of the block
         missing_trial = np.argmax(np.diff(np.where(events[:,2]==trig)[0])) + 1
         image_presentation_time = events[np.where(events[:,2]==20)[0][missing_trial], 0]
         # trig_img_delay = np.mean(events[events[:,2]==20, 0][0:50] - events[events[:,2]==trig, 0][0:50], 0) # 2266 or 2299
@@ -271,18 +284,19 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
         plt.savefig(f'{out_dir_plots}/run_{run_nb}_{block_type}_events_all.png', dpi=500)
         plt.close()
     
-    # # remove "start" and "end" triggers
-    # events = events[np.where(events[:,2] != 16434)]
-    # events = events[np.where(events[:,2] != 16384)]
-    # # remove butotn presses
-    # events = events[np.where(events[:,2] != 8232)]
-    # events = events[np.where(events[:,2] != 8224)]
-    # print(f"found {len(events)} triggers")
+    # add flashes to md
+    if block_type in ['two_objects']: # 'one_object', 
+        flashes = get_flash_indices(events)
+        try:
+            md["Flash"] = flashes
+        except:
+            set_trace()
+    
+    print(events.shape)
     events = events[events[:,2]==trig]
-    nb_ev_per_block = {"localizer": 360, "one_object": 135, "two_objects": 81}
+    print(events.shape)
+    # nb_ev_per_block = {"localizer": 360, "one_object": 135, "two_objects": 81}
     # if events.shape[0] != nb_ev_per_block[block_type]:
-    if events.shape[0] != len(md):
-        set_trace()
 
     if block_type == 'localizer':
         raw_loc.append(raw)
@@ -308,6 +322,8 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
     else:
         raise RuntimeError("Unknown block type", "Unknown block type")
 
+    if events.shape[0] != len(md):
+        set_trace()
     print(f"Found {len(events)} events")
 
     if args.plot: # plot events for this event type only
@@ -445,6 +461,8 @@ if args.plot:
 
 plt.show()
 plt.pause(0.1)
+
+print("ALL DONE")
 
 
 # block_type = 'localizer'

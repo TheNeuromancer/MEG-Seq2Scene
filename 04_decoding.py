@@ -3,7 +3,7 @@ import matplotlib
 matplotlib.use('Agg') # no output to screen.
 import mne
 import numpy as np
-from ipdb import set_trace
+# from ipdb import set_trace
 import argparse
 import pickle
 import time
@@ -18,7 +18,6 @@ parser.add_argument('-w', '--overwrite', action='store_true',  default=False, he
 parser.add_argument('--seed', default=42, type=int, help='random seed')
 parser.add_argument('--shuffle', action='store_true', default=False, help='Whether to shuffle sentence labels before training')
 parser.add_argument('--freq-band', default='', help='name of frequency band to use for filtering (theta, alpha, beta, gamma)')
-# parser.add_argument('--C', default=1, type=float, help='Regularization parameter')
 parser.add_argument('--timegen', action='store_true', default=False, help='Whether to test probe trained at one time point also on all other timepoints')
 parser.add_argument('--filter', default='', help='md query to filter trials before anything else (eg to use only matching trials')
 parser.add_argument('--train-cond', default='localizer', help='localizer, one_object or two_objects')
@@ -34,6 +33,7 @@ parser.add_argument('--label', default='', help='help to identify the result lat
 parser.add_argument('--dummy', action='store_true', default=False, help='Accelerates everything so that we can test that the pipeline is working. Will not yield any interesting result!!')
 parser.add_argument('--equalize_events', action='store_true', default=False, help='subsample majority event classes to get same number of trials as the minority class')
 parser.add_argument('-x', '--xdawn', action='store_true',  default=False, help='Whether to apply Xdawn spatial filtering before training decoder')
+parser.add_argument('-a', '--autoreject', action='store_true',  default=False, help='Whether to apply Autoreject on the epochs before training decoder')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
@@ -83,24 +83,26 @@ n_times = X.shape[2]
 
 if args.dummy:
     clf = LinearRegression(n_jobs=-1)
+    setattr(args, 'n_folds', 2)
 else:
     # clf = RidgeClassifier(class_weight='balanced')
     # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced', scoring='roc_auc')
     # clf = LogisticRegression(class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False)
-    clf = LogisticRegressionCV(Cs=10, class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False, cv=5, n_jobs=1)
+    clf =LogisticRegressionCV(Cs=10, class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False, cv=5, n_jobs=1)
     # clf = SVC()
     # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-4, 4, 9)})
-# clf = mne.decoding.LinearModel(clf)
+clf = mne.decoding.LinearModel(clf)
 
 
 ### DECODE ###
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
-all_models, AUC, accuracy, AUC_query = decode(args, X, y, clf, n_times, test_split_query_indices)
+all_models, AUC, accuracy, AUC_query, mean_preds, mean_preds_query = decode(args, X, y, clf, n_times, test_split_query_indices)
 print(f'Finished training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
+all_models = all_models.transpose(1,0) # go to shape n_times * n_folds
 
 if not args.dummy:
     ### SAVE RESULTS ###
-    save_results(out_fn, AUC) #, all_models)
+    save_results(out_fn, AUC, all_models)
     save_results(out_fn, accuracy, fn_end="acc")
     # save_preds(args, out_fn, mean_preds)
     # save_patterns(args, out_fn, all_models)
@@ -109,6 +111,9 @@ if not args.dummy:
     ### PLOT PERFORMANCE ###
     version = "v1" if int(args.subject[0:2]) < 8 else "v2"
     plot_perf(args, out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
+
+    ## Save best model
+    save_best_pattern(out_fn, AUC, all_models)
 
     # # # plot pred
     # plot_perf(args, out_fn, mean_preds, ylabel='prediction')
@@ -119,6 +124,7 @@ if not args.dummy:
             query = shorten_filename(query) # shorten string by removing unnecessary stuff
             save_results(out_fn+f'_for_{query}', AUC_query[:,:,i_query])
             plot_perf(args, out_fn+f'_for_{query}', AUC_query[:,:,i_query], args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
+            save_preds(args, out_fn+f'_for_{query}', mean_preds_query[:,:,i_query])
 
         # # save every contrast - full minus every split
         # for i_query, query in enumerate(args.split_queries):
@@ -126,7 +132,6 @@ if not args.dummy:
         #     query = shorten_filename(query) # shorten string by removing unnecessary stuff
         #     save_results(out_fn+f'_for_{query}_full_minus_split', AUC - AUC_query[:,:,i_query])
         #     plot_perf(args, out_fn+f'_for_{query}_full_minus_split', AUC - AUC_query[:,:,i_query], args.train_cond, contrast=True, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
-
 
 # # plot pred
 # if mean_preds_query is not None: # save the results for all the splits

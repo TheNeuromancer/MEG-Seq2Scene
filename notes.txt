@@ -1,60 +1,5 @@
-Epoch: 1-60hz, th-ch=20 th-epo=5, deleting all projections instead of applying them, recalibration between runs, sfreq=100hz, rejecting EOG with ICA
-Epochs2: 0.1-80hz, th-ch=20 th-epo=5
-resample before storing epochs ?
-
 do not take the diag but average a few points around it.
-
-Decoding:
- v3: first real try
- v4: one_object testing all combination of negative trials.
- v5: imgloc images
- v6: all orig
- v7: now classic with wrong tmintmax
- v8: with correct tmintmax filter = 1-60hz
-v9: decoder carré vs autres formes dans le localizer, pas vs tous les autres mots.
-passe haut à 0.1 pour avoir plus de chance de voir les effets soutenus. - >fitler 0.03-80
-Entrainer sur imgloc IMG and test on imgloc WORDS.
-Entrainer décodage couleur sur 2 obj. Utiliser toutes les époques ? ie couleur sur le 1er et sur le 2eme objet ?
-Splitter par match/nonmatch pour le décodage (dès l'entrainement), car on teste des choses différentes.
--> back to v1 on real subjects
-
 pooler les essais du loc et de 1obj pour améliorer la generalization.?
-
-train on blocks of 100ms and then gen? or on the whole window, then gen with rolling window
-
-
-Meeting 27-10-20:
-Mesure résumée : pool par fenetre après chaque mot et moyenne
-La généralisation est-elle "diagonale" après le mot, ou bien off-diagonale ? Si on a un processing très différent on peut s'attendre a du off-diagonale. 
-Decoder la position des mots ? Ou bien l'inclure dans la RSA. 
-Inclure un flash sur tout l'écran, un truc gris ou salt and pepper, sur la moitié des essais, 500ms avant l'image. 
-Figure finale : on veut un truc a la JR ou a la Pedro avec un timecourse par propriété d'interet: forme1, couleur1, relation, forme2, couleur2, objet individuels, match/nonmatch 
-Trace de la prédiction pour chaque décodeur : quand est-ce que la perf est bonne ET quand est-ce qu'on a une réactivation. On peut les moyenner comme on le fait pour l'AUC. 
-Quand on a une réactivation, est ce qu'elle est jointe pour nom et adj (forme et couleur), ou bien séparée ? Quel délai ? Comment sont ségrégées les réactivations d'un objet et de l'autre ? => binding problem.
-
-v1: 200hz decoding. no smoothing.
-v2: decoding at 100hz and smooting 11
-v3: Same but with half of the trials in order to check whether we can changethe design or not.  DELETED
-new v3: smoothing 21, filter 0.01, no lp, no channel rejection., 10 folds.
-v4: same with no baseline. 50hz
-v5: same with actually no baseline. 50hz
-v6: smth
-v7: RSA with first and 2nd object, and with xdawn. Also decoding with ridgeCV and scoring=auc.
-v8: same with logistic - not launched
-v9: OVO for RSA and decoding_ovr and subsampling majority classes for decoding. Also with baseline correction.
-+ v8: RSA with matching trials only (+ OVO)
-v10: split queries (during training but not yet test) for decoding - no baseline. RSA: back to OVR because OVO scoring is fucked up (gives majority class, not proba for each class) ; + weighted average instead of macro.
-v11: baseline. LogRegCV partout. Saving accuracy as well as AUC.
-remove equalize trials!
-v12: OVR, now averaging AUC over strat grouped folds. RidgeCV proba -> looks like the AUC problem is solved !!
-v13: OVR+decoding, SVC and gridsearch -> weaker than the one before ...
-v14: ridgecv, repeated strat grouped kfold with 10 repeats.
-v15: same with 100 repeats
-v16: Decoding same colour, shape, or object. 10folds.
-v17: OVR with LR (no CV), 5folds. Also all conditions. 
-v18: sklearn's confusion matric func for RSA. 
-v19: + reducdim 0.99 + LRCV
-v20: same but with left and right queries for RSA. Also SVC with gridsearch for decoding window. 
 
 BACK TO V1
 c1: windows: .15-.3s for early and .4-.55 for late
@@ -62,24 +7,18 @@ v2: windows now .1-.4s for early and .45-.75s for late.
 v3: cat10, no reduc dim. All launching all decoding. 
 v4: now clipping - baselining - clipping again. All conds, including delay windowing 
 v5: reduc dim for single ch decoding + smaller time window
+v6: including the presence of a flash in the metadata. Also Decoding cimplexitiy with generalization (sameShape -> sameColor). 
++ mean 3
 
 
 does split-queries work for OVR??
 LOOKS LIKE NOT
 
-
-
-
-FOR SUB 25: NOW CORRECTLY CORRECTING FOR MISSING TRIAL (BEFORE THE INDEX WAS WRONG)
-
 Use principal angles between subspaces? https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.subspace_angles.html
-
-
 
 
 TODO: add split queries for test queries as well (currently only for training queries).
 split queries not working well, we are missing trials for some queries in some folds, leading to having 0 examplars of some classes. 
-split with grey screen 
 
 angle between first and second color (or shape) encoding in scenes ? How is it compared to signle objects?
 add n_repeats to the config
@@ -112,3 +51,14 @@ sub13 - run1: multiple answers during trials. Weird ch jumps in run7. No run10.
 sub14: just fucking noisy all over.
 sub15 - run1: button press jsut before a trial. run6: one trial is shifted. 
 sub16: bit noisy but looks ok. problem in run8?
+
+
+
+Meeting 27-10-20:
+Mesure résumée : pool par fenetre après chaque mot et moyenne
+La généralisation est-elle "diagonale" après le mot, ou bien off-diagonale ? Si on a un processing très différent on peut s'attendre a du off-diagonale. 
+Decoder la position des mots ? Ou bien l'inclure dans la RSA. 
+Inclure un flash sur tout l'écran, un truc gris ou salt and pepper, sur la moitié des essais, 500ms avant l'image. -> flash = trigger 5 
+Figure finale : on veut un truc a la JR ou a la Pedro avec un timecourse par propriété d'interet: forme1, couleur1, relation, forme2, couleur2, objet individuels, match/nonmatch 
+Trace de la prédiction pour chaque décodeur : quand est-ce que la perf est bonne ET quand est-ce qu'on a une réactivation. On peut les moyenner comme on le fait pour l'AUC. 
+Quand on a une réactivation, est ce qu'elle est jointe pour nom et adj (forme et couleur), ou bien séparée ? Quel délai ? Comment sont ségrégées les réactivations d'un objet et de l'autre ? => binding problem.

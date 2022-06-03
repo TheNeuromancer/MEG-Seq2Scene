@@ -5,7 +5,7 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "6"
+    version: str = "4"
     root_path: str = "/neurospin/unicog/protocols/MEG/Seq2Scene/"
     epochs_dir: str = "Epochs"
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
@@ -32,8 +32,8 @@ class Config:
     reduc_dim_win: float = 0 # dimensionality reduction for the window decoding analysis 
     ## Decoding window parameters
     reduc_dim_sing: float = 0 # dimensionality reduction
-    cat: int = 3 # number of timepoints to concatenate
-    mean: bool = True # Wether to average instead of concatenate if using the "cat" argument
+    cat: int = 0 # number of timepoints to concatenate
+    mean: bool = False # Wether to average instead of concatenate if using the "cat" argument
     smooth: int = 21 # hanning smoothing window, in timesample,
     clip: bool = True # Whether to clip to the 5th and 95th percentile for each channel
     subtract_evoked: bool = False # Whether to subtract the evoked signal from the epochs

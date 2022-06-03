@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib as mpl
 import numpy as np
-from ipdb import set_trace
+# from ipdb import set_trace
 from glob import glob
 import os.path as op
 import os
@@ -13,22 +13,23 @@ import pickle
 from copy import deepcopy
 from tqdm import trange
 from sklearn.preprocessing import StandardScaler, RobustScaler, label_binarize, OneHotEncoder
-from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.linear_model import RidgeClassifier, RidgeClassifierCV, LogisticRegression, LogisticRegressionCV, LinearRegression
 from sklearn.svm import SVC, LinearSVC
 from sklearn.metrics import roc_auc_score, accuracy_score
-from sklearn.model_selection import KFold, StratifiedKFold, StratifiedShuffleSplit, permutation_test_score, GridSearchCV
+from sklearn.model_selection import KFold, StratifiedKFold, StratifiedShuffleSplit, permutation_test_score, GridSearchCV # StratifiedGroupKFold, 
 from sklearn.decomposition import PCA
 from sklearn.multiclass import OneVsRestClassifier
 from scipy.signal import savgol_filter
 from scipy.stats import ttest_1samp
+from autoreject import AutoReject
 
 
 # local import
 from .commons import *
 from .params import *
 from .angles import *
-from .split import *
+# from .split import *
 
 
 cmaptab10 = plt.cm.get_cmap('tab10', 10)
@@ -56,6 +57,10 @@ Called in the main scripts """
 
 def load_data(args, fn, query_1='', query_2=''):
     epochs = mne.read_epochs(fn, preload=True, verbose=False)
+    if args.autoreject:
+        print(f"Applying autoreject in the first place")
+        ar = AutoReject()
+        epochs = ar.fit_transform(epochs) 
     if args.filter: # filter metadata before anything else
         print(epochs.metadata)
         epochs = epochs[args.filter]
@@ -143,12 +148,13 @@ def load_data(args, fn, query_1='', query_2=''):
     if args.cat:
         data = win_ave_smooth(data, nb_cat=args.cat, mean=args.mean)
         new_info = epochs[0].info.copy()
-        old_ch_names = deepcopy(new_info['ch_names'])
-        for i in range(args.cat-1): new_info['ch_names'] += [f"{ch}_{i}" for ch in old_ch_names]
-        new_info['nchan'] = new_info['nchan'] * args.cat
-        old_info_chs = deepcopy(new_info['chs'])
-        for i in range(args.cat-1): new_info['chs'] += deepcopy(old_info_chs)
-        for i in range(new_info['nchan']): new_info['chs'][i]['ch_name'] = new_info['ch_names'][i] 
+        if not args.mean: # create new channel names because concatenation of timepoints equate adding channels
+            old_ch_names = deepcopy(new_info['ch_names'])
+            for i in range(args.cat-1): new_info['ch_names'] += [f"{ch}_{i}" for ch in old_ch_names]
+            new_info['nchan'] = new_info['nchan'] * args.cat
+            old_info_chs = deepcopy(new_info['chs'])
+            for i in range(args.cat-1): new_info['chs'] += deepcopy(old_info_chs)
+            for i in range(new_info['nchan']): new_info['chs'][i]['ch_name'] = new_info['ch_names'][i] 
     else:
         new_info = epochs[0].info
 
@@ -212,6 +218,24 @@ def get_class_queries(query):
         class_queries = [f"{query}=='{s}_{c}'" for s in shapes for c in colors]
     elif query == "Relation": 
         class_queries = ["Relation==\"à gauche d'\"", "Relation==\"à droite d'\""]
+    elif query == "Perf":
+        class_queries = ["Perf==0", "Perf==1"]
+    elif query == "Matching":
+        class_queries = ["Matching=='match'", "Matching=='nonmatch'"]
+    elif query == "Button":
+        class_queries = ["Button=='left'", "Button=='right'"]
+    elif query == "Flash":
+        class_queries = ["Flash==0", "Flash==1"]
+    elif query == "ColourMismatch": # single obj mismatch
+        class_queries = ["Matching=='match'", "Error_type=='colour'"]
+    elif query == "ShapeMismatch": # single obj mismatch
+        class_queries = ["Matching=='match'", "Error_type=='shape'"]
+    elif query == "PropMismatch": # scene mismatch
+        class_queries = ["Matching=='match'", "Error_type=='l0'"]
+    elif query == "BindMismatch": # scene mismatch
+        class_queries = ["Matching=='match'", "Error_type=='l1'"]
+    elif query == "RelMismatch": # scene mismatch
+        class_queries = ["Matching=='match'", "Error_type=='l2'"]
     else:
         raise RuntimeError(f"Wrong query: {query}")
     print(class_queries)
@@ -223,18 +247,11 @@ def get_class_queries(query):
 # ///////////////////////////////////////////////////////// #
 
 def decode(args, X, y, clf, n_times, test_split_query_indices):
-
-    if args.crossval == 'shufflesplit':
-        cv = StratifiedShuffleSplit(n_splits=args.n_folds, test_size=0.5)
-    elif args.crossval == 'kfold':
-        cv = StratifiedKFold(n_splits=args.n_folds, shuffle=False) # do not shuffle here!! 
-        # that is because we stored the indices of the queries we want to split at test time.
-        # plus we shuffle during the data loading
-    else:
-        print('unknown specified cross-validation scheme ... exiting')
-        raise
+    
     if args.dummy:
         cv = StratifiedKFold(n_splits=2, shuffle=False)
+    else:
+        cv = get_cv(args.train_cond, args.crossval, args.n_folds)
     
     if args.reduc_dim:
         pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
@@ -304,7 +321,11 @@ def decode(args, X, y, clf, n_times, test_split_query_indices):
             raise
         all_models = get_averaged_clf(args, all_models, n_times)
 
-    return all_models, AUC, accuracy, AUC_test_query_split
+    # put the pipeline object in an array without unpacking them
+    all_models_array = np.empty((len(all_models), len(all_models[0])), dtype=object)
+    all_models_array[:] = all_models 
+
+    return all_models_array, AUC, accuracy, AUC_test_query_split, mean_preds, mean_preds_test_query_split
 
 
 def get_averaged_clf(args, all_models, n_times):
@@ -519,6 +540,9 @@ def decode_ovr(args, clf, epochs, class_queries, n_times):
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+    if np.min(counts) < args.n_folds:
+        print(f"that's too few trials ... decreasing n_folds to {np.min(counts)}")
+        setattr(args, 'n_folds', np.min(counts))
 
     cv = get_cv(args.train_cond, args.crossval, args.n_folds)
 
@@ -565,7 +589,10 @@ def decode_ovr(args, clf, epochs, class_queries, n_times):
                     y_pred[test] = onehotenc.transform(preds.reshape((-1,1)))
             AUC[t] = roc_auc_score(y_true=y, y_score=y_pred, multi_class='ovr')
 
-    return AUC, accuracy, all_models
+    # put the pipeline object in an array without unpacking them
+    all_models_array = np.empty((len(all_models), len(all_models[0])), dtype=object)
+    all_models_array[:] = all_models 
+    return AUC, accuracy, all_models_array
 
 
 def test_decode_ovr(args, epochs, class_queries, all_models):
@@ -783,6 +810,21 @@ def save_results(out_fn, results, time=True, all_models=None, fn_end="AUC"):
         pickle.dump(all_models, open(out_fn + '_all_models.p', 'wb'))
     return
 
+def save_best_pattern(out_fn, AUC, all_models):
+    """ Get the time of best performance and
+    save the corresponding model's pattern, 
+    after applying the scaler's inverse transform (as it should)
+    Problem: it might not be the same timepoint across subjects...
+    """
+    if AUC.ndim > 1:
+        AUC = np.diag(AUC)
+    best_tp = np.argmax(AUC)
+    pipeline_each_fold = [all_models[best_tp][i] for i in range(len(all_models[0]))] # all_models is n_times * n_folds
+    # pattern_each_fold = [mne.decoding.get_coef(p, attr='patterns_', inverse_transform=True) for p in pipeline_each_fold]
+    pattern_each_fold = [p[0].inverse_transform(np.atleast_2d(p[-1].patterns_)) for p in pipeline_each_fold] # atleast_2d because for classical decoding it will be 1d, but 2d for ovr, and scaler expects 2d
+    pattern = np.mean(pattern_each_fold, 0)
+    np.save(f"{out_fn}_best_pattern_t{best_tp}.npy", pattern)
+
 
 def save_pickle(out_fn, results):
     """ Generic results to .p saving func """
@@ -801,7 +843,7 @@ def save_preds(args, out_fn, preds):
     return
 
 
-def save_patterns(args, out_fn, all_models):
+def save_patterns(args, out_fn, all_models): ## depecated, check dimensionality of all_models
     print('Saving patterns')
     n_folds = len(all_models)
     n_times = len(all_models[0])
@@ -1128,7 +1170,9 @@ def get_cv(train_cond, crossval, n_folds):
         if crossval == 'shufflesplit':
             cv = RepeatedStratifiedGroupKFold(n_splits=n_folds, n_repeats=10)
         elif crossval == 'kfold':
-            cv = StratifiedGroupKFold(n_splits=n_folds)
+            print("Using StratifiedKFold instead of StratifiedGroupKFold")
+            cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)    
+            # cv = StratifiedGroupKFold(n_splits=n_folds)
     elif crossval == 'shufflesplit':
         cv = StratifiedShuffleSplit(n_splits=n_folds, test_size=0.5, random_state=42)
     elif crossval == 'kfold':

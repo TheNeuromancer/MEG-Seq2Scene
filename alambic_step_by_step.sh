@@ -42,21 +42,22 @@ do
 cat <<EOT >> $file_qsub
 #!/bin/bash
 #PBS -N $i
-#PBS -l walltime=299:59:00
+#PBS -l walltime=99:59:00
 #PBS -l ncpus=1
 #PBS -l mem=5G
 #PBS -q Nspin_long
 #PBS -o $out_file
 #PBS -e $err_file
 source ~/miniconda3/etc/profile.d/conda.sh
-conda activate neurospin
+conda activate NS
 cd /neurospin/unicog/protocols/MEG/Seq2Scene/Code/
 ${job_array[i]}
 EOT
 
 qsub $file_qsub
 
-sleep 5 # time to let the job start, with margin
+# sleep 1 # time to let the job start, with margin
+#neurospin
 
 done
 

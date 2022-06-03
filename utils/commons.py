@@ -1,12 +1,14 @@
 import mne
 from sklearn.preprocessing import LabelEncoder
 from natsort import natsorted
-from ipdb import set_trace
+# from ipdb import set_trace
 import numpy as np
 from glob import glob
 import time
 import os.path as op
 import os
+
+from utils.params import TRIG_DICT
 
 
 short_to_long_cond = {"loc": "localizer", "one_obj": "one_object", "two_obj": "two_objects",
@@ -46,6 +48,8 @@ def get_paths(args, dirname='Decoding'):
     out_fn = get_out_fn(args, dirname=dirname)
     xdawn_str = "dawn-" if args.xdawn else ""
     out_fn += xdawn_str
+    autoreject_str = "autoreject-" if args.autoreject else ""
+    out_fn += autoreject_str
     print(f"out fn: {out_fn}")
 
     test_out_fns = []
@@ -209,6 +213,30 @@ def Xdawn(epochs4xdawn, epochs2transform, factor, n_comp=10):
     # plt.savefig('tmp2.png')
 
 
+def get_flash_indices(events):
+    ''' get trials where a flash was 
+    presented right before the image '''
+    events_ids = events[:,2]
+    trial_starts = np.where(events_ids == TRIG_DICT['two_objects_trial_start'])[0]
+    flashes = np.where(events_ids == 5)[0] # 5 is the trigger value for the flash
+    print(f"Found {len(flashes)} flashes")
+    if not len(flashes): # early subject did not have any flash
+        return [False for _ in trial_starts]
+    all_flash_present = []
+    for i_trial in range(len(trial_starts)-1):
+        flash_present = False # assume no flash
+        for flash in flashes: # check that a flash happened between the start and end of the trial
+            if trial_starts[i_trial] < flash < trial_starts[i_trial+1]:
+                flash_present = True
+                break
+        all_flash_present.append(flash_present)
+    if flashes[-1] > trial_starts[-1]: # we still have the last trial to test for the presence of a flash
+        all_flash_present.append(True)
+    else:
+        all_flash_present.append(False)
+    return all_flash_present
+
+
 def smooth(x, window_len=11, window='hanning'):
     """smooth the data using a window with requested size.
     
@@ -318,6 +346,7 @@ prop2cond = {'triangle': "shape", 'cercle': "shape", 'carre': "shape", 'vert': "
             'triangle vert 2': "object2", 'triangle bleu 2': "object2", 'triangle rouge 2': "object2", 'cercle vert 2': "object2", 
             'cercle bleu 2': "object2", 'cercle rouge 2': "object2", 'carre vert 2': "object2", 'carre bleu 2': "object2", 'carre rouge 2': "object2"}
 
+
 def group_conds(properties):
     """group back individual conditions, 
     eg: rouge to Colors
@@ -335,8 +364,6 @@ def group_conds(properties):
     groups_indices = [np.where(idx==conds_indices)[0] for idx in np.unique(conds_indices)]
     return unique_conds, groups_indices
     # return all_conds, unique_conds, conds_indices, groups_indices
-
-
 
 
 def win_ave_smooth(data, nb_cat, mean=True):

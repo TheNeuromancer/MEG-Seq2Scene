@@ -23,6 +23,8 @@ do
 --timegen -s $sub --label Colour \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
 --train-cond 'one_object' \
 --train-query \"Colour1\" \
 --test-cond 'two_objects' \
@@ -35,6 +37,8 @@ do
 --timegen -s $sub --label Colour1 \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Colour1\" \
 --test-cond 'one_object' \
@@ -46,6 +50,8 @@ do
 --timegen -s $sub --label Colour2 \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Colour2\" \
 --test-cond 'two_objects' \
@@ -69,6 +75,8 @@ do
 --timegen -s $sub --label Shape \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
 --train-cond 'one_object' \
 --train-query \"Shape1\" \
 --test-cond 'two_objects' \
@@ -81,6 +89,8 @@ do
 --timegen -s $sub --label Shape1 \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Shape1\" \
 --test-cond 'one_object' \
@@ -92,6 +102,8 @@ do
 --timegen -s $sub --label Shape2 \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Shape2\" \
 --test-cond 'one_object' \
@@ -106,6 +118,8 @@ do
 --timegen -s $sub --train-cond 'one_object' --label AllObject \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
 --train-query \"Shape1+Colour1\" \
 --test-cond 'two_objects' \
 --test-query \"Shape1+Colour1\" \
@@ -121,6 +135,8 @@ do
 --timegen -s $sub --train-cond 'two_objects' --label All1stObj \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
 --train-query \"Shape1+Colour1\" \
 --test-cond 'one_object' \
 --test-query \"Shape1+Colour1\" \
@@ -132,6 +148,8 @@ do
 --timegen -s $sub --train-cond 'two_objects' --label All2ndObj \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
 --train-query \"Shape2+Colour2\" \
 --test-cond 'one_object' \
 --test-query \"Shape1+Colour1\" \
@@ -146,6 +164,8 @@ do
 --label AllRightObject --timegen -s $sub \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Right_obj\" \
 --test-cond 'one_object' \
@@ -156,6 +176,8 @@ do
 --label AllLeftObject --timegen -s $sub \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Left_obj\" \
 --test-cond 'one_object' \
@@ -167,8 +189,100 @@ do
 --timegen -s $sub --label Relation \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Relation\" "
+
+
+## BUTTON
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Button \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
+--train-cond 'two_objects' \
+--train-query \"Button\" "
+
+
+## FLASH
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Flash \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-cond 'two_objects' \
+--train-query \"Flash\" "
+
+
+## PERF
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Perf \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
+--train-cond 'two_objects' \
+--train-query \"Perf\" "
+
+## MATCHING
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Matching \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
+--train-cond 'two_objects' \
+--train-query \"Matching\" "
+
+
+		## MISMATCHES
+
+	## ONE OBJECT MISMATCHES
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label ColourMismatch \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-cond 'one_object' \
+--train-query \"ColourMismatch\" "
+
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label ColourMismatch \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-cond 'one_object' \
+--train-query \"ColourMismatch\" "
+
+
+	## TWO OBJECTS MISMATCHES
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label PropMismatch \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-cond 'two_objects' \
+--train-query \"PropMismatch\" "
+
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label BindMismatch \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-cond 'two_objects' \
+--train-query \"BindMismatch\" "
+
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label RelMismatch \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-cond 'two_objects' \
+--train-query \"RelMismatch\" "
 
 
 

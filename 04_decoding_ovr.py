@@ -3,11 +3,13 @@ import matplotlib
 matplotlib.use('Agg') # no output to screen.
 import mne
 import numpy as np
-from ipdb import set_trace
+# from ipdb import set_trace
 import argparse
 import pickle
 import time
 import importlib
+from warnings import simplefilter
+simplefilter(action='ignore', category=FutureWarning) # ignore all future warnings
 
 # local imports
 from utils.decod import *
@@ -22,7 +24,6 @@ parser.add_argument('--freq-band', default='', help='name of frequency band to u
 parser.add_argument('--timegen', action='store_true', default=False, help='Whether to test probe trained at one time point also on all other timepoints')
 parser.add_argument('--label', default='', help='help to identify the result latter')
 parser.add_argument('--dummy', action='store_true', default=False, help='Accelerates everything so that we can test that the pipeline is working. Will not yield any interesting result!!')
-parser.add_argument('-x', '--xdawn', action='store_true',  default=False, help='Whether to apply Xdawn spatial filtering before training decoder')
 parser.add_argument('--test_quality', action='store_true', default=False, help='Change the out directory name, used for testing the quality of single runs.')
 parser.add_argument('--filter', default='', help='md query to filter trials before anything else (eg to use only matching trials')
 parser.add_argument('--train-cond', default='localizer', help='localizer, one_object or two_objects')
@@ -30,6 +31,8 @@ parser.add_argument('--train-query', help='Metadata query for training classes')
 parser.add_argument('--test-cond', default=[], action='append', help='localizer, one_object or two_objects, should have the same length as test-queries')
 parser.add_argument('--test-query', default=[], action='append', help='Metadata query for testing classes')
 parser.add_argument('--windows', default=[], action='append', help='tmin and tmax to crop the epochs, one for each train and test cond')
+parser.add_argument('-x', '--xdawn', action='store_true',  default=False, help='Whether to apply Xdawn spatial filtering before training decoder')
+parser.add_argument('-a', '--autoreject', action='store_true',  default=False, help='Whether to apply Autoreject on the epochs before training decoder')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
@@ -89,15 +92,16 @@ train_tmin, train_tmax = epochs.tmin, epochs.tmax
 class_queries = get_class_queries(args.train_query)
 n_times = len(epochs.times)
 
-# clf = LogisticRegression(C=1, class_weight='balanced', solver='liblinear', multi_class='auto')
-clf = LogisticRegressionCV(Cs=10, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=5, max_iter=10000)
-# clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=cv, class_weight='balanced')
-# clf = RidgeClassifier(class_weight='balanced')
-# clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
-# clf = LogisticRegressionCV(Cs=10, class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False, cv=5, n_jobs=1)
-# clf = SVC()
-# clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-2, 4, 7)})
+if args.dummy: # speed everything up for a dummy run
+    clf = LinearRegression(n_jobs=-1)
+    setattr(args, 'n_folds', 2)
+else:
+    clf = LogisticRegressionCV(Cs=10, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=5, max_iter=10000)
+    # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=cv, class_weight='balanced')
+    # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
+    # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-2, 4, 7)})
 clf = OneVsRestClassifier(clf, n_jobs=1)
+clf = mne.decoding.LinearModel(clf)
 
 ### DECODE ###
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
@@ -109,6 +113,9 @@ if not args.dummy:
     save_results(out_fn, AUC) #, all_models)
     save_results(out_fn, accuracy, fn_end="acc")
     # save_patterns(args, out_fn, all_models)
+
+    ## Save best model
+    save_best_pattern(out_fn, AUC, all_models)
 
     ### PLOT PERFORMANCE ###
     version = "v1" if int(args.subject[0:2]) < 8 else "v2"
