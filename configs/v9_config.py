@@ -5,9 +5,9 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "12"
+    version: str = "9"
     root_path: str = "/neurospin/unicog/protocols/MEG/Seq2Scene/"
-    epochs_dir: str = "Epochs_100hz"
+    epochs_dir: str = "Epochs_filt"
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
                            '08_ch180036', '09_jl190711', '10_ma200371', '11_rb210035', '12_mb160165', '13_lg170436', '14_eb180237', \
                            '15_ar160084', '16_er123987', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30')
@@ -20,7 +20,7 @@ class Config:
     l_freq: float = 0.1 # high-pass filter cutoff
     h_freq: float = 30 # low-pass filter cutoff
     notch: int = 50 # land line frequency
-    sfreq: int = 100 # final sampling frequency
+    sfreq: int = 50 # final sampling frequency
 
     ## Decoding parameters
     n_folds: int = 5 # number of shuffle splits
@@ -41,8 +41,6 @@ class Config:
     autoreject: bool = False
     xdawn: bool = False
     quality_th: float = 0 #.75
-    filter: str = "Perf==1"
-    equalize_events: bool = True
 
     # # TRF delays
     # tstart: float = 0.

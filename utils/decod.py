@@ -14,15 +14,17 @@ from copy import deepcopy
 from tqdm import trange
 from sklearn.preprocessing import StandardScaler, RobustScaler, label_binarize, OneHotEncoder
 from sklearn.pipeline import make_pipeline, Pipeline
-from sklearn.linear_model import RidgeClassifier, RidgeClassifierCV, LogisticRegression, LogisticRegressionCV, LinearRegression
+from sklearn.linear_model import RidgeClassifier, RidgeClassifierCV, LogisticRegression, LogisticRegressionCV, LinearRegression, Ridge, RidgeCV
 from sklearn.svm import SVC, LinearSVC
 from sklearn.metrics import roc_auc_score, accuracy_score
 from sklearn.model_selection import KFold, StratifiedKFold, StratifiedShuffleSplit, permutation_test_score, GridSearchCV # StratifiedGroupKFold, 
+from sklearn.utils.extmath import softmax
 from sklearn.decomposition import PCA
 from sklearn.multiclass import OneVsRestClassifier
 from scipy.signal import savgol_filter
-from scipy.stats import ttest_1samp
+from scipy.stats import ttest_1samp, sem, wilcoxon
 from autoreject import AutoReject
+from mne.stats import permutation_cluster_1samp_test, fdr_correction
 
 
 # local import
@@ -57,32 +59,52 @@ Called in the main scripts """
 
 def load_data(args, fn, query_1='', query_2=''):
     epochs = mne.read_epochs(fn, preload=True, verbose=False)
-    if args.autoreject:
-        print(f"Applying autoreject in the first place")
-        ar = AutoReject()
-        epochs = ar.fit_transform(epochs) 
     if args.filter: # filter metadata before anything else
-        print(epochs.metadata)
         epochs = epochs[args.filter]
         if not len(epochs): 
             print(f"No event left after filtering with {args.filter}. Exiting smoothly")
             exit()
         else:
             print(f"We have {len(epochs)} events left after filtering with {args.filter}")
+    if args.autoreject and not args.dummy:
+        print(f"Applying autoreject in the first place")
+        ar = AutoReject()
+        epochs = ar.fit_transform(epochs) 
+    if args.quality_th:
+        print(f"Keeping only runs with a quality score above {args.quality_th}")
+        cond = full_fn_to_short[op.basename(fn).replace('-epo.fif', '')]
+        score_per_run = quality_from_cond(args.subject, cond)
+        runs_to_keep = [k for k, v in score_per_run.items() if v > args.quality_th]
+        print(f"Keeping runs {runs_to_keep}")
+        epochs = epochs[f"run_nb in {runs_to_keep}"]
+    if args.xdawn and not args.dummy:
+        print("TO IMPLEMENT LOADING THE RIGHT EPOCHS")
+        raise
+        # Xdawn
     if args.subtract_evoked:
         epochs = epochs.subtract_evoked(epochs.average())
-    if "Right_obj" in query_1 or "Left_obj" in query_1 or "two_objects" in fn:
+    # if "Right_obj" in query_1 or "Left_obj" in query_1 or "two_objects" in fn:
+    print(fn)
+    if "two_objects-epo.fif" in fn:
         epochs.metadata = complement_md(epochs.metadata)
+        epochs.metadata['Complexity'] = epochs.metadata.apply(add_complexity_to_md, axis=1)
+    if "Flash" not in epochs.metadata.keys():
+        epochs.metadata['Flash'] = 0 # old subject did not have flashes
     if query_1 and query_2: # load 2 sub-epochs, one for each query
         epochs = [epochs[query_1], epochs[query_2]]
     elif query_1: # load a single sub-epochs
         epochs = [epochs[query_1]]
     else: # load the whole epochs (typically for RSA)
         epochs = [epochs]
+    if query_1:
+        print(f"Found {[len(epo) for epo in epochs]} events for queries {query_1} and {query_2}")
+    if not all([len(epo) for epo in epochs]):
+        print(f"No matching event for queries {query_1} and {query_2}. Exiting smoothly")
+        exit()
     epochs = [epo.pick('meg') for epo in epochs]
     initial_sfreq = epochs[0].info['sfreq']
 
-    if args.equalize_events:
+    if args.equalize_events and len(epochs) > 1:
         print(f"Equalizing event counts: ", end='')
         n_trials = min([len(epo) for epo in epochs])
         print(f"keeping: {n_trials} events in each class")
@@ -140,12 +162,8 @@ def load_data(args, fn, query_1='', query_2=''):
                 for i_ch in range(len(query_data[i_trial])):
                     query_data[i_trial, i_ch] = smooth(query_data[i_trial, i_ch], window_len=5, window='hanning')
 
-
-    # # Concatenate/average time point if needed
-    # if args.cat:
-    #     X = savgol_filter(X, window_length=51, polyorder=3, deriv=0, delta=1.0, axis=-1, mode='interp', cval=0.0)
-
     if args.cat:
+        ### !!! concatenating does not work anymore
         data = win_ave_smooth(data, nb_cat=args.cat, mean=args.mean)
         new_info = epochs[0].info.copy()
         if not args.mean: # create new channel names because concatenation of timepoints equate adding channels
@@ -236,6 +254,16 @@ def get_class_queries(query):
         class_queries = ["Matching=='match'", "Error_type=='l1'"]
     elif query == "RelMismatch": # scene mismatch
         class_queries = ["Matching=='match'", "Error_type=='l2'"]
+    elif query == "Mismatches": # scene mismatches
+        class_queries = ["Error_type=='l0'", "Error_type=='l1'", "Error_type=='l2'"]
+    elif query == "SameShape": 
+        class_queries = ["Shape1==Shape2 and Colour1!=Colour2", "Shape1!=Shape2 and Colour1!=Colour2"]
+    elif query == "SameColour": 
+        class_queries = ["Colour1==Colour2 and Shape1!=Shape2", "Colour1!=Colour2 and Shape1!=Shape2"]
+    elif query == "SameObject": 
+        class_queries = ["Colour1==Colour2 and Shape1==Shape2", "Colour1!=Colour2 and Shape1!=Shape2"]
+    elif query == "Complexity":  # for regression decoding
+        class_queries = ["Complexity==0", "Complexity==1", "Complexity==2"]
     else:
         raise RuntimeError(f"Wrong query: {query}")
     print(class_queries)
@@ -245,88 +273,6 @@ def get_class_queries(query):
 # ///////////////////////////////////////////////////////// #
 ###################### DECODING PROPER ######################
 # ///////////////////////////////////////////////////////// #
-
-def decode(args, X, y, clf, n_times, test_split_query_indices):
-    
-    if args.dummy:
-        cv = StratifiedKFold(n_splits=2, shuffle=False)
-    else:
-        cv = get_cv(args.train_cond, args.crossval, args.n_folds)
-    
-    if args.reduc_dim:
-        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
-    else:
-        pipeline = make_pipeline(RobustScaler(), clf)
-
-    all_models = []
-    if args.timegen:
-        AUC = np.zeros((n_times, n_times))
-        accuracy = np.zeros((n_times, n_times))
-        mean_preds = np.zeros((n_times, n_times))
-        if test_split_query_indices: # split the test indices according to the query
-            AUC_test_query_split = np.zeros((n_times, n_times, len(test_split_query_indices)))
-            mean_preds_test_query_split = np.zeros((n_times, n_times, len(test_split_query_indices)))
-        else:
-            AUC_test_query_split = None
-            mean_preds_test_query_split = None
-
-        for train, test in cv.split(X, y):
-            all_models.append([])
-            for t in trange(n_times):
-                pipeline.fit(X[train, :, t], y[train])
-                all_models[-1].append(deepcopy(pipeline))
-                for tgen in range(n_times):
-                    if test_split_query_indices: # split the test indices according to the query
-                        for i_query, split_indices in enumerate(test_split_query_indices):
-                            try:
-                                test_query = test[np.isin(test, split_indices)]
-                                pred = predict(pipeline, X[test_query, :, tgen])
-                                AUC_test_query_split[t, tgen, i_query] += roc_auc_score(y_true=y[test_query], y_score=pred) / args.n_folds
-                                mean_preds_test_query_split[t, tgen, i_query] += np.mean(pred) / args.n_folds
-                            except ValueError: # in case of "ValueError: Only one class present in y_true. ROC AUC score is not defined in that case."
-                                # defaults to just adding the mean perf and pred
-                                print("\n!!! could not find 2 classes in the split queries ... defaults to adding the mean perf and pred !!!\n")
-                                AUC_test_query_split[t, tgen, i_query] += 0.5 / args.n_folds
-                                mean_preds_test_query_split[t, tgen, i_query] += 0.5 / args.n_folds
-                        
-                    # normal test
-                    pred = predict(pipeline, X[test, :, tgen])
-                    AUC[t, tgen] += roc_auc_score(y_true=y[test], y_score=pred) / args.n_folds
-                    mean_preds[t, tgen] += np.mean(pred) / args.n_folds
-                    accuracy[t, tgen] += accuracy_score(y[test], pred>0.5) / args.n_folds
-
-    # TODO: implement generalization over conditions for the non-timegen case
-    else:
-        AUC_test_query_split = None
-        AUC = np.zeros(n_times)
-        mean_preds = np.zeros(n_times)
-        AUC_test_query_split = None
-        mean_preds_test_query_split = None
-        for train, test in cv.split(X, y):
-            all_models.append([])
-            for t in trange(n_times):
-                pipeline.fit(X[train, :, t], y[train])
-                all_models[-1].append(deepcopy(pipeline))
-                pred = predict(pipeline, X[test, :, t])
-                AUC[t] += roc_auc_score(y_true=y[test], y_score=pred) / args.n_folds
-                mean_preds[t] += np.mean(pred) / args.n_folds
-
-    print('mean AUC: ', AUC.mean())
-    print('max AUC: ', AUC.max())
-
-    if args.avg_clf: # average classifier parameters over all crossval splits
-        if args.reduc_dim:
-            print('cannot average classifier weights when using PCA because there can \
-                be a different nb of selected components for each fold .. .exiting')
-            raise
-        all_models = get_averaged_clf(args, all_models, n_times)
-
-    # put the pipeline object in an array without unpacking them
-    all_models_array = np.empty((len(all_models), len(all_models[0])), dtype=object)
-    all_models_array[:] = all_models 
-
-    return all_models_array, AUC, accuracy, AUC_test_query_split, mean_preds, mean_preds_test_query_split
-
 
 def get_averaged_clf(args, all_models, n_times):
     # all_models = n_folds*n_times
@@ -349,56 +295,134 @@ def get_averaged_clf(args, all_models, n_times):
         avg_models[0][-1][1].coef_ = np.mean([clf.coef_ for clf in clfs])
         avg_models[0][-1][1].intercept_ = np.mean([clf.intercept_ for clf in clfs])
 
-        # # PCA in exists
-        # if args.reduc_dim:
-        #     all_models[t][0][1].components_ = np.mean([all_models[t][i][1].components_ for i in range(args.n_folds)], 0) 
-    
     # discard the model for each split
     # averaged_models = all_models[:,0]
     return avg_models
 
-    # # clf = SVC(C=args.C, kernel='linear', probability=True, class_weight='balanced', verbose=False)
-    # clf.coef_ = np.mean([clf.coef_ for clf in all_models[t]], axis=0)
-    # clf.intercept_ = np.mean([clf.intercept_ for clf in all_models[t]], axis=0)
-    # pred = predict(clf, t_data)
-    # print(roc_auc_score(y_true=y, y_score=pred))
-    # print('\n')
-            
+
+def decode(args, X, y, clf, n_times, test_split_query_indices):
+    
+    if args.dummy:
+        cv = StratifiedKFold(n_splits=2, shuffle=False)
+    else:
+        cv = get_cv(args.train_cond, args.crossval, args.n_folds)
+    
+    if args.reduc_dim:
+        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
+    else:
+        pipeline = make_pipeline(RobustScaler(), clf)
+
+    all_models = []
+    if args.timegen:
+        AUC = np.zeros((n_times, n_times))
+        accuracy = np.zeros((n_times, n_times))
+        mean_preds = np.zeros((n_times, n_times))
+        if test_split_query_indices: # split the test indices according to the query
+            AUC_test_query_split = np.zeros((n_times, n_times, len(test_split_query_indices)))
+            AUC_test_query_counts = np.zeros((n_times, n_times, len(test_split_query_indices)))
+            mean_preds_test_query_split = np.zeros((n_times, n_times, len(test_split_query_indices)))
+        else:
+            AUC_test_query_split = None
+            AUC_test_query_counts = None
+            mean_preds_test_query_split = None
+
+        for train, test in cv.split(X, y):
+            all_models.append([])
+            for t in trange(n_times):
+                pipeline.fit(X[train, :, t], y[train])
+                all_models[-1].append(deepcopy(pipeline))
+                for tgen in range(n_times):
+                    
+                    # normal test
+                    pred = predict(pipeline, X[test, :, tgen])
+                    AUC[t, tgen] += roc_auc_score(y_true=y[test], y_score=pred) / args.n_folds
+                    mean_preds[t, tgen] += np.mean(pred) / args.n_folds
+                    # accuracy[t, tgen] += accuracy_score(y[test], pred>0.5) / args.n_folds
+
+                    if test_split_query_indices: # split the test indices according to the query
+                        for i_query, split_indices in enumerate(test_split_query_indices):
+                            test_query = test[np.isin(test, split_indices)]
+                            if len(np.unique(y[test_query])) < 2: # not enough classes to compute AUC, just pass
+                                continue
+                            if args.equalize_split_events: # keep the same number of events for each classes
+                                split_classes, split_counts = np.unique(y[test_query], return_counts=True)
+                                if not np.all(split_counts[0] == split_counts): # subsample majority class
+                                    nb_ev = split_counts.min()
+                                    picked_all_classes = []
+                                    for clas in split_classes:
+                                        candidates = test_query[np.where(y[test_query]==clas)[0]]
+                                        picked = np.random.choice(candidates, size=nb_ev, replace=False)
+                                        picked_all_classes.extend(picked)
+                                    test_query = np.array(picked_all_classes)
+                            pred = predict(pipeline, X[test_query, :, tgen])
+                            AUC_test_query_split[t, tgen, i_query] += roc_auc_score(y_true=y[test_query], y_score=pred) #/ args.n_folds
+                            AUC_test_query_counts[t, tgen, i_query] += 1 # keep track of the number of AUC computed (should = n_folds)
+        if test_split_query_indices: AUC_test_query_split = AUC_test_query_split / AUC_test_query_counts # replace division by n_folds because for many cases we don't have correct test indices in each fold.
+                        
+    # TDO: implement generalization over conditions for the non-timegen case
+    else:
+        AUC_test_query_split = None
+        AUC = np.zeros(n_times)
+        mean_preds = np.zeros(n_times)
+        AUC_test_query_split = None
+        mean_preds_test_query_split = None
+        for train, test in cv.split(X, y):
+            all_models.append([])
+            for t in trange(n_times):
+                pipeline.fit(X[train, :, t], y[train])
+                all_models[-1].append(deepcopy(pipeline))
+                pred = predict(pipeline, X[test, :, t])
+                AUC[t] += roc_auc_score(y_true=y[test], y_score=pred) / args.n_folds
+                mean_preds[t] += np.mean(pred) / args.n_folds
+
+    print(f'mean trainning AUC: {AUC.mean():.3f}')
+    print(f'max trainning AUC: {AUC.max():.3f}')
+
+    if args.avg_clf: # average classifier parameters over all crossval splits
+        if args.reduc_dim:
+            print('cannot average classifier weights when using PCA because there can \
+                be a different nb of selected components for each fold .. .exiting')
+            raise
+        all_models = get_averaged_clf(args, all_models, n_times)
+
+    # put the pipeline object in an array without unpacking them
+    all_models_array = np.empty((len(all_models), len(all_models[0])), dtype=object)
+    all_models_array[:] = all_models # n_folds, n_times
+    all_models_array = all_models_array.transpose(1,0) # go to shape n_times * n_folds
+
+    return all_models_array, AUC, accuracy, AUC_test_query_split, mean_preds, mean_preds_test_query_split
+
 
 def test_decode(args, X, y, all_models, test_split_query_indices):
-    n_folds = len(all_models)
+    n_times_train, n_folds = all_models.shape
     n_times_test = X.shape[2]
-    n_times_train = len(all_models[0])
-    
+
     if args.timegen:
         AUC = np.zeros((n_times_train, n_times_test))
         mean_preds = np.zeros((n_times_train, n_times_test))
         accuracy = np.zeros((n_times_train, n_times_test))
         if test_split_query_indices: # split the test indices according to the query
             AUC_test_query_split = np.zeros((n_times_train, n_times_test, len(test_split_query_indices)))
+        else:
+            AUC_test_query_split = None
         for tgen in trange(n_times_test):
             t_data = X[:, :, tgen]
             for t in range(n_times_train):
                 all_folds_preds = []
                 for i_fold in range(n_folds):
-                    pipeline = all_models[i_fold][t]
+                    pipeline = all_models[t, i_fold]
                     all_folds_preds.append(predict(pipeline, t_data))
 
-                all_folds_preds = np.mean(all_folds_preds, 0)
-                if test_split_query_indices: # split the test indices according to the query
-                    for i_query, split_indices in enumerate(test_split_query_indices):
-                        try:
-                            # pred = predict(pipeline, X[split_indices, :, tgen])
-                            AUC_test_query_split[t, tgen, i_query] += roc_auc_score(y_true=y[split_indices], y_score=all_folds_preds[split_indices])
-                        except ValueError: # in case of "ValueError: Only one class present in y_true. ROC AUC score is not defined in that case."
-                            # defaults to just adding the mean perf and pred
-                            print("\n!!! could not find 2 classes in the split queries ... defaults to adding the mean perf!!!\n")
-                            AUC_test_query_split[t, tgen, i_query] += 0.5
+                mean_folds_preds = np.mean(all_folds_preds, 0)
+                AUC[t, tgen] = roc_auc_score(y_true=y, y_score=mean_folds_preds)
+                mean_preds[t, tgen] = np.mean(mean_folds_preds)
+                accuracy[t, tgen] += accuracy_score(y, mean_folds_preds>0.5)
 
-                AUC[t, tgen] = roc_auc_score(y_true=y, y_score=all_folds_preds)
-                mean_preds[t, tgen] = np.mean(all_folds_preds)
-                accuracy[t, tgen] += accuracy_score(y, all_folds_preds>0.5)
-                # accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1))
+                if test_split_query_indices: # split the test indices according to the query
+                    for i_query, split_indices in enumerate(test_split_query_indices):
+                        if len(np.unique(y[split_indices])) < 2: # not enough classes to compute AUC, just pass
+                            continue
+                        AUC_test_query_split[t, tgen, i_query] = roc_auc_score(y_true=y[split_indices], y_score=mean_folds_preds[split_indices]) #/ args.n_folds
 
     else: # diag only
         AUC = np.zeros(n_times_train)
@@ -412,8 +436,8 @@ def test_decode(args, X, y, all_models, test_split_query_indices):
             AUC[t] = roc_auc_score(y_true=y, y_score=np.mean(all_folds_preds, 0))
             mean_preds[t] = np.mean(all_folds_preds)
 
-    print('mean AUC: ', AUC.mean())
-    print('max AUC: ', AUC.max())
+    print(f'mean test AUC: {AUC.mean():.3f}')
+    print(f'max test AUC: {AUC.max():.3f}')
 
     return AUC, accuracy, mean_preds, AUC_test_query_split
 
@@ -426,7 +450,7 @@ def decode_window(args, clf, epochs, class_queries):
     """ train single decoder for the whole time of the epochs
         class_queries: list of strings, pandas queries to get each class
     """
-    X, y, groups = get_X_y_from_queries(epochs, class_queries)
+    X, y, groups, _ = get_X_y_from_queries(epochs, class_queries)
     n_trials = len(X)
     X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
     classes, counts = np.unique(y, return_counts=True)
@@ -467,7 +491,7 @@ def test_decode_window(args, epochs, class_queries, trained_models):
         class_queries: list of strings, pandas queries to get each class
         trained_models: list of sklearn estimators, one for each class
     """
-    X, y, groups = get_X_y_from_queries(epochs, class_queries)
+    X, y, groups, _ = get_X_y_from_queries(epochs, class_queries)
     n_trials = len(X)
     X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
     classes, counts = np.unique(y, return_counts=True)
@@ -501,7 +525,7 @@ def test_decode_sliding_window(args, epochs, class_queries, trained_models, nb_c
         class_queries: list of strings, pandas queries to get each class
         trained_models: list of sklearn estimators, one for each class
     """
-    X, y, groups = get_X_y_from_queries(epochs, class_queries)
+    X, y, groups, _ = get_X_y_from_queries(epochs, class_queries)
     n_times = X.shape[2]
     X = win_ave_smooth(X, nb_cat, mean=False)[0]
     classes, counts = np.unique(y, return_counts=True)
@@ -531,15 +555,20 @@ def test_decode_sliding_window(args, epochs, class_queries, trained_models, nb_c
     return AUC, accuracy
 
 
-def decode_ovr(args, clf, epochs, class_queries, n_times):
+def decode_ovr(args, clf, epochs, class_queries):
     """ X: n_trials, n_sensors, n_times
         y: n_trials
         class_queries: list of strings, pandas queries to get each class
     """
-    X, y, groups = get_X_y_from_queries(epochs, class_queries)
+    n_times = len(epochs.times)
+    if args.equalize_events:
+        epochs = equalize_events_single_epo(epochs, class_queries)
+    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+    if n_classes < 2:
+        raise RuntimeError(f"did not find enough classes for queries {class_queries} and subjects {args.subject}")
     if np.min(counts) < args.n_folds:
         print(f"that's too few trials ... decreasing n_folds to {np.min(counts)}")
         setattr(args, 'n_folds', np.min(counts))
@@ -554,10 +583,12 @@ def decode_ovr(args, clf, epochs, class_queries, n_times):
     else:
         pipeline = make_pipeline(RobustScaler(), clf)
 
+    accuracy = None
+    AUC_test_query_split = np.zeros((n_times, n_times, len(test_split_query_indices))) if test_split_query_indices else None
+    AUC_test_query_counts = np.zeros((n_times, n_times, len(test_split_query_indices))) if test_split_query_indices else None
     all_models = []
     if args.timegen:
         AUC = np.zeros((n_times, n_times))
-        accuracy = np.zeros((n_times, n_times))
         all_confusions = []
         for t in trange(n_times):
             all_models.append([])
@@ -566,49 +597,73 @@ def decode_ovr(args, clf, epochs, class_queries, n_times):
                 all_models[-1].append(deepcopy(pipeline))
                 for tgen in range(n_times):
                     preds = predict(pipeline, X[test, :, tgen], multiclass=True)
-                    if preds.ndim == 2:
-                        preds = preds
-                    else:
-                        preds = onehotenc.transform(preds.reshape((-1,1)))
-                    if n_classes == 2: preds = preds[:,1]
+                    preds = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
+                    if n_classes == 2: preds = preds[:,1] # not a proper OVR object, needs different method
+                    if np.any(np.isnan(preds)):
+                        print(f"nan in preds, probably due to lack of convergence of classifier, moving to next fold")
+                        continue
                     AUC[t, tgen] += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
-                    if not n_classes == 2: # then single set of probabilities...
-                        accuracy[t, tgen] += accuracy_score(y[test], preds.argmax(1)) / args.n_folds
+                    # if not n_classes == 2: # then single set of probabilities...
+                    #     accuracy[t, tgen] += accuracy_score(y[test], preds.argmax(1)) / args.n_folds
+                    if test_split_query_indices: # split the test indices according to the query
+                        for i_query, split_indices in enumerate(test_split_query_indices):
+                            test_query = test[np.isin(test, split_indices)]
+                            if len(np.unique(y[test_query])) < n_classes: # not enough classes to compute AUC, just pass
+                                continue
+                            if args.equalize_split_events: # keep the same number of events for each classes
+                                split_classes, split_counts = np.unique(y[test_query], return_counts=True)
+                                if not np.all(split_counts[0] == split_counts): # subsample majority class
+                                    nb_ev = split_counts.min()
+                                    picked_all_classes = []
+                                    for clas in split_classes:
+                                        candidates = test_query[np.where(y[test_query]==clas)[0]]
+                                        picked = np.random.choice(candidates, size=nb_ev, replace=False)
+                                        picked_all_classes.extend(picked)
+                                    test_query = np.array(picked_all_classes)
+                            pred = predict(pipeline, X[test_query, :, tgen], multiclass=True)
+                            pred = pred if pred.ndim == 2 else onehotenc.transform(pred.reshape((-1,1)))
+                            if n_classes == 2: 
+                                pred = pred[:,1] # not a proper OVR object, needs different method
+                            AUC_test_query_split[t, tgen, i_query] += roc_auc_score(y_true=y[test_query], y_score=pred, multi_class='ovr', average='weighted') #/ args.n_folds
+                            AUC_test_query_counts[t, tgen, i_query] += 1 # keep track of the number of AUC computed (should = n_folds)
+        if test_split_query_indices: AUC_test_query_split = AUC_test_query_split / AUC_test_query_counts # replace division by n_folds because for many cases we don't have correct test indices in each fold.
     else:
         AUC = np.zeros(n_times)
-        accuracy = np.zeros(n_times)
         for t in trange(n_times):
-            y_pred = np.zeros((len(y), n_classes))
+            all_models.append([])
             for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
                 pipeline.fit(X[train, :, t], y[train])
-                accuracy[t] = pipeline.score(X[test, :, t], y[test])
+                all_models[-1].append(deepcopy(pipeline))
                 preds = predict(pipeline, X[test, :, t], multiclass=True)
-                if preds.ndim == 2:
-                    y_pred[test] = preds
-                else:
-                    y_pred[test] = onehotenc.transform(preds.reshape((-1,1)))
-            AUC[t] = roc_auc_score(y_true=y, y_score=y_pred, multi_class='ovr')
+                preds = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
+                if n_classes == 2: preds = preds[:,1] # not a proper OVR object, needs different method
+                AUC[t] += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
 
     # put the pipeline object in an array without unpacking them
     all_models_array = np.empty((len(all_models), len(all_models[0])), dtype=object)
-    all_models_array[:] = all_models 
-    return AUC, accuracy, all_models_array
+    all_models_array[:] = all_models # n_times, n_folds
+
+    print(f'mean training AUC: {AUC.mean():.3f}')
+    print(f'max training AUC: {AUC.max():.3f}')
+    return AUC, accuracy, all_models_array, AUC_test_query_split
 
 
 def test_decode_ovr(args, epochs, class_queries, all_models):
-    n_folds = len(all_models[0])
     n_times_test = len(epochs.times)
-    n_times_train = len(all_models)
+    n_times_train, n_folds = all_models.shape
 
-    X, y, _ = get_X_y_from_queries(epochs, class_queries)
+    X, y, _, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
-    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+    if n_classes < 2:
+        raise RuntimeError(f"did not find enough classes for queries {class_queries} and subjects {args.subject}")
 
     onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
-    
+
+    # full of nans because here we replace the values (only once), whereas in the train we count  the occurences where we could manage to do the split queries, then divide by this. 
     if args.timegen:
+        AUC_test_query_split = np.full((n_times_train, n_times_test, len(test_split_query_indices)), np.nan) if test_split_query_indices else None    
         AUC = np.zeros((n_times_train, n_times_test))
         accuracy = np.zeros((n_times_train, n_times_test))
         for tgen in trange(n_times_test):
@@ -618,30 +673,24 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                 for i_fold in range(n_folds):
                     pipeline = all_models[t][i_fold]
                     preds = predict(pipeline, t_data, multiclass=True)
-                    if preds.ndim == 2:
-                        y_pred = preds
-                    else:
-                        y_pred = onehotenc.transform(preds.reshape((-1,1)))
+                    y_pred = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
                     all_folds_preds.append(y_pred)
                 mean_fold_pred = np.mean(all_folds_preds, 0)
+                if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
                 AUC[t, tgen] = roc_auc_score(y_true=y, y_score=mean_fold_pred, multi_class='ovr')
-                accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1))
-    # else: # diag only
-    #     AUC = np.zeros(n_times_train)
-    #     mean_preds = np.zeros(n_times_train)
-    #     for t in range(n_times_train):
-    #         t_data = X[:, :, t]
-    #         all_folds_preds = []
-    #         for i_fold in range(n_folds):
-    #             pipeline = all_models[i_fold][t]
-    #             all_folds_preds.append(predict(pipeline, t_data), multiclass=True)
-    #         AUC[t] = roc_auc_score(y_true=y, y_score=np.mean(all_folds_preds, 0))
-    #         mean_preds[t] = np.mean(all_folds_preds)
+                # accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1)) # dim error when n_classes = 2
 
-    print('mean AUC: ', AUC.mean())
-    print('max AUC: ', AUC.max())
+                if test_split_query_indices: # split the test indices according to the query
+                    for i_query, split_indices in enumerate(test_split_query_indices):
+                        if len(np.unique(y[split_indices])) < n_classes: # not enough classes to compute AUC, just pass
+                            continue
+                        AUC_test_query_split[t, tgen, i_query] = roc_auc_score(y_true=y[split_indices], y_score=mean_fold_pred[split_indices], multi_class='ovr')
+    else:
+        raise NotImplementedError
+    print(f'mean test AUC: {AUC.mean():.3f}')
+    print(f'max test AUC: {AUC.max():.3f}')
 
-    return AUC, accuracy
+    return AUC, accuracy, AUC_test_query_split
 
 
 
@@ -650,11 +699,18 @@ def decode_single_ch_ovr(args, clf, epochs, class_queries):
         y: n_trials
         class_queries: list of strings, pandas queries to get each class
     """
-    X, y, groups = get_X_y_from_queries(epochs, class_queries)
+    if args.equalize_events:
+        epochs = equalize_events_single_epo(epochs, class_queries)
+    X, y, groups, _ = get_X_y_from_queries(epochs, class_queries, split_queries=[])
     nchan = X.shape[1]
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+    if n_classes < 2:
+        raise RuntimeError(f"did not find enough classes for queries {class_queries} and subjects {args.subject}")
+    if np.min(counts) < args.n_folds:
+        print(f"that's too few trials ... decreasing n_folds to {np.min(counts)}")
+        setattr(args, 'n_folds', np.min(counts))
 
     cv = get_cv(args.train_cond, args.crossval, args.n_folds)
 
@@ -684,14 +740,15 @@ def decode_single_ch_ovr(args, clf, epochs, class_queries):
             # accuracy[ch] = pipeline.score(X[test, ch, :], y[test])
             # if not n_classes == 2: # then single set of probabilities...
             #     accuracy[ch] += accuracy_score(y[test], preds.argmax(1)) / args.n_folds
-
+    print(f'mean AUC: {AUC.mean():.3f}')
+    print(f'max AUC: {AUC.max():.3f}')
     return AUC, accuracy, all_models
 
 
 def test_decode_single_ch_ovr(args, epochs, class_queries, all_models):
     n_folds = len(all_models[0])
     nchan = len(all_models)
-    X, y, _ = get_X_y_from_queries(epochs, class_queries)
+    X, y, _, _ = get_X_y_from_queries(epochs, class_queries, split_queries=[])
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
@@ -714,9 +771,53 @@ def test_decode_single_ch_ovr(args, epochs, class_queries, all_models):
         mean_fold_pred = np.mean(all_folds_preds, 0)
         AUC[ch] = roc_auc_score(y_true=y, y_score=mean_fold_pred, multi_class='ovr')
         accuracy[ch] = accuracy_score(y, mean_fold_pred.argmax(1))
-    print('mean AUC: ', AUC.mean())
-    print('max AUC: ', AUC.max())
+    print(f'mean AUC: {AUC.mean():.3f}')
+    print(f'max AUC: {AUC.max():.3f}')
     return AUC, accuracy
+
+
+def regression_decode(args, epochs, class_queries, clf):
+    n_times = len(epochs.times)
+    if args.equalize_events:
+        epochs = equalize_events_single_epo(epochs, class_queries)
+    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    classes, counts = np.unique(y, return_counts=True)
+    n_classes = len(classes)
+    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+    if n_classes < 2:
+        raise RuntimeError(f"did not find enough classes for queries {class_queries} and subjects {args.subject}")
+    if np.min(counts) < args.n_folds:
+        print(f"that's too few trials ... decreasing n_folds to {np.min(counts)}")
+        setattr(args, 'n_folds', np.min(counts))
+
+    if args.dummy:
+        cv = StratifiedKFold(n_splits=2, shuffle=False)
+    else:
+        cv = get_cv(args.train_cond, args.crossval, args.n_folds)
+
+    pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf) if args.reduc_dim else make_pipeline(RobustScaler(), clf)
+    all_models = []
+    if args.timegen:
+        R2 = np.zeros((n_times, n_times))
+        for train, test in cv.split(X, y):
+            all_models.append([])
+            for t in trange(n_times):
+                pipeline.fit(X[train, :, t], y[train])
+                all_models[-1].append(deepcopy(pipeline))
+                for tgen in range(n_times):
+                    R2[t, tgen] = pipeline.score(X[test, :, tgen], y[test]) # normal test
+                    # pred = predict(pipeline, X[test, :, tgen])
+                    # R2[t, tgen] += roc_auc_score(y_true=y[test], y_score=pred) / args.n_folds
+                    # mean_preds[t, tgen] += np.mean(pred) / args.n_folds
+                    # accuracy[t, tgen] += accuracy_score(y[test], pred>0.5) / args.n_folds  
+    print(f'mean trainning R2: {R2.mean():.3f}')
+    print(f'max trainning R2: {R2.max():.3f}')
+    # put the pipeline object in an array without unpacking them
+    all_models_array = np.empty((len(all_models), len(all_models[0])), dtype=object)
+    all_models_array[:] = all_models # n_folds, n_times
+    all_models_array = all_models_array.transpose(1,0) # go to shape n_times * n_folds
+    return all_models_array, R2
+
 
 ### FROM THE MARSEILLE SCRIPT. NOT USED YET HERE.
 # def test_decode_all_sentence(args, X, y, all_models):
@@ -1114,6 +1215,83 @@ def plot_all_props(ave_dict, std_dict, times, out_fn, labels=['S1', 'C1', 'R', '
     plt.savefig(out_fn)
 
 
+def add_slice_line_1ax(ax, slice_time, times, data_line, mult_fac=3, alpha=.4, fill=False, stat_fill=False, fill_where=[], color='k', lw=2, h_lw=1, mksz=8, zorder=-10):
+    # Draw the plots in a few steps
+    data_line *= mult_fac
+    ax.plot(times, data_line+slice_time, color=color, lw=lw, clip_on=False, zorder=zorder)
+    ax.axhline(xmin=times[0], xmax=times[-1], y=slice_time, linewidth=h_lw, clip_on=True, color=color, zorder=zorder)
+    if fill:
+        ax.fill_between(times, data_line+slice_time, slice_time, alpha=alpha, clip_on=False, zorder=zorder, color=color)
+    if stat_fill: # fill only when significant
+        ax.fill_between(times, data_line+slice_time, slice_time, where=fill_where, color=color, alpha=alpha, clip_on=False, zorder=zorder)
+    # Remove axes details that don't play well with overlap
+    ax.set_yticks([])
+#     ax.set_xticks([])    
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+#     ax.spines['bottom'].set_visible(False)
+#     ax.set_xlim(times[0], times[-1])
+
+
+def joyplot_with_stats(data_dict, times, out_fn, tmin=-.5, tmax=8, labels=['S1', 'C1', 'R', 'S2', 'C2'], \
+                       word_onsets=[], image_onset=[], fsz=16, title_fsz=26, stat='wilc', threshold=0.01):
+    """ To plot multiple decoders diagonals on the same plot
+    one per subplot, with statistics
+    """
+    if not np.all([lab in data_dict.keys() for lab in labels]):
+        print(f"!!! Could not find key(s) {[lab for lab in labels if lab not in data_dict.keys()]} in the data_dict")
+        return
+    fig, axes = plt.subplots(len(labels), figsize=(18, len(labels)*3))
+    for i, k in enumerate(labels):
+        for w_onset in word_onsets:
+            axes[i].axvline(x=w_onset, linestyle='--', color='k', ymin=0., ymax=1, lw=1, clip_on=False)
+        for img_onset in image_onset:
+            axes[i].axvline(x=img_onset, linestyle='-', color='k', lw=1, clip_on=False)
+        axes[i].axhline(y=0.5, color='k', linestyle='-', alpha=.7, lw=0.5)
+
+        dat, std = np.mean(data_dict[k], 0), sem(data_dict[k], 0)
+        time_mask = np.logical_and(tmin<=times, times<=tmax)
+        dat, std, local_times = dat[time_mask], std[time_mask], times[time_mask]
+        axes[i].plot(local_times, dat, alpha=0.8, lw=3, c=cmaptab10(i), clip_on=False)
+        axes[i].fill_between(local_times, dat-std, dat+std, alpha=0.2, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
+
+        if stat == "wilc":
+            np.random.seed(seed=233423)
+            signif = np.zeros_like(local_times)
+            chance_array = np.ones_like(data_dict[k][:,0]) * 0.5
+            for t in range(len(local_times)):
+                signif[t] = wilcoxon(data_dict[k][:, time_mask][:, t], chance_array, alternative="greater")[1] #two-sided
+            signif = fdr_correction(np.array(signif), alpha=0.05)[0] #.astype(bool)
+            axes[i].fill_between(local_times, 0.5, dat, where=signif, alpha=0.8, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
+            # axes[i].fill_between(local_times, 0.5, signifed_dat, alpha=0.8, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
+        # fvalues, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(data_dict[k]-0.5, n_permutations=1000, threshold=1e-6, tail=1, n_jobs=-1, verbose=False, buffer_size=None)
+        elif stat == "cluster_perm":
+            for cluster, pval in zip(clusters, cluster_p_values):
+                if pval < 0.05:
+                    axes[i].fill_between(local_times[cluster], 0.5, dat[cluster], alpha=0.8, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
+        
+        axes[i].text(-0.02, .55, k.split("_")[0], ha='center', va='center', transform=axes[i].transAxes, fontsize=title_fsz)
+        # back2fullname(k.split("_")[0])
+        # axes[i].set_title(back2fullname(k.split("_")[0]), loc='left')
+        
+        # from ipdb import set_trace; set_trace()
+
+        # cosmetics
+        axes[i].set_xlim(tmin, tmax)
+        for spine in ['bottom', 'top', 'left', 'right']:
+            axes[i].spines[spine].set_visible(False)
+        axes[i].set_yticks([])
+        if (i+1) < len(labels): axes[i].set_xticks([])
+        # axes[i].set_ylabel("AUC")
+
+    axes[-1].tick_params(axis='both', which='major', labelsize=fsz)
+    axes[-1].set_xlabel("Time (s)")
+    plt.subplots_adjust(hspace=-.1)
+    # plt.tight_layout()
+    plt.savefig(out_fn)
+
+
 def plot_all_props_multi(ave_dict, std_dict, times, out_fn, labels=['S1', 'C1', 'R', 'S2', 'C2'], word_onsets=[], image_onset=[]): # 'R'
     """ To plot multiple decoders diagonals on the same plot
     one per subplot
@@ -1129,7 +1307,7 @@ def plot_all_props_multi(ave_dict, std_dict, times, out_fn, labels=['S1', 'C1', 
         axes[i].fill_between(times, ave_dict[k]-std_dict[k], ave_dict[k]+std_dict[k], alpha=0.2, zorder=-1, lw=0, color=cmaptab10(i))
         axes[i].set_title(back2fullname(k))
         axes[i].set_ylabel("AUC")
-        axes[i].set_xlim(-.5, 6)
+        axes[i].set_xlim(-.5, 7)
     axes[i].set_xlabel("Time (s)")
     plt.tight_layout()
     plt.savefig(out_fn)
@@ -1190,17 +1368,23 @@ def get_split_indices(split_queries, epochs):
     """
     if not isinstance(epochs, list): epochs = [epochs]
     test_split_query_indices = []
-    for split_query in split_queries: # get the indices of each of the categories to split during test
+    actual_split_queries = [] # will contain only queries for which we found trials
+    for split_query in split_queries: # get the indices of each of the categories to split during test
         metadatas = [epo.metadata for epo in epochs]
         split_overall_indices = [epo[split_query].metadata.index for epo in epochs]
         split_local_indices = [np.arange(len(meta))[np.isin(meta.index, split_idx)] for meta, split_idx in zip(metadatas, split_overall_indices)]
         # split local indices contains the indices in the epochs.get_data() corresponding to the query
-        # offset the second query indices by the length of the first epochs.get_data() to get final indices (X is the concatenation of both epochs data)
+        # offset the second query indices by the length of the first epochs.get_data() to get final indices (X is the concatenation of both epochs data)
         split_local_indices[1] += len(metadatas[0])
-        test_split_query_indices.append(np.concatenate(split_local_indices))
-        if not len(test_split_query_indices[-1]):
-            raise RuntimeError(f"split queries did not yield any trial for query: {split_query}")
-    return test_split_query_indices
+        cat_split_local_indices = np.concatenate(split_local_indices)
+        if not len(cat_split_local_indices):
+            print(f"Did not found any trial for split query {split_query}, moving on")
+            continue
+            # raise RuntimeError(f"split queries did not yield any trial for query: {split_query}")
+        print(f"Found {len(cat_split_local_indices)} trial for split query {split_query}")
+        test_split_query_indices.append(cat_split_local_indices)
+        actual_split_queries.append(split_query)
+    return test_split_query_indices, actual_split_queries
 
 
 def get_X_y_from_epochs_list(args, epochs, sfreq):
@@ -1233,17 +1417,44 @@ def get_X_y_from_epochs_list(args, epochs, sfreq):
     return X, y, nchan, ch_names
 
 
-def get_X_y_from_queries(epochs, class_queries):
+def equalize_events_single_epo(epo, class_queries):
+    """ Equalize events in a single epoch
+    typically for OVR """    
+    print(f"Equalizing event counts: ", end='')
+    md = epo.metadata
+    counts = [len(md.query(class_query)) for class_query in class_queries]
+    n_trials = min(counts)
+    print(f"keeping: {n_trials} events in each class")
+    epos = [epo[q][np.random.choice(range(len(epo[q])), n_trials, replace=False)] for q in class_queries]
+    return mne.concatenate_epochs(epos, add_offset=False)
+
+
+def get_X_y_from_queries(epochs, class_queries, split_queries):
     """ get X and y for decoding based on 
-    an epochs object and a list of queries
+    an epochs object and a list of queries (for OVR)
+    also returns split queries indices
     """
     md = epochs.metadata
     X, y, groups = [], [], []
+    mds_for_split = [] # store sub-mds, in the order of X and y, to get correct indices for split queries
     for i, class_query in enumerate(class_queries):
+        if not len(md.query(class_query)):
+            print(f"!! did not find any trial for query {class_query} !!")
         X.extend(epochs[class_query].get_data())
         y.extend([i for qwe in range(len(md.query(class_query)))])
+        mds_for_split.append(md.query(class_query))
         # rely on the indices in the metadata to get groups. Only useful to split scene trials 
         groups.extend(md.query(class_query).index.values)
+    md_for_split = pd.concat(mds_for_split).reset_index(drop=True) # single df, same order as X and y
+    test_split_query_indices = [] # get split query indices
+    for split_query in split_queries:
+        test_split_query_indices.append(md_for_split.query(split_query).index.values)
     X, y = np.array(X), np.array(y)
-    return X, y, groups
+    return X, y, groups, test_split_query_indices
 
+
+class RidgeClassifierCVwithProba(RidgeClassifierCV):
+    def predict_proba(self, X):
+        d = self.decision_function(X)
+        d_2d = np.c_[-d, d]
+        return softmax(d_2d)

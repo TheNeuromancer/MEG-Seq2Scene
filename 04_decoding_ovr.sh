@@ -6,7 +6,6 @@ do
 
 # FOR NOW ONLY INDIV OBJECTS DECODING
 ## COLORS
-## Not the same query ...
 # 	# train on localizer words only
 # 	echo "python 04_decoding_ovr.py -w --train-cond 'localizer' --label Colour \
 # --split-queries \"Matching=='match'\" \
@@ -14,17 +13,15 @@ do
 # --timegen -s $sub \
 # --train-query \"Loc_word\" \
 # --test-cond 'one_object' \
-# --test-query-1 \"Colour1\" \
-# --test-cond 'two_objects' "
-# --train-query \"Loc_word in ['${colours[0]}', 'img_${colours[0]}']\" \
+# --test-query \"Colour1\" \
+# --test-cond 'two_objects' \
+# --test-query \"Colour1\" "
 
 	# train on one object
 	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label Colour \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-cond 'one_object' \
 --train-query \"Colour1\" \
 --test-cond 'two_objects' \
@@ -37,8 +34,6 @@ do
 --timegen -s $sub --label Colour1 \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Colour1\" \
 --test-cond 'one_object' \
@@ -50,8 +45,6 @@ do
 --timegen -s $sub --label Colour2 \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Colour2\" \
 --test-cond 'two_objects' \
@@ -60,7 +53,6 @@ do
 --test-query \"Colour1\" "
 
 ## SHAPE
-## Not the same query ...
 # 	# train on localizer words only
 # 	echo "python 04_decoding_ovr.py -w --train-cond 'localizer' --label Shape \
 # --split-queries \"Matching=='match'\" \
@@ -68,15 +60,15 @@ do
 # --timegen -s $sub \
 # --train-query \"Loc_word\" \
 # --test-cond 'one_object' \
-# --test-cond 'two_objects' "
+# --test-query \"Shape1\" \
+# --test-cond 'two_objects' \
+# --test-query \"Shape1\" "
 
 	# train on one object
 	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label Shape \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-cond 'one_object' \
 --train-query \"Shape1\" \
 --test-cond 'two_objects' \
@@ -89,8 +81,6 @@ do
 --timegen -s $sub --label Shape1 \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Shape1\" \
 --test-cond 'one_object' \
@@ -102,8 +92,6 @@ do
 --timegen -s $sub --label Shape2 \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Shape2\" \
 --test-cond 'one_object' \
@@ -118,8 +106,6 @@ do
 --timegen -s $sub --train-cond 'one_object' --label AllObject \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-query \"Shape1+Colour1\" \
 --test-cond 'two_objects' \
 --test-query \"Shape1+Colour1\" \
@@ -135,8 +121,6 @@ do
 --timegen -s $sub --train-cond 'two_objects' --label All1stObj \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-query \"Shape1+Colour1\" \
 --test-cond 'one_object' \
 --test-query \"Shape1+Colour1\" \
@@ -148,8 +132,6 @@ do
 --timegen -s $sub --train-cond 'two_objects' --label All2ndObj \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-query \"Shape2+Colour2\" \
 --test-cond 'one_object' \
 --test-query \"Shape1+Colour1\" \
@@ -157,31 +139,56 @@ do
 --test-query \"Shape1+Colour1\" "
 
 
+## COMPLEXITY
+	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+--train-cond 'two_objects' --label SameShape \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-query \"SameShape\" \
+--test-cond 'two_objects' \
+--test-query \"SameColour\" "
+
+echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+--train-cond 'two_objects' --label SameColour \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-query \"SameColour\" \
+--test-cond 'two_objects' \
+--test-query \"SameShape\" "
+
+echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+--train-cond 'two_objects' --label SameObject \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-query \"SameObject\"  "
+
+
+
 ## TRAIN OBJECTS ON SCENES (ORDER OF THE VISUAL SCENE)
 
-		# RIGHT OBJECT
-	echo "python 04_decoding_ovr.py -w \
---label AllRightObject --timegen -s $sub \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
---train-cond 'two_objects' \
---train-query \"Right_obj\" \
---test-cond 'one_object' \
---test-query \"Shape1+Colour1\" "
+# 		# RIGHT OBJECT
+# 	echo "python 04_decoding_ovr.py -w \
+# --label AllRightObject --timegen -s $sub \
+# --split-queries \"Matching=='match'\" \
+# --split-queries \"Matching=='nonmatch'\" \
+# --split-queries \"Flash==0\" \
+# --split-queries \"Flash==1\" \
+# --train-cond 'two_objects' \
+# --train-query \"Right_obj\" \
+# --test-cond 'one_object' \
+# --test-query \"Shape1+Colour1\" "
 	
-		# LEFT OBJECT
-	echo "python 04_decoding_ovr.py -w \
---label AllLeftObject --timegen -s $sub \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
---train-cond 'two_objects' \
---train-query \"Left_obj\" \
---test-cond 'one_object' \
---test-query \"Shape1+Colour1\" "
+# 		# LEFT OBJECT
+# 	echo "python 04_decoding_ovr.py -w \
+# --label AllLeftObject --timegen -s $sub \
+# --split-queries \"Matching=='match'\" \
+# --split-queries \"Matching=='nonmatch'\" \
+# --split-queries \"Flash==0\" \
+# --split-queries \"Flash==1\" \
+# --train-cond 'two_objects' \
+# --train-query \"Left_obj\" \
+# --test-cond 'one_object' \
+# --test-query \"Shape1+Colour1\" "
 
 
 ## RELATION
@@ -189,8 +196,6 @@ do
 --timegen -s $sub --label Relation \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Relation\" "
 
@@ -200,8 +205,6 @@ do
 --timegen -s $sub --label Button \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Button\" "
 
@@ -220,47 +223,41 @@ do
 --timegen -s $sub --label Perf \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
---train-query \"Perf\" "
+--train-query \"Perf\" \
+--filter ''" # empty filter to overwrite the config with perf filtering
 
 ## MATCHING
 	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label Matching \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --train-cond 'two_objects' \
 --train-query \"Matching\" "
 
 
 		## MISMATCHES
 
-	## ONE OBJECT MISMATCHES
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label ColourMismatch \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
---train-cond 'one_object' \
---train-query \"ColourMismatch\" "
+# 	## ONE OBJECT MISMATCHES
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label ColourMismatch \
+# --split-queries \"Flash==0\" \
+# --split-queries \"Flash==1\" \
+# --split-queries \"Matching=='match'\" \
+# --split-queries \"Matching=='nonmatch'\" \
+# --train-cond 'one_object' \
+# --train-query \"ColourMismatch\" "
 
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label ColourMismatch \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
---train-cond 'one_object' \
---train-query \"ColourMismatch\" "
-
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label ShapeMismatch \
+# --split-queries \"Flash==0\" \
+# --split-queries \"Flash==1\" \
+# --split-queries \"Matching=='match'\" \
+# --split-queries \"Matching=='nonmatch'\" \
+# --train-cond 'one_object' \
+# --train-query \"ShapeMismatch\" "
 
 	## TWO OBJECTS MISMATCHES
 	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label PropMismatch \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
@@ -268,8 +265,6 @@ do
 
 	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label BindMismatch \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
@@ -277,12 +272,18 @@ do
 
 	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label RelMismatch \
---split-queries \"Flash==0\" \
---split-queries \"Flash==1\" \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
 --train-query \"RelMismatch\" "
+
+
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Mismatches \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-cond 'two_objects' \
+--train-query \"Mismatches\" "
 
 
 

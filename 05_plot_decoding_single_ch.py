@@ -31,6 +31,7 @@ parser.add_argument('-c', '--config', default='config', help='path to config fil
 parser.add_argument('-s', '--subject', default='01_js180232',help='subject name')
 parser.add_argument('-o', '--out-dir', default='agg', help='output directory')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
+parser.add_argument('-v', '--verbose', action='store_true',  default=False, help='Print more stuff')
 args = parser.parse_args()
 
 # import config parameters
@@ -97,10 +98,11 @@ all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
 max_auc_all_facconds = []
 all_faccond_names = []
 ave_auc_all_labels = {}
+med_auc_all_labels = {}
 std_auc_all_labels = {}
 for label in all_labels:
     for train_cond in ["localizer", "obj", "scenes"]: # , "one_object", "two_objects", 
-        for match in ["match", "nonmatch", False]:
+        for split_query in ["match", "nonmatch", "flash", "noflash", False]:
             for gen_cond in [None, "localizer", "obj", "scenes"]: # , "one_object", "two_objects", 
                 # if train_cond == gen_cond: continue # skip when we both have one object, it is not generalization
                 all_AUC = []
@@ -109,17 +111,13 @@ for label in all_labels:
                 for fn in all_fns:
                     if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
                     if f"-{train_cond}-" not in fn: continue
-                    if not match: # if not match or nonmatch markers, keep all
-                        if "match" in fn or "nonmatch" in fn: continue
-                        match_str = ""
-                    elif match == "match": # keep only the files where we tested on matching trials
-                        if "match" not in fn or "nonmatch" in fn: continue
-                        match_str = "_match"
-                    elif match == "nonmatch": # do not keep these trials
-                        if "nonmatch" not in fn: continue
-                        match_str = ""
+                    if not split_query: # if not split_query or nonmatch markers, keep all non-splitqueries
+                            split_query_str = ""
+                            if "_for_" in fn: continue
                     else:
-                        raise RuntimeError("Matching issue")
+                        if f"for_{split_query}" not in fn: continue
+                        split_query_str = f"_for_{split_query}"
+                        # raise RuntimeError("Matching issue")
                     if gen_cond is not None:
                         if f"tested_on_{gen_cond}" not in fn: continue
                     else: # ensure we don't have generalization results
@@ -127,17 +125,17 @@ for label in all_labels:
                     # do not load the full mnius splits
                     if "full_minus_split" in fn: continue
 
-                    print('loading file ', fn)
+                    if args.verbose: print('loading file ', fn)
                     all_AUC.append(np.load(fn))
                     all_subs.append(op.basename(op.dirname(fn))[0:2])
                     all_items.append(op.basename(fn))
 
                 if not all_AUC: 
-                    print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} {'matching trials only' if match else ''}")
+                    print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} {f'for split query {split_query}' if split_query else ''}")
                     continue
-                print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} {'matching trials only' if match else ''}")
+                if args.verbose: print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} {f'for split query {split_query}' if split_query else ''}")
                 gen_str = f"_tested_on_{gen_cond}" if gen_cond is not None else ""
-                out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}{match_str}_{len(all_AUC)}ave"
+                out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}{split_query_str}_{len(all_AUC)}ave"
 
                 all_subs_labels = np.unique(all_subs)
                 all_subs = dummy_class_enc.fit_transform(all_subs)
@@ -146,11 +144,13 @@ for label in all_labels:
                 # average per subject, then accross subjects
                 all_AUC = np.array(all_AUC)
                 AUC_mean = np.mean(all_AUC, 0)
+                AUC_med = np.median(all_AUC, 0)
                 AUC_std = np.std(all_AUC, 0)
 
                 # store values for all labels for multi plot
                 if train_cond=="scenes" and gen_cond is None and "win" not in label:
                     ave_auc_all_labels[label] = np.diag(AUC_mean)
+                    med_auc_all_labels[label] = np.diag(AUC_med)
                     std_auc_all_labels[label] = np.diag(AUC_std)
 
                 # save max values to save to csv
@@ -161,15 +161,18 @@ for label in all_labels:
                 # print("CHECK THAT ALL EPOCHS INFO ARE THE SAME, and that the fb is correct")
                 # set_trace()
                 # epo_info = pickle.load(open(f"{op.basename(fn)}/{train_cond}_epo_info.p", "rb"))
-                epo_info = pickle.load(open(f"{fn.split('-_AUC')[0]}-_epo_info.p", "rb"))
-                 
-
+                # epo_info = pickle.load(open(f"{fn.split('-_AUC')[0]}-_epo_info.p", "rb"))
+                epo_info = pickle.load(open(fn.replace('AUC_diag.npy', 'epo_info.p'), "rb"))
                 
+                 
                 ylabel = get_ylabel_from_fn(fn)
                 is_contrast = True if (np.min(np.array(all_AUC)) < 0) or (np.max(np.array(all_AUC)) < .4) else False
 
-
-                plot_single_ch_perf(AUC_mean, epo_info, f"{out_fn}.png", title=f"{op.basename(out_fn).split(str(len(all_AUC))+'ave')[0]}".replace("_", " "), vmin=.45, vmax=.55)
+                # get vmin and vmax
+                vmin, vmax = np.min(AUC_mean), np.max(AUC_mean)
+                plot_single_ch_perf(AUC_mean, epo_info, f"{out_fn}_mean.png", title=f"{op.basename(out_fn).split(str(len(all_AUC))+'ave')[0]}".replace("_", " "), vmin=vmin, vmax=vmax)
+                vmin, vmax = np.min(AUC_med), np.max(AUC_med)
+                plot_single_ch_perf(AUC_med, epo_info, f"{out_fn}_median.png", title=f"{op.basename(out_fn).split(str(len(all_AUC))+'ave')[0]}".replace("_", " "), vmin=vmin, vmax=vmax)
 
                 # if gen_cond is None or "win" in label:
                 #     # try:
@@ -179,7 +182,7 @@ for label in all_labels:
                 # plot_GAT(data_mean=AUC_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, 
                 #          test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, gen_cond=gen_cond, slices=slices, version=version, window=window)
 
-                print(f"Finished {label} trained on {train_cond} with generalization {gen_cond} {'matching trials only' if match else ''}\n")
+                print(f"Finished {label} trained on {train_cond} with generalization {gen_cond} {f'for split query {split_query}' if split_query else ''}\n")
                 plt.close('all')
 
 

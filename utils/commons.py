@@ -14,6 +14,8 @@ from utils.params import TRIG_DICT
 short_to_long_cond = {"loc": "localizer", "one_obj": "one_object", "two_obj": "two_objects",
                       "localizer": "localizer", "one_object":"one_object"}
 
+full_fn_to_short = {"two_objects": 'scenes', "one_object": 'obj'}
+
 colors = ["vert", "bleu", "rouge"]
 shapes = ["triangle", "cercle", "carre"]
 
@@ -46,14 +48,10 @@ def get_paths(args, dirname='Decoding'):
 
     ### SET UP OUTPUT DIRECTORY AND FILENAME
     out_fn = get_out_fn(args, dirname=dirname)
-    xdawn_str = "dawn-" if args.xdawn else ""
-    out_fn += xdawn_str
-    autoreject_str = "autoreject-" if args.autoreject else ""
-    out_fn += autoreject_str
     print(f"out fn: {out_fn}")
 
     test_out_fns = []
-    if hasattr(args, "test_query1") and hasattr(args, "test_query2"): # typically for classical decoding
+    if hasattr(args, "test_query_1") and hasattr(args, "test_query_2"): # typically for classical decoding
         for i_fn, (test_cond, test_query1, test_query2) in enumerate(zip(args.test_cond, args.test_query_1, args.test_query_2)):
             test_query_str = f"{'_'.join(test_query1.split())}_vs_{'_'.join(test_query2.split())}"
             # add an int to the label to split the different tests
@@ -70,7 +68,7 @@ def get_paths(args, dirname='Decoding'):
     print(f'sleeping {rand_time} seconds to desynchronize parallel scripts')
     time.sleep(rand_time)
     
-    out_dir = f'{args.root_path}/Results/{dirname}_v{args.version}/{args.epochs_dir}/{args.subject}'
+    out_dir = op.dirname(out_fn)
     if not op.exists(out_dir):
         rand_time = float(str(abs(hash(str(args))))[0:8]) / 10000000
         print(f'sleeping some {rand_time} more seconds before attempting to create out dir')
@@ -90,7 +88,10 @@ def get_paths(args, dirname='Decoding'):
 
 
 def get_out_fn(args, dirname='Decoding'):
-    out_dir = f'{args.root_path}/Results/{dirname}_v{args.version}/{args.epochs_dir}/{args.subject}'
+    if args.dummy: # temporary directory
+        out_dir = f'{args.root_path}/Results/TMP/{dirname}_v{args.version}/{args.epochs_dir}/{args.subject}'
+    else:
+        out_dir = f'{args.root_path}/Results/{dirname}_v{args.version}/{args.epochs_dir}/{args.subject}'
 
     cat_string = f"_{args.cat}cat" if args.cat else ""
     cat_string = f"{cat_string[0:-3]}mean" if args.mean else cat_string
@@ -110,6 +111,10 @@ def get_out_fn(args, dirname='Decoding'):
         out_fn = f'{out_dir}/{args.label}-{train_query_1}_vs_{train_query_2}{reduc_dim_str}{shuffle_str}{fband_str}{cond_str}'
     else: # RSA
         out_fn = f'{out_dir}/{args.label}-{reduc_dim_str}{shuffle_str}{fband_str}{cond_str}'
+
+    out_fn += "dawn-" if args.xdawn else ""
+    out_fn += "autoreject-" if args.autoreject else ""
+    out_fn += args.filter if args.filter else ""
 
     out_fn = shorten_filename(out_fn)
     print('\noutput file will be in: ' + out_fn)
@@ -141,6 +146,9 @@ def shorten_filename(fn):
     fn = fn.replace('rouge', 'rg')
     fn = fn.replace('==', '=')
     fn = fn.replace('Matching=match', 'match')
+    fn = fn.replace('Matching=nonmatch', 'nonmatch')
+    fn = fn.replace('Flash=0', 'noflash')
+    fn = fn.replace('Flash=1', 'flash')
     
     # if fn is still too long, make some ugly changes
     if len(fn) > 255:
@@ -301,6 +309,7 @@ def predict(clf, data, multiclass=False):
 def complement_md(md):
     """ add entries to metadata:
     Right_obj and Left_obj = what object was on which side
+    Complexity = 2 minus number of shared properties
     """
     right_obj, left_obj = [], [] 
     for i, line in md.iterrows():
@@ -314,7 +323,16 @@ def complement_md(md):
             raise RuntimeError("Could not parse metadata to get left and right obejcts")
     md["Right_obj"] = right_obj
     md["Left_obj"] = left_obj
+    # from ipdb import set_trace; set_trace()
     return md
+
+def add_complexity_to_md(line):
+    complexity = 2
+    if line.Shape1 == line.Shape2:
+        complexity -= 1
+    if line.Colour1 == line.Colour2:
+        complexity -= 1
+    return complexity
 
 
 def get_ylabel_from_fn(fn):
@@ -401,3 +419,23 @@ def win_ave_smooth(data, nb_cat, mean=True):
                     new_data[:,:,t] = query_data[:,:,t-nb_to_cat:t].reshape(sz[0], sz[1] * nb_to_cat)
         data[i_d] = new_data
     return data
+
+
+def quality_from_cond(sub, cond, label='Matching', scoring='max', dir='/neurospin/unicog/protocols/MEG/Seq2Scene/Results/Decoding_test_quality_v7/Quality_test'):
+    """ get the score (from decoding_test_quality.sh)
+    for a single run
+    """ 
+    run_fns = glob(f"{dir}/{sub}_{label}-_cond-{cond}-*")
+    sep_char = "_"if label == "Matching" else "#"
+    runs = [op.basename(fn).split('run_nb=')[-1].split(sep_char)[0] for fn in run_fns]
+    score_per_run = {}
+    for run in runs:
+        _fn = f"{dir}/{sub}_{label}-_cond-{cond}-run_nb={run}*.txt" 
+        fn = glob(_fn)
+        if not fn: return
+        if len(fn) > 1: from ipdb import set_trace; set_trace()
+        score = float(op.basename(fn[0]).split(scoring)[-1][0:5])
+        score_per_run[run] = score
+    return score_per_run
+
+    # from ipdb import set_trace; set_trace()

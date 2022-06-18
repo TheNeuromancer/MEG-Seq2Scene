@@ -143,7 +143,8 @@ def plot_ch_scores(info, scores, cmap, kind='topomap', ch_type=None, title=None,
         raise ValueError('Could not find any channels of type %s.' % ch_type)
 
     chs = [info['chs'][pick] for pick in picks]
-    if not _check_ch_locs(chs):
+    # if not _check_ch_locs(chs):
+    if not _check_ch_locs(info): # change by TD 14/06/2022
         raise RuntimeError('No valid channel positions found')
     dev_head_t = info['dev_head_t']
     pos = np.empty((len(chs), 3))

@@ -7,26 +7,39 @@ v2: windows now .1-.4s for early and .45-.75s for late.
 v3: cat10, no reduc dim. All launching all decoding. 
 v4: now clipping - baselining - clipping again. All conds, including delay windowing 
 v5: reduc dim for single ch decoding + smaller time window
-v6: including the presence of a flash in the metadata. Also Decoding cimplexitiy with generalization (sameShape -> sameColor). 
-+ mean 3
+v6: including the presence of a flash in the metadata. Also Decoding cimplexitiy with generalization (sameShape -> sameColor). + mean 3
+v7: testing split queries for OVR + better way to arange for split queries aleas. TO BE REPLICATED IN THE NORMAL DECODING
+v8: quality threshold = 0.75 (decoding matching in a signle block with perf >.75) -> worse than original.
+v9: new Epochs named Epochs_filt with lowpass=30hz, highpass=0.1hz (instead of 0 and 0.01), - Launched both at 13h55 
+Finally corrected split_queries for OVR ! to be tested
+Corrected test-cond as well, there was a bug due to the change of shape of all_models (not for OVR)
+Actually the new epochs is the same as the old, more or less. The sfreq is 50hz, so there is a 25hz lowpass. Only highpass at 0.1hz is different
+v10: autoreject + filter with Perf==1 for all - good ! but still "hashy", need to smooth more. Maybe increase sfreq too...
+v11: Simple ridgeCV and equalize events for all conds (check for OVR if it works!) + trying complexity regression deocding (with equalize too, maybe try without) + single_channel decoding.
+add complexity decoding!
+
+v12: 100hz - still with ridgeCV !
+try increasing sfreq? Maybe without timegen? then check the decode funcs.
 
 
-does split-queries work for OVR??
-LOOKS LIKE NOT
+Trying REAL split queries for decoding.py = KindMismatch -> launched at (allv8) -> buged, to lauch again
+propmismatch weird perf before image: results are from decoding.py BUT NOT FROM SPLIT QUERIES.
+
+change Error_type to lower case? Would be great for grepping logs.
+single channel decoding -- check if it works in our setup and if not then add window ?
+
+
+patterns are shite, try single channel decoding instead
+
+
+
+Response loc for mismatch??
+
 
 Use principal angles between subspaces? https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.subspace_angles.html
-
-
-TODO: add split queries for test queries as well (currently only for training queries).
-split queries not working well, we are missing trials for some queries in some folds, leading to having 0 examplars of some classes. 
-
 angle between first and second color (or shape) encoding in scenes ? How is it compared to signle objects?
-add n_repeats to the config
-
-
 
 make ICA separately for each block!!! or not at all...
-
 
 Binding condition: triangle bleue vs other triangles, generalized to triangle bleue vs other triangles when the other object is blue (and optionally also not a triangle)
 
