@@ -30,6 +30,16 @@ do
 # --test-cond 'two_objects' \
 # --test-query \"Colour2\" "
 
+	# kind of mismatch one obj
+	echo "python 04_decoding_single_ch.py -w \
+-s $sub --label ColourMismatch \
+--train-cond 'one_object' \
+--train-query \"ColourMismatch\" "
+	echo "python 04_decoding_single_ch.py -w \
+-s $sub --label ShapeMismatch \
+--train-cond 'one_object' \
+--train-query \"ShapeMismatch\" "
+
 	# train on two objects
 	echo "python 04_decoding_single_ch.py -w \
 -s $sub --label Colour1 \
@@ -295,6 +305,14 @@ do
 --windows \"0.,.8\" \
 --test-query \"Shape1\" "
 
+	## relation
+	echo "python 04_decoding_single_ch.py -w \
+-s $sub --label winRelation \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-cond 'two_objects' \
+--train-query \"Relation\" \
+--windows \"1.2,2.\" "
 
 	## OBJECTS
 	# train on all other trials, gen to first, then to 2nd object
@@ -369,6 +387,15 @@ do
 --train-query \"Shape2\" \
 --windows \"3.5,5.\" "
 
+## RELATION
+	echo "python 04_decoding_single_ch.py -w \
+-s $sub --label winRelationdelay \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-cond 'two_objects' \
+--train-query \"Relation\" \
+--windows \"3.5,5.\" "
+
 ## COLORS
 	echo "python 04_decoding_single_ch.py -w \
 -s $sub --label winColoursdelay \
@@ -418,7 +445,7 @@ do
 
 ## PERF
 	echo "python 04_decoding_single_ch.py -w \
--s $sub --label Perf \
+-s $sub --label winPerf \
 --windows \"6.,8.\" \
 --split-queries \"Matching=='match'\" \
 --split-queries \"Matching=='nonmatch'\" \

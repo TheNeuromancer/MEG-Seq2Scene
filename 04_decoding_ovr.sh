@@ -208,6 +208,12 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --train-cond 'two_objects' \
 --train-query \"Button\" "
 
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Button \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-cond 'one_object' \
+--train-query \"Button\" "
 
 ## FLASH
 	echo "python 04_decoding_ovr.py -w \
@@ -227,61 +233,62 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --train-query \"Perf\" \
 --filter ''" # empty filter to overwrite the config with perf filtering
 
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Perf \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--train-cond 'one_object' \
+--train-query \"Perf\" \
+--filter ''" # empty filter to overwrite the config with perf filtering
+
 ## MATCHING
 	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label Matching \
 --train-cond 'two_objects' \
 --train-query \"Matching\" "
 
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Matching \
+--train-cond 'one_object' \
+--train-query \"Matching\" "
 
 		## MISMATCHES
 
-# 	## ONE OBJECT MISMATCHES
-# 	echo "python 04_decoding_ovr.py -w \
-# --timegen -s $sub --label ColourMismatch \
-# --split-queries \"Flash==0\" \
-# --split-queries \"Flash==1\" \
-# --split-queries \"Matching=='match'\" \
-# --split-queries \"Matching=='nonmatch'\" \
-# --train-cond 'one_object' \
-# --train-query \"ColourMismatch\" "
+	## ONE OBJECT MISMATCHES
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label ColourMismatch \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
+--train-cond 'one_object' \
+--train-query \"ColourMismatch\" "
 
-# 	echo "python 04_decoding_ovr.py -w \
-# --timegen -s $sub --label ShapeMismatch \
-# --split-queries \"Flash==0\" \
-# --split-queries \"Flash==1\" \
-# --split-queries \"Matching=='match'\" \
-# --split-queries \"Matching=='nonmatch'\" \
-# --train-cond 'one_object' \
-# --train-query \"ShapeMismatch\" "
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label ShapeMismatch \
+--split-queries \"Flash==0\" \
+--split-queries \"Flash==1\" \
+--train-cond 'one_object' \
+--train-query \"ShapeMismatch\" "
+
 
 	## TWO OBJECTS MISMATCHES
 	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label PropMismatch \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
 --train-query \"PropMismatch\" "
 
 	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label BindMismatch \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
 --train-query \"BindMismatch\" "
 
 	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label RelMismatch \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
 --train-query \"RelMismatch\" "
 
 
 	echo "python 04_decoding_ovr.py -w \
 --timegen -s $sub --label Mismatches \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
 --train-cond 'two_objects' \
 --train-query \"Mismatches\" "
 

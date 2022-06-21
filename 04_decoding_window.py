@@ -141,6 +141,8 @@ for window_str, query, cond, train_fn in zip(args.windows, args.train_query, arg
     #         print(f"\n doing classes {classe1} vs {classe2}: {np.degrees(angle_between(a1, a2))} degrees")
     #         print(f"and cosine_similarity: {cosine_similarity(a1[np.newaxis,:], a2[np.newaxis,:])[0][0]}")
 
+    print("Done")
+
 
 print(f'Finished training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
 

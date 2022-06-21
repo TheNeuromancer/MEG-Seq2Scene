@@ -36,6 +36,7 @@ parser.add_argument('-s', '--subject', default='01_js180232',help='subject name'
 parser.add_argument('-o', '--out-dir', default='agg', help='output directory')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
 parser.add_argument('--ovr', action='store_true',  default=False, help='Whether to get the one versus rest directory or classic decoding')
+parser.add_argument('--regression', action='store_true',  default=False, help='Whether to get the regression decoding or classic decoding')
 parser.add_argument('--slices', action='store_true',  default=False, help='Whether to make horizontal slice plots of single decoder')
 parser.add_argument('--only_agg', action='store_true',  default=False, help='Do plot for each available condition, or just the aggregates plots with multiple conditions')
 parser.add_argument('-r', '--remake', action='store_true',  default=False, help='recompute average again, even if plotting only aggregates')
@@ -59,9 +60,12 @@ if args.slices:
 else:
     slices = []
 
+ylabel = "R" if args.regression else "AUC"
+ybar = 0 if args.regression else 0.5 # vertical line
+print(ylabel)
 
 print('This script lists all the .npy files in all the subjects decoding output directories, takes the set of this and the averages all unique filenames to get on plot for all subjects per condition')
-decoding_dir = f"Decoding_ovr_v{args.version}" if args.ovr else f"Decoding_v{args.version}"
+decoding_dir = f"Decoding_ovr_v{args.version}" if args.ovr else f"Regression_decoding_v{args.version}" if args.regression else f"Decoding_v{args.version}"
 if args.subject in ["all", "v1", "v2",  "goods"]: # for v1 and v2 we filter later
     in_dir = f"{args.root_path}/Results/{decoding_dir}/{args.epochs_dir}/*/"
 else:
@@ -82,7 +86,7 @@ else:
     os.makedirs(out_dir)
 
 # list all .npy files in the directory
-all_fns = natsorted(glob(in_dir + '/*AUC*.npy'))
+all_fns = natsorted(glob(in_dir + f'/*{ylabel}.npy'))
 if not all_fns:
     raise RuntimeError(f"Did not find any AUC files in {in_dir}/*AUC*.npy ... Did you pass the right config?")
 
@@ -110,7 +114,6 @@ dummy_labbin = LabelBinarizer()
 mag_idx, grad_idx = [pickle.load(open(f"{args.root_path}/Data/{s}_indices.p", "rb")) for s in ['mag', 'grad']]
 mag_info, grad_info = [pickle.load(open(f"{args.root_path}/Data/{s}_info.p", "rb")) for s in ['mag', 'grad']]
 
-
 data_fn = f"{op.dirname(op.dirname(out_dir))}/all_data.p"
 diags_fn = f"{op.dirname(op.dirname(out_dir))}/all_diags.p"
 patterns_fn = f"{op.dirname(op.dirname(out_dir))}/all_patterns.p"
@@ -131,7 +134,7 @@ else:
             if args.slices:
                 if train_cond in ["localizer"]: slices = slices_loc
                 if train_cond == "one_object": slices = slices_one_obj
-            for split_query in ["match", "nonmatch", "flash", "noflash", False]:
+            for split_query in ["match", "nonmatch", "flash", "noflash", "match_or_Error_type=l0", "match_or_Error_type=l1", "match_or_Error_type=l2", False]:
                 for gen_cond in [None, "localizer", "obj", "scenes"]: # , "one_object", "two_objects", 
                     # if train_cond == gen_cond: continue # skip when we both have one object, it is not generalization
                     all_patterns = []
@@ -166,10 +169,12 @@ else:
                             # pattern_fn = f"{op.dirname(fn)}/{'_'.join(op.basename(fn).split('_')[0:2])}_best_pattern_t*.npy"
                             pattern_fn = f"{op.dirname(fn)}/{op.basename(fn).replace('_AUC.npy', '')}_best_pattern_t*.npy"
                             pattern_fn = glob(pattern_fn)
-                            if len(pattern_fn) != 1:
+                            if len(pattern_fn) == 0:
+                                print(f"!!!No pattern found!!! passing for now but look it up")
+                            elif len(pattern_fn) > 1:
                                 print(f"!!!Multiple patterns found!!! passing for now but look it up")
-                                # set_trace()
-                            all_patterns.append(np.load(pattern_fn[0]))
+                            else:
+                                all_patterns.append(np.load(pattern_fn[0]))
                             
 
                     if not all_AUC: 
@@ -193,24 +198,30 @@ else:
                         print(f"did find any auc for {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}, continuing")
                         continue
                     all_AUC = np.array(all_AUC)
+                    if args.regression: # clipping R2s
+                        all_AUC = np.clip(all_AUC, -1, 1)
                     try:
-                        AUC_mean = np.nanmean(all_AUC, 0)
+                        # AUC_mean = np.nanmean(all_AUC, 0)
+                        AUC_mean = np.nanmedian(all_AUC, 0)
                     except:
                         print(f"Shape mismatch ... continuing for now but look it up")
                         continue
                         set_trace()
                     AUC_std = sem(all_AUC, 0, nan_policy='omit')
-                    if not split_query and (gen_cond is None): 
-                        pattern = np.median(all_patterns, 0)
-                        if pattern.ndim == 2: # OVR, one additional dimension
-                            pattern = np.median(pattern, 0)
-                            all_patterns = np.concatenate(all_patterns) # first dim = subjs*classes
+                    if not split_query and (gen_cond is None):
+                        if len(all_patterns) == 0: 
+                            print(f"Not a single pattern found ...") 
+                        else:
+                            pattern = np.median(all_patterns, 0)
+                            if pattern.ndim == 2: # OVR, one additional dimension
+                                pattern = np.median(pattern, 0)
+                                all_patterns = np.concatenate(all_patterns) # first dim = subjs*classes
+                    
+                            pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot
 
                     # store values for all labels for multi plot
                     # if train_cond=="scenes": # and gen_cond is None and "win" not in label:
                     auc_all_labels[f"{label}_{train_cond}_{gen_cond}_{split_query_str}"] = np.array(all_AUC)
-                    if not split_query and (gen_cond is None): 
-                        pattern_all_labels[f"{label}_{train_cond}"] = pattern
 
                     # save max values to save to csv
                     max_auc_all_facconds.append(np.max(AUC_mean))
@@ -243,11 +254,10 @@ else:
                         test_tmin, test_tmax = [float(s) for s in fn.split("#")[2].split(",")]
                         window = True
                     
-                    ylabel = get_ylabel_from_fn(fn)
                     is_contrast = True if (np.min(np.array(all_AUC)) < 0) or (np.max(np.array(all_AUC)) < .4) else False
 
                     if gen_cond is None or "win" in label:
-                        plot_diag(data_mean=AUC_mean, data_std=AUC_std, out_fn=out_fn, train_cond=train_cond, 
+                        plot_diag(data_mean=AUC_mean, data_std=AUC_std, out_fn=out_fn, train_cond=train_cond, ybar=ybar,
                             train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, window=window)
                         
                         # ## plot diags for all subjects
@@ -303,51 +313,57 @@ word_onsets, image_onset = get_onsets("scenes", version=version)
 
 print(diag_auc_all_labels.keys())
 
-if args.ovr:
-    # mismatch type
-    labels = ['Matching_scenes_None_', 'PropMismatch_scenes_None_', 'BindMismatch_scenes_None_', 'RelMismatch_scenes_None_'] #, 'Button_scenes_None_', 'Perf_scenes_None_']
-    joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_mismatches.png', tmin=4.5, word_onsets=word_onsets, image_onset=image_onset)
+# if args.ovr:
+# mismatch type
+labels = ['Matching_scenes_None_', 'PropMismatch_scenes_None_', 'BindMismatch_scenes_None_', 'RelMismatch_scenes_None_'] #, 'Button_scenes_None_', 'Perf_scenes_None_']
+joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_mismatches.png', tmin=4.5, word_onsets=word_onsets, image_onset=image_onset)
 
-    # only basics
-    labels = ['S1_scenes_None_', 'C1_scenes_None_', 'R_scenes_None_', 'S2_scenes_None_', 'C2_scenes_None_']
-    joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_basic.png', word_onsets=word_onsets, image_onset=image_onset)
-    labels = ['Flash_scenes_None_', 'Matching_scenes_None_', 'Button_scenes_None_', 'Perf_scenes_None_'] # 'SameObj_scenes_None_', 
-    joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_basic2.png', word_onsets=word_onsets, image_onset=image_onset)
+# only basics
+labels = ['S1_scenes_None_', 'C1_scenes_None_', 'R_scenes_None_', 'S2_scenes_None_', 'C2_scenes_None_']
+joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_basic.png', word_onsets=word_onsets, image_onset=image_onset)
+labels = ['Flash_scenes_None_', 'Matching_scenes_None_', 'Button_scenes_None_', 'Perf_scenes_None_'] # 'SameObj_scenes_None_', 
+joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, y_inc=.1, out_fn=f'{out_dir}/scenes_joyplot_basic2.png', word_onsets=word_onsets, image_onset=image_onset)
 
-    # # Shape gen
-    # labels = ['S1_scenes_None_', 'S2_scenes_None_', 'S1_scenes_scenes_', 'S2_scenes_scenes_']
-    # joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_shape_gen.png', word_onsets=word_onsets, image_onset=image_onset)
+# # Shape gen
+# labels = ['S1_scenes_None_', 'S2_scenes_None_', 'S1_scenes_scenes_', 'S2_scenes_scenes_']
+# joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_shape_gen.png', word_onsets=word_onsets, image_onset=image_onset)
 
-    # extended
-    labels = ['S1_scenes_None_', 'C1_scenes_None_', 'R_scenes_None_', 'S2_scenes_None_', 'C2_scenes_None_', 'Flash_scenes_None_', 'Matching_scenes_None_', 'Button_scenes_None_', 'Perf_scenes_None_']
-    joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_extended.png', word_onsets=word_onsets, image_onset=image_onset)
-
-
-
-    # object properties and gen
-    tmin, tmax = tmin_tmax_dict["obj"]
-    times = np.arange(tmin, tmax+1e-10, 1./args.sfreq)
-    word_onsets, image_onset = get_onsets("obj", version=version)
-    labels = ['S_obj_None_', 'C_obj_None_'] #, 'AllObj_obj_None_', 'CMismatch_obj_None_', 'SMismatch_obj_None_']
-    joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, tmax=4, times=times, out_fn=f'{out_dir}/scenes_joyplot_obj_props.png', word_onsets=word_onsets, image_onset=image_onset)
-    # labels = ['S_obj_None_', 'S_0_obj_scenes_', 'S_1_obj_scenes_', 'C_obj_None_', 'C_0_obj_scenes_', 'C_1_obj_scenes_']
-    # joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, tmax=4, times=times, out_fn=f'{out_dir}/scenes_joyplot_obj_prop_and_gen.png', word_onsets=word_onsets, image_onset=image_onset)
-
-    # object properties gen to scenes
-    labels = ['S_0_obj_scenes_', 'S_1_obj_scenes_', 'C_0_obj_scenes_', 'C_1_obj_scenes_']
-    # set_trace()
-    joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_obj_gen.png', word_onsets=word_onsets, image_onset=image_onset)
-
-else:
-    labels = ['SameC_scenes_None_', 'SameS_scenes_None_', 'SameC_0_scenes_scenes_', 'SameS_0_scenes_scenes_', 'SameObj_scenes_None_']
-    # labels = ['SameC_scenes_None_', 'SameS_scenes_None_', 'SameObj_scenes_None_']
-    joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_complexity.png', word_onsets=word_onsets, image_onset=image_onset)
-
-    labels = ['PropMismatch_scenes_None_', 'BindMismatch_scenes_None_', 'RelMismatch_scenes_None_']
-    joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, tmin=4.5, times=times, out_fn=f'{out_dir}/scenes_joyplot_mismatches.png', word_onsets=word_onsets, image_onset=image_onset)
+# extended
+labels = ['S1_scenes_None_', 'C1_scenes_None_', 'R_scenes_None_', 'S2_scenes_None_', 'C2_scenes_None_', 'Flash_scenes_None_', 'Matching_scenes_None_', 'Button_scenes_None_', 'Perf_scenes_None_']
+joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_extended.png', word_onsets=word_onsets, image_onset=image_onset)
 
 
 
+labels = ['PropMismatch_scenes_None_', 'BindMismatch_scenes_None_', 'RelMismatch_scenes_None_']
+joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, tmin=4.5, times=times, out_fn=f'{out_dir}/scenes_joyplot_mismatches.png', word_onsets=word_onsets, image_onset=image_onset)
+
+## Complexity
+labels = ['SameC_scenes_None_', 'SameS_scenes_None_', 'SameC_0_scenes_scenes_', 'SameS_0_scenes_scenes_', 'SameObj_scenes_None_']
+# labels = ['SameC_scenes_None_', 'SameS_scenes_None_', 'SameObj_scenes_None_']
+joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_complexity.png', word_onsets=word_onsets, image_onset=image_onset)
+
+
+
+# object properties
+tmin, tmax = tmin_tmax_dict["obj"]
+times = np.arange(tmin, tmax+1e-10, 1./args.sfreq)
+word_onsets, image_onset = get_onsets("obj", version=version)
+labels = ['S_obj_None_', 'C_obj_None_'] #, 'CMismatch_obj_None_', 'SMismatch_obj_None_'] # ] #, 'AllObj_obj_None_',
+joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, tmax=4, times=times, out_fn=f'{out_dir}/scenes_joyplot_obj_props.png', word_onsets=word_onsets, image_onset=image_onset)
+labels = ['SMismatch_obj_None_', 'CMismatch_obj_None_']
+joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, tmin=2, tmax=4, times=times, out_fn=f'{out_dir}/scenes_joyplot_obj_mismatches.png', word_onsets=word_onsets, image_onset=image_onset)
+labels = ['Matching_obj_None_', 'Button_obj_None_', 'Perf_obj_None_']
+joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, tmax=4, times=times, out_fn=f'{out_dir}/scenes_joyplot_obj_props2.png', word_onsets=word_onsets, image_onset=image_onset)
+# generalization
+# labels = ['S_obj_None_', 'S_0_obj_scenes_', 'S_1_obj_scenes_', 'C_obj_None_', 'C_0_obj_scenes_', 'C_1_obj_scenes_']
+# joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, tmax=4, times=times, out_fn=f'{out_dir}/scenes_joyplot_obj_prop_and_gen.png', word_onsets=word_onsets, image_onset=image_onset)
+
+# object properties gen to scenes
+labels = ['S_0_obj_scenes_', 'S_1_obj_scenes_', 'C_0_obj_scenes_', 'C_1_obj_scenes_']
+# set_trace()
+joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_obj_gen.png', word_onsets=word_onsets, image_onset=image_onset)
+
+# else:
 
 
 # joyplot_with_stats(data_dict=diag_auc_all_labels, labels=diag_auc_all_labels.keys(), times=times, out_fn=f'{out_dir}/scenes_joyplot_all.png', word_onsets=word_onsets, image_onset=image_onset) # ['S1','C1','R','S2','C2','All1stObj','All2ndObj']

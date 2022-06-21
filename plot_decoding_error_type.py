@@ -115,7 +115,7 @@ else:
 # plt.close()
 
 
-## TWO OBJECTS
+## TWO OBJECTS - separate decoders
 train_tmin, train_tmax = tmin_tmax_dict["scenes"]
 word_onsets, image_onset = get_onsets("scenes", version=version)
 pmis_fns = [fn for fn in all_fns if "PropMismatch" in fn]
@@ -138,7 +138,7 @@ ax.plot(times, pmis_auc, label='Mismatch on Property')
 ax.plot(times, bmis_auc, label='Mismatch on Binding')
 ax.plot(times, rmis_auc, label='Mismatch on Relation')
 plt.legend()
-ax.set_xlim(image_onset[0]-.2)
+ax.set_xlim(image_onset[0]-.2, 7.)
 ax.axvline(x=image_onset[0], linestyle='-', color='k')
 ax.axhline(y=0.5, color='k', linestyle='-', alpha=.5)
 plt.ylabel("AUC")
@@ -146,5 +146,40 @@ plt.xlabel("Time (s)")
 
 out_fn = f"{out_dir}/TwoObjMismatches_{len(pmis_fns)}ave"
 plt.savefig(f'{out_fn}_AUC_diag.png')
+
+
+
+## TWO OBJECTS - single decoder and slit queries for each mismatch
+train_tmin, train_tmax = tmin_tmax_dict["scenes"]
+word_onsets, image_onset = get_onsets("scenes", version=version)
+pmis_fns = [fn for fn in all_fns if "KindMismatch" in fn and "Error_type=l0" in fn]
+pmis_auc = np.diag(np.mean([np.load(fn) for fn in pmis_fns], 0))
+pmis_auc_sem = np.diag(sem([np.load(fn) for fn in pmis_fns], 0))
+
+bmis_fns = [fn for fn in all_fns if "KindMismatch" in fn and "Error_type=l1" in fn]
+bmis_auc = np.diag(np.mean([np.load(fn) for fn in bmis_fns], 0))
+bmis_auc_sem = np.diag(sem([np.load(fn) for fn in bmis_fns], 0))
+
+rmis_fns = [fn for fn in all_fns if "KindMismatch" in fn and "Error_type=l2" in fn]
+rmis_auc = np.diag(np.mean([np.load(fn) for fn in rmis_fns], 0))
+rmis_auc_sem = np.diag(sem([np.load(fn) for fn in rmis_fns], 0))
+
+n_times = pmis_auc.shape[0]
+times = np.linspace(train_tmin, train_tmax, n_times)
+
+fig, ax = plt.subplots()
+ax.plot(times, pmis_auc, label='Mismatch on Property')
+ax.plot(times, bmis_auc, label='Mismatch on Binding')
+ax.plot(times, rmis_auc, label='Mismatch on Relation')
+plt.legend()
+ax.set_xlim(image_onset[0]-.2, 7.)
+ax.axvline(x=image_onset[0], linestyle='-', color='k')
+ax.axhline(y=0.5, color='k', linestyle='-', alpha=.5)
+plt.ylabel("AUC")
+plt.xlabel("Time (s)")
+
+out_fn = f"{out_dir}/TwoObjMismatches_split_query_{len(pmis_fns)}ave"
+plt.savefig(f'{out_fn}_AUC_diag.png')
+
 
 print("ALL DONE")

@@ -92,11 +92,13 @@ clf = mne.decoding.LinearModel(clf)
 
 ### DECODE ###
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
-all_models, R2 = regression_decode(args, epochs, class_queries, clf)
+all_models, R2, R = regression_decode(args, epochs, class_queries, clf)
 print(f'Finished training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
 
 ### SAVE RESULTS ###
-save_results(out_fn, R2, all_models)
+save_results(out_fn, R2, all_models, fn_end="R2")
+save_results(out_fn, R, all_models, fn_end="R")
+save_best_pattern(out_fn, R2, all_models) ## Save best model's pattern
 
 # ### PLOT PERFORMANCE ### # no split query à priori
 # version = "v1" if int(args.subject[0:2]) < 8 else "v2"

@@ -5,7 +5,7 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "15"
+    version: str = "13"
     root_path: str = "/neurospin/unicog/protocols/MEG/Seq2Scene/"
     epochs_dir: str = "Epochs_100hz"
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
@@ -30,12 +30,11 @@ class Config:
     n_folds_win: int = 10 # number of shuffle splits for the window decoding analysis 
     crossval_win: str = "kfold" # cross-validation scheme for the window decoding analysis 
     reduc_dim_win: float = 0 # dimensionality reduction for the window decoding analysis 
-    ## Decoding single channel parameters
+    ## Decoding window parameters
     reduc_dim_sing: float = 0 # dimensionality reduction
-    ## General analysis parameters
-    cat: int = False # number of timepoints to concatenate
+    cat: int = 5 # number of timepoints to concatenate
     mean: bool = False # Wether to average instead of concatenate if using the "cat" argument
-    smooth: int = 21 # hanning smoothing window, in timesample,
+    smooth: int = 11 # hanning smoothing window, in timesample,
     clip: bool = True # Whether to clip to the 5th and 95th percentile for each channel
     subtract_evoked: bool = False # Whether to subtract the evoked signal from the epochs
     avg_clf: bool = False # Whether to average classifiers across cval folds
@@ -44,6 +43,10 @@ class Config:
     quality_th: float = 0 #.75
     filter: str = "Perf==1"
     equalize_events: bool = False
+
+    # # TRF delays
+    # tstart: float = 0.
+    # tstop: float = 1.
 
 
     def print_subjects_names(self):

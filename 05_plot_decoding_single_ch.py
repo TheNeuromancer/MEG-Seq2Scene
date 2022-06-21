@@ -159,9 +159,6 @@ for label in all_labels:
 
                 ## get epochs info
                 # print("CHECK THAT ALL EPOCHS INFO ARE THE SAME, and that the fb is correct")
-                # set_trace()
-                # epo_info = pickle.load(open(f"{op.basename(fn)}/{train_cond}_epo_info.p", "rb"))
-                # epo_info = pickle.load(open(f"{fn.split('-_AUC')[0]}-_epo_info.p", "rb"))
                 epo_info = pickle.load(open(fn.replace('AUC_diag.npy', 'epo_info.p'), "rb"))
                 
                  
@@ -169,10 +166,16 @@ for label in all_labels:
                 is_contrast = True if (np.min(np.array(all_AUC)) < 0) or (np.max(np.array(all_AUC)) < .4) else False
 
                 # get vmin and vmax
-                vmin, vmax = np.min(AUC_mean), np.max(AUC_mean)
-                plot_single_ch_perf(AUC_mean, epo_info, f"{out_fn}_mean.png", title=f"{op.basename(out_fn).split(str(len(all_AUC))+'ave')[0]}".replace("_", " "), vmin=vmin, vmax=vmax)
-                vmin, vmax = np.min(AUC_med), np.max(AUC_med)
-                plot_single_ch_perf(AUC_med, epo_info, f"{out_fn}_median.png", title=f"{op.basename(out_fn).split(str(len(all_AUC))+'ave')[0]}".replace("_", " "), vmin=vmin, vmax=vmax)
+                # vmin, vmax = np.min(AUC_mean), np.max(AUC_mean)
+                vmin = 0.45
+                vmax = .55 if AUC_mean.max()<.55 else .6 if AUC_mean.max()<.6 else .7 if AUC_mean.max()<.7 else .8 if AUC_mean.max()<.8 else 1
+                title = f"{op.basename(out_fn).split(str(len(all_AUC))+'ave')[0]} - Max AUC = {AUC_mean.max():.3f}".replace("_", " ")
+                plot_single_ch_perf(AUC_mean, epo_info, f"{out_fn}_mean.png", title=title, vmin=vmin, vmax=vmax)
+                
+                # vmin, vmax = np.min(AUC_med), np.max(AUC_med)
+                vmax = .55 if AUC_mean.max()<.55 else .6 if AUC_mean.max()<.6 else .7 if AUC_mean.max()<.7 else .8 if AUC_mean.max()<.8 else 1
+                title = f"{op.basename(out_fn).split(str(len(all_AUC))+'ave')[0]} - Max AUC = {AUC_med.max():.3f}".replace("_", " ")
+                plot_single_ch_perf(AUC_med, epo_info, f"{out_fn}_median.png", title=title, vmin=vmin, vmax=vmax)
 
                 # if gen_cond is None or "win" in label:
                 #     # try:
@@ -184,16 +187,3 @@ for label in all_labels:
 
                 print(f"Finished {label} trained on {train_cond} with generalization {gen_cond} {f'for split query {split_query}' if split_query else ''}\n")
                 plt.close('all')
-
-
-# ## all basic decoders diagonals on the same plot
-# tmin, tmax = tmin_tmax_dict["scenes"]
-# times = np.arange(tmin, tmax+1e-10, 1./args.sfreq)
-# word_onsets, image_onset = get_onsets("scenes", version=version)
-# plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props_multi.png', word_onsets=word_onsets, image_onset=image_onset)
-# plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props.png', word_onsets=word_onsets, image_onset=image_onset)
-
-# # plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=ave_auc_all_labels.keys(), times=times, out_fn=f'{out_fn}_scenes_props_multi_all.png', word_onsets=word_onsets, image_onset=image_onset) # ['S1','C1','R','S2','C2','All1stObj','All2ndObj']
-# # plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=ave_auc_all_labels.keys(), times=times, out_fn=f'{out_fn}_scenes_props_all.png', word_onsets=word_onsets, image_onset=image_onset) # ['S1','C1','R','S2','C2','All1stObj','All2ndObj']
-# plot_all_props_multi(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, labels=['S1','C1','R','S2','C2','AllObjScenes','All2ndObjScenes'], times=times, out_fn=f'{out_fn}_scenes_props_multi_all.png', word_onsets=word_onsets, image_onset=image_onset)
-# plot_all_props(ave_dict=ave_auc_all_labels, std_dict=std_auc_all_labels, times=times, out_fn=f'{out_fn}_scenes_props_all.png', word_onsets=word_onsets, image_onset=image_onset)

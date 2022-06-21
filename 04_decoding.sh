@@ -4,17 +4,17 @@ do
 	# do
 
 ## MISMTACHES
-# 	## TRAIN ON ONE OBJECT
-# 	echo "python 04_decoding.py \
-# --train-cond 'one_object' --label KindMismatch \
-# --timegen -s $sub \
-# --train-query-1 \"Matching=='match'\" \
-# --train-query-2 \"Matching=='nonmatch'\" \
-# --split-queries \"Matching=='match' or Error_type=='colour'\" \
-# --split-queries \"Matching=='match' or Error_type=='shape'\" \
-# --test-cond 'two_objects' \
-# --test-query-1 \"Matching=='match'\" \
-# --test-query-2 \"Matching=='nonmatch'\" "
+	## TRAIN ON ONE OBJECT
+	echo "python 04_decoding.py \
+--train-cond 'one_object' --label KindMismatch \
+--timegen -s $sub \
+--train-query-1 \"Matching=='match'\" \
+--train-query-2 \"Matching=='nonmatch'\" \
+--split-queries \"Matching=='match' or Error_type=='colour'\" \
+--split-queries \"Matching=='match' or Error_type=='shape'\" \
+--test-cond 'two_objects' \
+--test-query-1 \"Matching=='match'\" \
+--test-query-2 \"Matching=='nonmatch'\" "
 
 
 	echo "python 04_decoding.py \

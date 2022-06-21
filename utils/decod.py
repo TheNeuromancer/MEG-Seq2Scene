@@ -11,7 +11,7 @@ from natsort import natsorted
 import pandas as pd
 import pickle
 from copy import deepcopy
-from tqdm import trange
+from tqdm import tqdm, trange
 from sklearn.preprocessing import StandardScaler, RobustScaler, label_binarize, OneHotEncoder
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.linear_model import RidgeClassifier, RidgeClassifierCV, LogisticRegression, LogisticRegressionCV, LinearRegression, Ridge, RidgeCV
@@ -22,7 +22,7 @@ from sklearn.utils.extmath import softmax
 from sklearn.decomposition import PCA
 from sklearn.multiclass import OneVsRestClassifier
 from scipy.signal import savgol_filter
-from scipy.stats import ttest_1samp, sem, wilcoxon
+from scipy.stats import ttest_1samp, sem, wilcoxon, pearsonr
 from autoreject import AutoReject
 from mne.stats import permutation_cluster_1samp_test, fdr_correction
 
@@ -53,9 +53,9 @@ cmaptab10 = plt.cm.get_cmap('tab10', 10)
 *********************************
 Called in the main scripts """
 
-# ///////////////////////////////////////////////////////// #
+# ///////////////////////////////////////////////////////// #
 ################## PATHS AND DATA LOADING ###################
-# ///////////////////////////////////////////////////////// #
+# ///////////////////////////////////////////////////////// #
 
 def load_data(args, fn, query_1='', query_2=''):
     epochs = mne.read_epochs(fn, preload=True, verbose=False)
@@ -111,7 +111,7 @@ def load_data(args, fn, query_1='', query_2=''):
         epochs = [epo[np.random.choice(range(len(epo)), n_trials, replace=False)] for epo in epochs]
 
 
-    ### SELECT ONLY CH THAT HAD AN EFFECT IN THE LOCALIZER
+    ### SELECT ONLY CH THAT HAD AN EFFECT IN THE LOCALIZER
     if args.localizer:
         print("not implemented yet ...")
         raise
@@ -152,7 +152,7 @@ def load_data(args, fn, query_1='', query_2=''):
 
     metadatas = [epo.metadata for epo in epochs]
 
-    # # add the temporal derivative of each channel as new feature
+    # # add the temporal derivative of each channel as new feature
     # X = np.concatenate([X, np.gradient(X, axis=1)], axis=1)
 
     if args.smooth:
@@ -162,19 +162,15 @@ def load_data(args, fn, query_1='', query_2=''):
                 for i_ch in range(len(query_data[i_trial])):
                     query_data[i_trial, i_ch] = smooth(query_data[i_trial, i_ch], window_len=5, window='hanning')
 
+    new_info = epochs[0].info.copy() # default, overwritten if cat is not none
     if args.cat:
-        ### !!! concatenating does not work anymore
         data = win_ave_smooth(data, nb_cat=args.cat, mean=args.mean)
-        new_info = epochs[0].info.copy()
         if not args.mean: # create new channel names because concatenation of timepoints equate adding channels
-            old_ch_names = deepcopy(new_info['ch_names'])
-            for i in range(args.cat-1): new_info['ch_names'] += [f"{ch}_{i}" for ch in old_ch_names]
-            new_info['nchan'] = new_info['nchan'] * args.cat
-            old_info_chs = deepcopy(new_info['chs'])
-            for i in range(args.cat-1): new_info['chs'] += deepcopy(old_info_chs)
-            for i in range(new_info['nchan']): new_info['chs'][i]['ch_name'] = new_info['ch_names'][i] 
-    else:
-        new_info = epochs[0].info
+            old_ch_names = deepcopy(epochs[0].info['ch_names'])
+            new_ch_names = [f"{ch}_{i}" for i in range(args.cat) for ch in old_ch_names]
+            new_nchan = epochs[0].info['nchan'] * args.cat
+            new_ch_types = [typ for i in range(args.cat) for typ in epochs[0].info.get_channel_types('meg')]
+            new_info = mne.create_info(ch_names=new_ch_names, sfreq=epochs[0].info['sfreq'], ch_types=new_ch_types)
 
     # print('zscoring each epoch')
     # for idx in range(X.shape[0]):
@@ -183,7 +179,7 @@ def load_data(args, fn, query_1='', query_2=''):
 
     epochs = [mne.EpochsArray(datum, new_info, metadata=meta, tmin=old_epo.times[0], verbose="warning") for datum, meta, old_epo in zip(data, metadatas, epochs)]
 
-    # crop after getting high gammas and smoothing to avoid border issues
+    # crop after getting high gammas and smoothing to avoid border issues
     block_type = op.basename(fn).split("-epo.fif")[0]
     tmin, tmax = tmin_tmax_dict[block_type]
     print('initial tmin and tmax: ', [(epo.times[0], epo.times[-1]) for epo in epochs])
@@ -201,7 +197,7 @@ def load_data(args, fn, query_1='', query_2=''):
                 p95 = np.percentile(query_data[:, ch, :], 95)
                 query_data[:, ch, :] = np.clip(query_data[:, ch, :], p5, p95)
 
-    ### BASELINING
+    ### BASELINING
     if args.baseline:
         print('baselining...')
         epochs = [epo.apply_baseline((tmin, 0), verbose=0) for epo in epochs]
@@ -270,13 +266,13 @@ def get_class_queries(query):
     return class_queries
 
 
-# ///////////////////////////////////////////////////////// #
+# ///////////////////////////////////////////////////////// #
 ###################### DECODING PROPER ######################
-# ///////////////////////////////////////////////////////// #
+# ///////////////////////////////////////////////////////// #
 
 def get_averaged_clf(args, all_models, n_times):
-    # all_models = n_folds*n_times
-    # average classifier parameters over all crossval splits, works only for logreg
+    # all_models = n_folds*n_times
+    # average classifier parameters over all crossval splits, works only for logreg
     
 
     avg_models = [[]] #[[deepcopy(all_models[0][t]) for t in range]
@@ -288,14 +284,14 @@ def get_averaged_clf(args, all_models, n_times):
             clfs.append(all_models[i][t][1])
 
         avg_models[0].append(deepcopy(all_models[0][t]))
-        # scaler
+        # scaler
         avg_models[0][-1][0].center_ = np.mean([scaler.center_ for scaler in scalers])
         avg_models[0][-1][0].scale_ = np.mean([scaler.scale_ for scaler in scalers])
         # clf
         avg_models[0][-1][1].coef_ = np.mean([clf.coef_ for clf in clfs])
         avg_models[0][-1][1].intercept_ = np.mean([clf.intercept_ for clf in clfs])
 
-    # discard the model for each split
+    # discard the model for each split
     # averaged_models = all_models[:,0]
     return avg_models
 
@@ -317,7 +313,7 @@ def decode(args, X, y, clf, n_times, test_split_query_indices):
         AUC = np.zeros((n_times, n_times))
         accuracy = np.zeros((n_times, n_times))
         mean_preds = np.zeros((n_times, n_times))
-        if test_split_query_indices: # split the test indices according to the query
+        if test_split_query_indices: # split the test indices according to the query
             AUC_test_query_split = np.zeros((n_times, n_times, len(test_split_query_indices)))
             AUC_test_query_counts = np.zeros((n_times, n_times, len(test_split_query_indices)))
             mean_preds_test_query_split = np.zeros((n_times, n_times, len(test_split_query_indices)))
@@ -378,7 +374,7 @@ def decode(args, X, y, clf, n_times, test_split_query_indices):
     print(f'mean trainning AUC: {AUC.mean():.3f}')
     print(f'max trainning AUC: {AUC.max():.3f}')
 
-    if args.avg_clf: # average classifier parameters over all crossval splits
+    if args.avg_clf: # average classifier parameters over all crossval splits
         if args.reduc_dim:
             print('cannot average classifier weights when using PCA because there can \
                 be a different nb of selected components for each fold .. .exiting')
@@ -401,7 +397,7 @@ def test_decode(args, X, y, all_models, test_split_query_indices):
         AUC = np.zeros((n_times_train, n_times_test))
         mean_preds = np.zeros((n_times_train, n_times_test))
         accuracy = np.zeros((n_times_train, n_times_test))
-        if test_split_query_indices: # split the test indices according to the query
+        if test_split_query_indices: # split the test indices according to the query
             AUC_test_query_split = np.zeros((n_times_train, n_times_test, len(test_split_query_indices)))
         else:
             AUC_test_query_split = None
@@ -424,7 +420,7 @@ def test_decode(args, X, y, all_models, test_split_query_indices):
                             continue
                         AUC_test_query_split[t, tgen, i_query] = roc_auc_score(y_true=y[split_indices], y_score=mean_folds_preds[split_indices]) #/ args.n_folds
 
-    else: # diag only
+    else: # diag only
         AUC = np.zeros(n_times_train)
         mean_preds = np.zeros(n_times_train)
         for t in range(n_times_train):
@@ -450,7 +446,7 @@ def decode_window(args, clf, epochs, class_queries):
     """ train single decoder for the whole time of the epochs
         class_queries: list of strings, pandas queries to get each class
     """
-    X, y, groups, _ = get_X_y_from_queries(epochs, class_queries)
+    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     n_trials = len(X)
     X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
     classes, counts = np.unique(y, return_counts=True)
@@ -469,7 +465,7 @@ def decode_window(args, clf, epochs, class_queries):
 
     models_all_folds = []
     AUC, accuracy = 0, 0
-    for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
+    for train, test in tqdm(cv.split(X, y, groups=groups)): # groups is ignored for non-groupedKFold
         pipeline.fit(X[train], y[train])
         models_all_folds.append(deepcopy(pipeline))
 
@@ -491,7 +487,7 @@ def test_decode_window(args, epochs, class_queries, trained_models):
         class_queries: list of strings, pandas queries to get each class
         trained_models: list of sklearn estimators, one for each class
     """
-    X, y, groups, _ = get_X_y_from_queries(epochs, class_queries)
+    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     n_trials = len(X)
     X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
     classes, counts = np.unique(y, return_counts=True)
@@ -799,24 +795,24 @@ def regression_decode(args, epochs, class_queries, clf):
     all_models = []
     if args.timegen:
         R2 = np.zeros((n_times, n_times))
+        R = np.zeros((n_times, n_times))
         for train, test in cv.split(X, y):
             all_models.append([])
             for t in trange(n_times):
                 pipeline.fit(X[train, :, t], y[train])
                 all_models[-1].append(deepcopy(pipeline))
                 for tgen in range(n_times):
-                    R2[t, tgen] = pipeline.score(X[test, :, tgen], y[test]) # normal test
-                    # pred = predict(pipeline, X[test, :, tgen])
-                    # R2[t, tgen] += roc_auc_score(y_true=y[test], y_score=pred) / args.n_folds
-                    # mean_preds[t, tgen] += np.mean(pred) / args.n_folds
-                    # accuracy[t, tgen] += accuracy_score(y[test], pred>0.5) / args.n_folds  
+                    R2[t, tgen] += pipeline.score(X[test, :, tgen], y[test]) / args.n_folds # normal test
+                    pred = predict(pipeline, X[test, :, tgen])
+                    R[t, tgen] += pearsonr(pred, y[test])[0] / args.n_folds
+                    # from ipdb import set_trace; set_trace()
     print(f'mean trainning R2: {R2.mean():.3f}')
     print(f'max trainning R2: {R2.max():.3f}')
     # put the pipeline object in an array without unpacking them
     all_models_array = np.empty((len(all_models), len(all_models[0])), dtype=object)
     all_models_array[:] = all_models # n_folds, n_times
     all_models_array = all_models_array.transpose(1,0) # go to shape n_times * n_folds
-    return all_models_array, R2
+    return all_models_array, R2, R
 
 
 ### FROM THE MARSEILLE SCRIPT. NOT USED YET HERE.
@@ -895,9 +891,9 @@ def regression_decode(args, epochs, class_queries, clf):
 
 
 
-# ///////////////////////////////////////////////////////// #
-#################### SAVING AND PLOTTING ####################
-# ///////////////////////////////////////////////////////// #
+# ///////////////////////////////////////////////////////// #
+#################### SAVING AND PLOTTING ####################
+# ///////////////////////////////////////////////////////// #
 
 
 def save_results(out_fn, results, time=True, all_models=None, fn_end="AUC"):
@@ -948,9 +944,9 @@ def save_patterns(args, out_fn, all_models): ## depecated, check dimensionality 
     print('Saving patterns')
     n_folds = len(all_models)
     n_times = len(all_models[0])
-    n_chan = len(all_models[0][0][-1].patterns_) # [-1] because the clf is the last in the pipeline
+    n_chan = len(all_models[0][0][-1].patterns_) # [-1] because the clf is the last in the pipeline
 
-    # average patterns? You probably ill never have to analyse non-averaged patterns ...
+    # average patterns? You probably ill never have to analyse non-averaged patterns ...
     # aze = list(map(list, zip(*l)))
     patterns = np.zeros((n_folds, n_times, n_chan))
     for i_f in range(n_folds):
@@ -973,7 +969,7 @@ def plot_perf(args, out_fn, data_mean, train_cond, train_tmin, train_tmax, test_
     return
 
 
-def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", contrast=False, version="v1", window=False):
+def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", contrast=False, version="v1", window=False, ybar=.5):
     n_times_train = data_mean.shape[0]
     times_train = np.linspace(train_tmin, train_tmax, n_times_train)
     if window: # Decoding inside subwindow
@@ -987,7 +983,7 @@ def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=No
          fig.axes[0].axvline(x=w_onset, linestyle='--', color='k')
     for img_onset in image_onset:
          fig.axes[0].axvline(x=img_onset, linestyle='-', color='k')
-    fig.axes[0].axhline(y=0.5, color='k', linestyle='-', alpha=.5)
+    fig.axes[0].axhline(y=ybar, color='k', linestyle='-', alpha=.5)
     
     if data_mean.ndim > 1: # we have the full timegen
         data_mean_diag = np.diag(data_mean)
@@ -1082,7 +1078,7 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
     times_test = np.linspace(test_tmin, test_tmax, n_times_test)
 
     if contrast:
-        vmin = np.min(data_mean) if np.min(data_mean) < -0.001 else -0.001 # make the colormap center on the white, whatever the values
+        vmin = np.min(data_mean) if np.min(data_mean) < -0.001 else -0.001 # make the colormap center on the white, whatever the values
         vcenter=0.
         vmax = np.max(data_mean) if np.max(data_mean) > 0.001 else 0.001
     else:
@@ -1119,7 +1115,7 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
     ## ADD SLICES
     if slices and ylabel=='AUC':
         cmap = plt.cm.get_cmap('plasma', len(slices))
-        # add colored line to th matrix plot
+        # add colored line to th matrix plot
         for i_slice, sli in enumerate(slices):
             plt.axhline(y=sli, linestyle=':', alpha=.9, color=cmap(i_slice))
         plt.savefig(out_fn + '_wslices.png')
@@ -1138,22 +1134,22 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
             line_idx = (np.abs(times_train - sli)).argmin()
             data_mean_line = np.mean(data_mean[line_idx-5:line_idx+5], 0)
             
-            # vertical dashed line for time reference
+            # vertical dashed line for time reference
             if gen_cond is None:
                 plt.axvline(x=sli, color=cmap(i_slice), linestyle=':', alpha=.7)
 
-            # actual trace plot
+            # actual trace plot
             plt.plot(times_test, data_mean_line, label=str(sli)+'s', color=cmap(i_slice))
             # plt.fill_between(times, data_line-std, data_line+std, color=cmap(i_slice), alpha=0.2)
 
             # Compute statistic
             # fvalues, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(all_AUC[:,(np.abs(times_train - sli)).argmin()]-0.5, n_permutations=1000, threshold=None, tail=1, n_jobs=5, verbose=False)
-            # significance hlines
+            # significance hlines
             # for i_clust, cluster in enumerate(clusters):
             #     if cluster_p_values[i_clust] < 0.05:
             #         # with std
             #         # plt.plot(times[cluster], np.ones_like(times[cluster])*(max_auc+0.1+0.01*i_slice), color=cmap(i_slice))
-            #         # without std, put the hlines closer to the curves
+            #         # without std, put the hlines closer to the curves
             #         plt.plot(times_test[cluster], np.ones_like(times[cluster])*(max_auc+0.02+0.01*i_slice), color=cmap(i_slice))
 
         plt.legend(title='training time', loc='upper right')
@@ -1235,14 +1231,14 @@ def add_slice_line_1ax(ax, slice_time, times, data_line, mult_fac=3, alpha=.4, f
 
 
 def joyplot_with_stats(data_dict, times, out_fn, tmin=-.5, tmax=8, labels=['S1', 'C1', 'R', 'S2', 'C2'], \
-                       word_onsets=[], image_onset=[], fsz=16, title_fsz=26, stat='wilc', threshold=0.01):
+                       word_onsets=[], image_onset=[], fsz=16, title_fsz=26, stat='wilc', threshold=0.01, y_inc=0.05):
     """ To plot multiple decoders diagonals on the same plot
     one per subplot, with statistics
     """
     if not np.all([lab in data_dict.keys() for lab in labels]):
         print(f"!!! Could not find key(s) {[lab for lab in labels if lab not in data_dict.keys()]} in the data_dict")
         return
-    fig, axes = plt.subplots(len(labels), figsize=(18, len(labels)*3))
+    fig, axes = plt.subplots(len(labels), figsize=(18, len(labels)*3), sharey='col')
     for i, k in enumerate(labels):
         for w_onset in word_onsets:
             axes[i].axvline(x=w_onset, linestyle='--', color='k', ymin=0., ymax=1, lw=1, clip_on=False)
@@ -1262,7 +1258,7 @@ def joyplot_with_stats(data_dict, times, out_fn, tmin=-.5, tmax=8, labels=['S1',
             chance_array = np.ones_like(data_dict[k][:,0]) * 0.5
             for t in range(len(local_times)):
                 signif[t] = wilcoxon(data_dict[k][:, time_mask][:, t], chance_array, alternative="greater")[1] #two-sided
-            signif = fdr_correction(np.array(signif), alpha=0.05)[0] #.astype(bool)
+            signif = fdr_correction(np.array(signif), alpha=0.3)[0] #.astype(bool)
             axes[i].fill_between(local_times, 0.5, dat, where=signif, alpha=0.8, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
             # axes[i].fill_between(local_times, 0.5, signifed_dat, alpha=0.8, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
         # fvalues, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(data_dict[k]-0.5, n_permutations=1000, threshold=1e-6, tail=1, n_jobs=-1, verbose=False, buffer_size=None)
@@ -1270,8 +1266,8 @@ def joyplot_with_stats(data_dict, times, out_fn, tmin=-.5, tmax=8, labels=['S1',
             for cluster, pval in zip(clusters, cluster_p_values):
                 if pval < 0.05:
                     axes[i].fill_between(local_times[cluster], 0.5, dat[cluster], alpha=0.8, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
-        
-        axes[i].text(-0.02, .55, k.split("_")[0], ha='center', va='center', transform=axes[i].transAxes, fontsize=title_fsz)
+        ## Title label on the left
+        axes[i].text(-0.02, .55, back2fullname(k.split("_")[0]), ha='center', va='center', transform=axes[i].transAxes, fontsize=title_fsz)
         # back2fullname(k.split("_")[0])
         # axes[i].set_title(back2fullname(k.split("_")[0]), loc='left')
         
@@ -1281,11 +1277,18 @@ def joyplot_with_stats(data_dict, times, out_fn, tmin=-.5, tmax=8, labels=['S1',
         axes[i].set_xlim(tmin, tmax)
         for spine in ['bottom', 'top', 'left', 'right']:
             axes[i].spines[spine].set_visible(False)
-        axes[i].set_yticks([])
-        if (i+1) < len(labels): axes[i].set_xticks([])
+        axes[i].yaxis.set_label_position("right") # put yaxis on the right
+        axes[i].yaxis.tick_right()
+        yticks = np.arange(0.5, axes[i].get_ylim()[1], y_inc)
+        axes[i].set_yticks(yticks)
+        # if i == 0: 
+        #     axes[i].set_yticks(yticks)
+        # else:  # remove last tick because it overlaps with the axis on top of it - doesnt work because axes are shared
+        #     axes[i].set_yticks(yticks[0:-1])
+        if (i+1) < len(labels): axes[i].set_xticks([]) # keep xticks only on the bottom row
         # axes[i].set_ylabel("AUC")
+        axes[i].tick_params(axis='both', which='major', labelsize=fsz)
 
-    axes[-1].tick_params(axis='both', which='major', labelsize=fsz)
     axes[-1].set_xlabel("Time (s)")
     plt.subplots_adjust(hspace=-.1)
     # plt.tight_layout()
@@ -1315,19 +1318,19 @@ def plot_all_props_multi(ave_dict, std_dict, times, out_fn, labels=['S1', 'C1', 
 
 def plot_single_ch_perf(scores, info, out_fn, cmap_name='bwr', vmin=.4, vmax=.6, score_label='AUC', title=None, ticksize=14):
     from .plot_channels import plot_ch_scores
+    divnorm = matplotlib.colors.TwoSlopeNorm(vmin=vmin if vmin<0.5 else 0.49, vcenter=0.5, vmax=vmax if vmax>0.5 else 0.51)
     cmap = matplotlib.cm.get_cmap(cmap_name)
-    ## add dummy image for the cbar
-    img = plt.imshow([scores, scores], cmap=cmap, vmin=vmin, vmax=vmax)
+    img = plt.imshow([scores, scores], cmap=cmap, vmin=vmin, vmax=vmax, norm=divnorm) ## add dummy image for the cbar
     plt.gca().set_visible(False)
     fig, ax = plt.subplots()
-    fig = plot_ch_scores(info, scores, cmap, ch_type='all', axes=ax)
+    fig = plot_ch_scores(info, scores, cmap, ch_type='all', axes=ax, norm=divnorm)
     cbar_ax = fig.add_axes([0.8, 0.1, 0.1, 0.05])
-    cbar = fig.colorbar(img, orientation="horizontal", cax=cbar_ax)
+    cbar = fig.colorbar(img, orientation="horizontal", cax=cbar_ax, ticks=matplotlib.ticker.MaxNLocator(nbins=5))
     cbar_ax.set_title(score_label)
-    cbar.ax.tick_params(labelsize=ticksize)
+    cbar.ax.tick_params(labelsize=ticksize, rotation=45)
     if title is not None:
         ax.set_title(title)
-    plt.savefig(out_fn, dpi=200)
+    plt.savefig(out_fn, dpi=200, bbox_inches='tight', transparent=True)
 
 
 """
@@ -1405,7 +1408,7 @@ def get_X_y_from_epochs_list(args, epochs, sfreq):
 
     y = np.concatenate([np.ones(len(data[i][0]))*i for i in range(n_queries)]).astype(float)
     X = np.concatenate([np.concatenate(data[i], axis=1) for i in range(n_queries)])
-    # X = trials * channels * time
+    # X = trials * channels * time
 
     # shuffle labels to get baseline performance
     if args.shuffle:

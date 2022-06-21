@@ -54,7 +54,7 @@ _channel_type_prettyprint = {'eeg': "EEG channel", 'grad': "Gradiometer",
 
 def plot_ch_scores(info, scores, cmap, kind='topomap', ch_type=None, title=None,
                  show_names=False, ch_groups=None, to_sphere=True, axes=None,
-                 block=False, show=True, sphere=None, verbose=None):
+                 block=False, show=True, sphere=None, verbose=None, norm=None, sensor_size=155):
     """Plot sensors positions.
     Parameters
     ----------
@@ -203,18 +203,21 @@ def plot_ch_scores(info, scores, cmap, kind='topomap', ch_type=None, title=None,
                     colors[pick_idx] = color_vals[ind]
                     break
     ## custom colors
-    colors = [cmap(score) for score in scores]
+    if norm:
+        colors = [cmap(norm(score)) for score in scores]
+    else:    
+        colors = [cmap(score) for score in scores]
     title = 'Sensor positions (%s)' % ch_type if title is None else title
     fig = _plot_sensors(pos, info, picks, colors, bads, ch_names, title,
                         show_names, axes, show, kind, block,
-                        to_sphere, sphere)
+                        to_sphere, sphere, sensor_size)
     if kind == 'select':
         return fig, fig.lasso.selection
     return fig
 
 
 def _plot_sensors(pos, info, picks, colors, bads, ch_names, title, show_names,
-                  ax, show, kind, block, to_sphere, sphere):
+                  ax, show, kind, block, to_sphere, sphere, sensor_size):
     """Plot sensors."""
     from matplotlib import rcParams
     import matplotlib.pyplot as plt
@@ -252,7 +255,7 @@ def _plot_sensors(pos, info, picks, colors, bads, ch_names, title, show_names,
                                           to_sphere=to_sphere)
         _draw_outlines(ax, outlines)
         pts = ax.scatter(pos[:, 0], pos[:, 1], picker=True, clip_on=False,
-                         c=colors, edgecolors=edgecolors, s=55, lw=.5)
+                         c=colors, edgecolors=edgecolors, s=sensor_size, lw=.5)
         if kind == 'select':
             fig.lasso = SelectFromCollection(ax, pts, ch_names)
         else:

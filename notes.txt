@@ -15,22 +15,28 @@ Finally corrected split_queries for OVR ! to be tested
 Corrected test-cond as well, there was a bug due to the change of shape of all_models (not for OVR)
 Actually the new epochs is the same as the old, more or less. The sfreq is 50hz, so there is a 25hz lowpass. Only highpass at 0.1hz is different
 v10: autoreject + filter with Perf==1 for all - good ! but still "hashy", need to smooth more. Maybe increase sfreq too...
-v11: Simple ridgeCV and equalize events for all conds (check for OVR if it works!) + trying complexity regression deocding (with equalize too, maybe try without) + single_channel decoding.
+v11: Simple ridgeCV and equalize events for all conds (check for OVR if it works!) + trying complexity regression decoding (with equalize too, maybe try without) + single_channel decoding.
 add complexity decoding!
+v12: 100hz - still with ridgeCV ! - still equalize_events
+v13: 5cat and 11smooth (insread of 21) regression only - WITHOUT equalize_events RELAUNCHED
+v14: 10cat regression only - still equalize_events
+v15: no cat no mean no equalize events -> best !
 
-v12: 100hz - still with ridgeCV !
-try increasing sfreq? Maybe without timegen? then check the decode funcs.
+no Cmismatch and Smismatch yet + oneobj Perf, Matching and Button, need to relaunch OVR decoding
+Generalization of decoders? Using sliding windows
+Check the windows of single channels decoding: should it be 1 SOA ?
 
 
-Trying REAL split queries for decoding.py = KindMismatch -> launched at (allv8) -> buged, to lauch again
-propmismatch weird perf before image: results are from decoding.py BUT NOT FROM SPLIT QUERIES.
+
+jobs: 
+v13 regression 10mean DONE
+v13 regression 5mean DONE
+v15 single channel kind mismatch one obj DONE
+v15 single ch relation during delay
+v13 regression 5cat and smooth11
+
 
 change Error_type to lower case? Would be great for grepping logs.
-single channel decoding -- check if it works in our setup and if not then add window ?
-
-
-patterns are shite, try single channel decoding instead
-
 
 
 Response loc for mismatch??

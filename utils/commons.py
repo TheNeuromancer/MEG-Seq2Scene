@@ -19,6 +19,7 @@ full_fn_to_short = {"two_objects": 'scenes', "one_object": 'obj'}
 colors = ["vert", "bleu", "rouge"]
 shapes = ["triangle", "cercle", "carre"]
 
+
 def num2sub_name(num, all_subjects):
   if not num.isdigit():
     return num
@@ -175,6 +176,12 @@ def back2fullname(name):
     name = name.replace('S', 'Shape')
     name = name.replace('All1stObj', 'First Object')
     name = name.replace('All2ndObj', 'Second Object')
+    name = name.replace('1', ' #1')
+    name = name.replace('2', ' #2')
+    name = name.replace('Colour', 'Color')
+    name = name.replace('ColorMismatch', 'Color Mismatch')
+    name = name.replace('ShapeMismatch', 'Shape Mismatch')
+# label2text = {'C': "Color", 'S': "Shape", 'S1': "First shape", 'S2': "Second shape", 'C1': "First color", 'C2': "Second Color", 'R': "Relation"}
     return name
 
 def get_onsets(cond, version="v1"):
@@ -337,10 +344,13 @@ def add_complexity_to_md(line):
 
 def get_ylabel_from_fn(fn):
     # acc or AUC
+    print(fn)
     if fn[-7:-4] == 'acc' or fn[-12:-9] == 'acc':
         ylabel = 'Accuracy'
     elif fn[-7:-4] == 'AUC' or fn[-12:-9] == 'AUC':
         ylabel = 'AUC'
+    elif fn[-6:-4] == 'R2':
+        ylabel = 'R2'
     elif fn[-9:-4] == 'preds': # or fn[-12:-9] == 'AUC':
         ylabel = 'prediction'
     elif 'Accuracy' in fn:
@@ -385,8 +395,8 @@ def group_conds(properties):
 
 
 def win_ave_smooth(data, nb_cat, mean=True):
-    """ smoothing throughmoving average window
-    data should be a list if np arrays of shape
+    """ smoothing through moving average window
+    data should be a list of np arrays of shape
     n_epochs * n_ch * n_times
     """
     if nb_cat == 0: return data
