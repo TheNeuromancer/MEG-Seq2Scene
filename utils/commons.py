@@ -7,8 +7,10 @@ from glob import glob
 import time
 import os.path as op
 import os
+from copy import deepcopy
+from itertools import combinations
 
-from utils.params import TRIG_DICT
+from utils.params import TRIG_DICT, tmin_tmax_dict
 
 
 short_to_long_cond = {"loc": "localizer", "one_obj": "one_object", "two_obj": "two_objects",
@@ -19,9 +21,13 @@ full_fn_to_short = {"two_objects": 'scenes', "one_object": 'obj'}
 colors = ["vert", "bleu", "rouge"]
 shapes = ["triangle", "cercle", "carre"]
 
+sentence_examples = {"scenes": (['un cercle', 'vert', 'à droite', 'd\'un carré', 'bleu', ''], [('s', 'b'), ('o', 'g')]),
+                     "obj": (['un cercle', 'vert', ''], ('o', 'g'))}
 
 def num2sub_name(num, all_subjects):
   if not num.isdigit():
+    return num
+  elif num == 'all': # keep 'all' as subjecft name
     return num
   else: 
     sub_name = [sub for sub in all_subjects if num == sub[0:2]]
@@ -30,26 +36,26 @@ def num2sub_name(num, all_subjects):
     return sub_name[0]
 
 
-def get_paths(args, dirname='Decoding'):
+def get_paths(args, dirname='Decoding', mkdir=True, verbose=True):
     subject_string = args.subject if args.subject!='grand' else ''
     in_dir = f"{args.root_path}/Data/{args.epochs_dir}/{subject_string}"
-    print("\nGetting training filename:")
-    print(in_dir + f'/{args.train_cond}*-epo.fif')
+    if verbose: print("\nGetting training filename:")
+    if verbose: print(in_dir + f'/{args.train_cond}*-epo.fif')
     if isinstance(args.train_cond, list):
-        print("Getting MULTIPLE training filenameS:")
+        if verbose: print("Getting MULTIPLE training filenameS:")
         train_fn = [natsorted(glob(in_dir + f'/{cond}*-epo.fif'))[0] for cond in args.train_cond]
     else:
-        print(in_dir + f'/{args.train_cond}*-epo.fif')
+        if verbose: print(in_dir + f'/{args.train_cond}*-epo.fif')
         train_fn = natsorted(glob(in_dir + f'/{args.train_cond}*-epo.fif'))[0]
         # assert len(train_fn) == 1
-    print(train_fn)
-    print("\nGetting test filenames:")
+    if verbose: print(train_fn)
+    if verbose: print("\nGetting test filenames:")
     test_fns = [natsorted(glob(in_dir + f'/{cond}*-epo.fif'))[0] for cond in args.test_cond]
-    print(test_fns)
+    if verbose: print(test_fns)
 
     ### SET UP OUTPUT DIRECTORY AND FILENAME
     out_fn = get_out_fn(args, dirname=dirname)
-    print(f"out fn: {out_fn}")
+    if verbose: print(f"out fn: {out_fn}")
 
     test_out_fns = []
     if hasattr(args, "test_query_1") and hasattr(args, "test_query_2"): # typically for classical decoding
@@ -66,24 +72,24 @@ def get_paths(args, dirname='Decoding'):
 
     # wait for a random time in order to avoid conflit (parallel jobs that try to construct the same directory)
     rand_time = float(str(abs(hash(str(args))))[0:8]) / 100000000
-    print(f'sleeping {rand_time} seconds to desynchronize parallel scripts')
+    if verbose: print(f'sleeping {rand_time} seconds to desynchronize parallel scripts')
     time.sleep(rand_time)
     
     out_dir = op.dirname(out_fn)
-    if not op.exists(out_dir):
+    if not op.exists(out_dir) and mkdir:
         rand_time = float(str(abs(hash(str(args))))[0:8]) / 10000000
-        print(f'sleeping some {rand_time} more seconds before attempting to create out dir')
+        if verbose: print(f'sleeping some {rand_time} more seconds before attempting to create out dir')
         time.sleep(rand_time)
         if not op.exists(out_dir):
-            print('Constructing output directory')
+            if verbose: print('Constructing output directory')
             os.makedirs(out_dir)
     else:
-        print('output directory already exists')
+        if verbose: print('output directory already exists')
         if op.exists(f"{out_dir}_AUC.npy"):
             if args.overwrite:
-                print('overwrite is set to True ... overwriting\n')
+                if verbose: print('overwrite is set to True ... overwriting\n')
             else:
-                print('overwrite is set to False ... exiting smoothly')
+                if verbose: print('overwrite is set to False ... exiting smoothly')
                 exit()
     return train_fn, test_fns, out_fn, test_out_fns
 
@@ -101,6 +107,7 @@ def get_out_fn(args, dirname='Decoding'):
     smooth_str = f"_{args.smooth}smooth" if args.smooth else ""
     shuffle_str = '_shuffled' if args.shuffle else ''
     fband_str = f'_{args.freq_band}' if args.freq_band else ''
+    resp_str = f'_resplock' if args.response_lock else ''
     cond_str = f"_cond-{args.train_cond}-" if isinstance(args.train_cond, str) else "" # empty string if we have a list of training conditions.
     if hasattr(args, 'train_query_1'):
         if args.train_query_1 and args.train_query_2:
@@ -109,9 +116,12 @@ def get_out_fn(args, dirname='Decoding'):
         else:
             train_query_1 = ''
             train_query_2 = ''
-        out_fn = f'{out_dir}/{args.label}-{train_query_1}_vs_{train_query_2}{reduc_dim_str}{shuffle_str}{fband_str}{cond_str}'
+        out_fn = f'{out_dir}/{args.label}-{train_query_1}_vs_{train_query_2}{reduc_dim_str}{shuffle_str}{resp_str}{fband_str}{cond_str}'
+    elif hasattr(args, 'train_query'):
+        train_query = '_'.join(args.train_query.split()) if args.train_query else ''
+        out_fn = f'{out_dir}/{args.label}-{train_query}{reduc_dim_str}{shuffle_str}{resp_str}{fband_str}{cond_str}'
     else: # RSA
-        out_fn = f'{out_dir}/{args.label}-{reduc_dim_str}{shuffle_str}{fband_str}{cond_str}'
+        out_fn = f'{out_dir}/{args.label}-{reduc_dim_str}{shuffle_str}{resp_str}{fband_str}{cond_str}'
 
     out_fn += "dawn-" if args.xdawn else ""
     out_fn += "autoreject-" if args.autoreject else ""
@@ -187,6 +197,8 @@ def back2fullname(name):
 def get_onsets(cond, version="v1"):
     """ get the word and image onsets depending on the condition
     """
+    if cond == "response_locked":
+        return [0], []
     if version == "v1": # first version, longger SOA
         SOA_dict = {"localizer": .9, "one_object": .65, "two_objects": .65, "obj": .65, "scenes": .65}
     else: # second version for subject 9 and up
@@ -319,18 +331,45 @@ def complement_md(md):
     Complexity = 2 minus number of shared properties
     """
     right_obj, left_obj = [], [] 
+    right_color, left_color = [], [] 
+    right_shape, left_shape = [], []
+    mismatch_side = [] # left or right (or None), side of the violation, for l0 mismatches only
     for i, line in md.iterrows():
         if line.Relation == "à gauche d'":
             left_obj.append(f"{line.Shape1}_{line.Colour1}")
             right_obj.append(f"{line.Shape2}_{line.Colour2}")
+            left_shape.append(f"{line.Shape1}")
+            right_shape.append(f"{line.Shape2}")
+            left_color.append(f"{line.Colour1}")
+            right_color.append(f"{line.Colour2}")
+            if 'colour1' in line.Change or 'shape1' in line.Change:
+                mismatch_side.append("left")
+            elif 'colour2' in line.Change or 'shape2' in line.Change:
+                mismatch_side.append("right")
+            else:
+                mismatch_side.append("None")
         elif line.Relation == "à droite d'":
             right_obj.append(f"{line.Shape1}_{line.Colour1}")
             left_obj.append(f"{line.Shape2}_{line.Colour2}")
+            right_shape.append(f"{line.Shape1}")
+            left_shape.append(f"{line.Shape2}")
+            right_color.append(f"{line.Colour1}")
+            left_color.append(f"{line.Colour2}")
+            if 'colour1' in line.Change or 'shape1' in line.Change:
+                mismatch_side.append("right")
+            elif 'colour2' in line.Change or 'shape2' in line.Change:
+                mismatch_side.append("left")
+            else:
+                mismatch_side.append("None")
         else:
             raise RuntimeError("Could not parse metadata to get left and right obejcts")
     md["Right_obj"] = right_obj
     md["Left_obj"] = left_obj
-    # from ipdb import set_trace; set_trace()
+    md["Right_color"] = right_color
+    md["Left_color"] = left_color
+    md["Right_shape"] = right_shape
+    md["Left_shape"] = left_shape
+    md["Mismatch_side"] = mismatch_side
     return md
 
 def add_complexity_to_md(line):
@@ -448,4 +487,43 @@ def quality_from_cond(sub, cond, label='Matching', scoring='max', dir='/neurospi
         score_per_run[run] = score
     return score_per_run
 
-    # from ipdb import set_trace; set_trace()
+
+def to_response_lock_epochs(stim_locked_epochs, block_type):
+    """ Take an epochs object and 
+    make a new one based on the onset of the image 
+    and the RT of this trial
+    """
+    tmin, tmax = tmin_tmax_dict["response_locked"]
+    img_onset = {'two_objects': 5, 'one_object': 2.2}[block_type]
+    resp_locked_epochs = []
+    for i in range(len(stim_locked_epochs)):
+        epo = deepcopy(stim_locked_epochs[i])
+        shift = img_onset + round(epo.metadata.RT.values[0] / 1000, 2) # shift to put t0 on the response button press
+        new_epo = epo.shift_time(-shift, relative=True)
+        # new_epo = new_epo.crop(tmin, tmax)
+        if epo.tmax < tmax:
+            print(f'overtime for trial {i+1}')
+            continue
+        resp_locked_epochs.append(new_epo.crop(tmin, tmax))
+
+    print(f"Keeping {len(resp_locked_epochs) / len(stim_locked_epochs):.2f}% of trials that are not overtime")
+    return mne.concatenate_epochs(resp_locked_epochs)
+
+
+def micro_averaging(X, Y, nb_ave):
+    """ Average trials using all available combinations
+    Should be used AFTER the CV split, else
+    there will be information of the test set in the train set.
+    For each class, there will be (n * (n-1) / 2) new trials
+    """
+    classes = np.unique(Y)
+    _X, _Y = [], [] # Final X and Y
+    for clas in classes: # loop over classes
+        _x, _y = X[Y==clas], Y[Y==clas] # single class X and Y
+        comb_x = combinations(_x, nb_ave)
+        for _comb_x in comb_x:
+            _X.append(np.mean(_comb_x, 0)) # average
+            _Y.append(clas)
+    return np.asarray(_X), np.asarray(_Y)
+
+        

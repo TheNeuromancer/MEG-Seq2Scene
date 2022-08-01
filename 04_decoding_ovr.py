@@ -36,6 +36,8 @@ parser.add_argument('-a', '--autoreject', action='store_true',  default=None, he
 parser.add_argument('--quality_th', default=None, type=float, help='Whether to apply Autoreject on the epochs before training decoder')
 parser.add_argument('--split-queries', action='append', default=[], help='Metadata query for splitting the test data')
 parser.add_argument('--equalize_split_events', action='store_true', default=None, help='subsample majority event classes IN EACH SPLIT QUERY to get same number of trials as the minority class')
+parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
+parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
@@ -86,7 +88,11 @@ if args.windows:
 
 print('\nStarting training')
 ### LOAD EPOCHS ###
-epochs = load_data(args, train_fn)[0]
+if args.response_lock:
+    epochs = load_data(args, train_fn, crop_final=False)[0]
+    epochs = to_response_lock_epochs(epochs, args.train_cond)
+else:
+    epochs = load_data(args, train_fn)[0]
 windows = [tuple([float(x) for x in win.split(",")]) for win in args.windows]
 if windows: epochs = epochs.crop(*windows[0])
 train_tmin, train_tmax = epochs.tmin, epochs.tmax
@@ -99,10 +105,10 @@ if args.dummy: # speed everything up for a dummy run
     clf = LinearRegression(n_jobs=-1)
     setattr(args, 'n_folds', 2)
 else:
-    # clf_cv = StratifiedShuffleSplit(10, random_state=42) # help avoid warnings when there are very few trials in one class
-    # clf = LogisticRegressionCV(Cs=10, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
+    clf_cv = StratifiedShuffleSplit(10, random_state=42) # help avoid warnings when there are very few trials in one class
+    clf = LogisticRegressionCV(Cs=10, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
     # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=clf_cv, class_weight='balanced')
-    clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
+    # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
     # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-2, 4, 7)})
 clf = OneVsRestClassifier(clf, n_jobs=1)
 clf = mne.decoding.LinearModel(clf)

@@ -31,6 +31,7 @@ parser.add_argument('--test-cond', default=[], action='append', help='localizer,
 parser.add_argument('--test-query', default=[], action='append', help='Metadata query for testing classes')
 parser.add_argument('--quality_th', default=None, type=float, help='Whether to apply Autoreject on the epochs before training decoder')
 parser.add_argument('--windows', default=[], action='append', help='tmin and tmax to crop the epochs, one for each train and test cond')
+parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
@@ -42,6 +43,7 @@ parser.add_argument('--timegen', action='store_true', default=False, help='Wheth
 parser.add_argument('--t1', action='append', default=[], help="Metadata query for generalization test")
 parser.add_argument('--t2', action='append', default=[], help="Metadata query for generalization test")
 parser.add_argument('--equalize_events', action='store_true', default=False, help='subsample majority event classes to get same number of trials as the minority class')
+parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
 
 # not implemented
 parser.add_argument('--localizer', action='store_true', default=False, help='Whether to use only electrode that were significant in the localizer')

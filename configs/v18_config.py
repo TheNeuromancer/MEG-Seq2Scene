@@ -5,7 +5,7 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "21"
+    version: str = "18"
     root_path: str = "/neurospin/unicog/protocols/MEG/Seq2Scene/"
     epochs_dir: str = "Epochs_100hz"
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
@@ -20,19 +20,18 @@ class Config:
     l_freq: float = 0.1 # high-pass filter cutoff
     h_freq: float = 30 # low-pass filter cutoff
     notch: int = 50 # land line frequency
-    sfreq: int = 50 # final sampling frequency
+    sfreq: int = 100 # final sampling frequency
 
     ## Decoding parameters
     n_folds: int = 5 # number of shuffle splits
     crossval: str = "kfold" # cross-validation scheme. "kfold" or "sufflesplit"
     reduc_dim: float = 0 # dimensionality reduction
     ## Decoding window parameters
-    n_folds_win: int = 10 # number of shuffle splits for the window decoding analysis 
+    n_folds_win: int = 5 # number of shuffle splits for the window decoding analysis 
     crossval_win: str = "kfold" # cross-validation scheme for the window decoding analysis 
-    reduc_dim_win: float = 0.99 # dimensionality reduction for the window decoding analysis 
-    sfreq_win: int = 50 # final sampling frequency for the window decoding analysis (applied after args.sfreq resampling)
-    micro_ave_win: int = 2
-    max_trials_win: int = 20000 # maximum number of trials (after micro-averaging) for the window decoding analysis 
+    reduc_dim_win: float = 0 # dimensionality reduction for the window decoding analysis 
+    sfreq_win: int = 50 # final sampling frequency for the window decoding analysis 
+    max_trials_win: int = 5000 # maximum number of trials (after micro-averaging) for the window decoding analysis 
     ## Decoding single channel parameters
     reduc_dim_sing: float = 0 # dimensionality reduction
     ## General analysis parameters
@@ -46,11 +45,9 @@ class Config:
     xdawn: bool = False
     quality_th: float = 0 #.75
     filter: str = "Perf==1"
-    equalize_events: bool = True
-    micro_ave: int = 0
-    max_trials: int = 0 # maximum number of trials (after micro-averaging)
-
-    riemann: bool = False # apply riemannian tranformation before fitting decoder
+    equalize_events: bool = False
+    micro_ave: int = False
+    max_trials: int = 1000 # maximum number of trials (after micro-averaging)
 
 
     def print_subjects_names(self):

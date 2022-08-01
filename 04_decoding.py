@@ -1,6 +1,6 @@
 import matplotlib
 # matplotlib.use('Qt5Agg')
-matplotlib.use('Agg') # no output to screen.
+matplotlib.use('Agg') # no output to screen.
 import mne
 import numpy as np
 # from ipdb import set_trace
@@ -35,6 +35,8 @@ parser.add_argument('--equalize_events', action='store_true', default=None, help
 parser.add_argument('--equalize_split_events', action='store_true', default=None, help='subsample majority event classes IN EACH SPLIT QUERY to get same number of trials as the minority class')
 parser.add_argument('-x', '--xdawn', action='store_true',  default=None, help='Whether to apply Xdawn spatial filtering before training decoder')
 parser.add_argument('-a', '--autoreject', action='store_true',  default=None, help='Whether to apply Autoreject on the epochs before training decoder')
+parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
+parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
@@ -73,8 +75,14 @@ start_time = time.time()
 train_fn, test_fns, out_fn, test_out_fns = get_paths(args)
 
 print('\nStarting training')
-### LOAD EPOCHS ###
-epochs = load_data(args, train_fn, args.train_query_1, args.train_query_2)
+### LOAD EPOCHS ###
+if args.response_lock:
+    epochs = load_data(args, train_fn, args.train_query_1, args.train_query_2, crop_final=False)
+    epochs = [to_response_lock_epochs(epo, args.train_cond) for epo in epochs]
+else:
+    epochs = load_data(args, train_fn, args.train_query_1, args.train_query_2)
+
+
 test_split_query_indices, corrected_split_queries = get_split_indices(args.split_queries, epochs)
 train_tmin, train_tmax = epochs[0].tmin, epochs[0].tmax
 ### GET DATA AND CONSTRUCT LABELS ###
@@ -89,20 +97,20 @@ if args.dummy:
 else:
     # clf = RidgeClassifier(class_weight='balanced')
     # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced', scoring='roc_auc')
-    clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
+    # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
     # clf = LogisticRegression(class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False)
-    # clf =LogisticRegressionCV(Cs=10, class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False, cv=5, n_jobs=1)
+    clf =LogisticRegressionCV(Cs=10, class_weight='balanced', solver='lbfgs', max_iter=10000, verbose=False, cv=5, n_jobs=1)
     # clf = SVC()
     # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-4, 4, 9)})
 clf = mne.decoding.LinearModel(clf)
 
 
-### DECODE ###
+### DECODE ###
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
 all_models, AUC, accuracy, AUC_query, mean_preds, mean_preds_query = decode(args, X, y, clf, n_times, test_split_query_indices)
 print(f'Finished training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
 
-### SAVE RESULTS ###
+### SAVE RESULTS ###
 save_results(out_fn, AUC, all_models)
 save_results(out_fn, accuracy, fn_end="acc")
 # save_preds(args, out_fn, mean_preds)
@@ -115,40 +123,40 @@ plot_perf(args, out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=
 save_best_pattern(out_fn, AUC, all_models) ## Save best model's pattern
 if AUC_query is not None: # save the results for all the splits
     for i_query, query in enumerate(corrected_split_queries):
-        query = '_'.join(query.split()) # replace spaces by underscores
-        query = shorten_filename(query) # shorten string by removing unnecessary stuff
+        query = '_'.join(query.split()) # replace spaces by underscores
+        query = shorten_filename(query) # shorten string by removing unnecessary stuff
         save_results(out_fn+f'_for_{query}', AUC_query[:,:,i_query])
         plot_perf(args, out_fn+f'_for_{query}', AUC_query[:,:,i_query], args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
         # save_preds(args, out_fn+f'_for_{query}', mean_preds_query[:,:,i_query])
 
-    # # save every contrast - full minus every split
+    # # save every contrast - full minus every split
     # for i_query, query in enumerate(corrected_split_queries):
-    #     query = '_'.join(query.split()) # replace spaces by underscores
-    #     query = shorten_filename(query) # shorten string by removing unnecessary stuff
+    #     query = '_'.join(query.split()) # replace spaces by underscores
+    #     query = shorten_filename(query) # shorten string by removing unnecessary stuff
     #     save_results(out_fn+f'_for_{query}_full_minus_split', AUC - AUC_query[:,:,i_query])
     #     plot_perf(args, out_fn+f'_for_{query}_full_minus_split', AUC - AUC_query[:,:,i_query], args.train_cond, contrast=True, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
 
-# # plot pred
-# if mean_preds_query is not None: # save the results for all the splits
+# # plot pred
+# if mean_preds_query is not None: # save the results for all the splits
 #     for i_query, query in enumerate(corrected_split_queries):
-#         query = '_'.join(query.split()) # replace spaces by underscores
-#         query = shorten_filename(query) # shorten string by removing unnecessary stuff
+#         query = '_'.join(query.split()) # replace spaces by underscores
+#         query = shorten_filename(query) # shorten string by removing unnecessary stuff
 #         # save_preds(args, out_fn+f'_for_{query}', mean_preds_query[:,:,i_query])
 #         # plot_perf(args, out_fn+f'_for_{query}', mean_preds_query[:,:,i_query], ylabel='prediction')
 
-#     # save every contrast - full minus every split
+#     # save every contrast - full minus every split
 #     for i_query, query in enumerate(corrected_split_queries):
-#         query = '_'.join(query.split()) # replace spaces by underscores
-#         query = shorten_filename(query) # shorten string by removing unnecessary stuff
+#         query = '_'.join(query.split()) # replace spaces by underscores
+#         query = shorten_filename(query) # shorten string by removing unnecessary stuff
 #         # save_preds(args, out_fn+f'_for_{query}_full_minus_split', mean_preds - mean_preds_query[:,:,i_query])
-#         # plot pred
+#         # plot pred
 #         # plot_perf(args, out_fn+f'_for_{query}_full_minus_split', 
 #         #     mean_preds - mean_preds_query[:,:,i_query], ylabel='prediction', contrast=True)
 
 print(f'Done with saving training plots and data. Elasped time since the script began: {(time.time()-start_time)/60:.2f}min')
 
 
-    # ### LOAD MODELS FROM FILE ###
+    # ### LOAD MODELS FROM FILE ###
     # print('No training specified. Loading saved models')
     # all_models = pickle.load(open(out_fn + '_all_models.p', 'rb'))
     # print(f'Done loading models')
@@ -163,7 +171,7 @@ print('\n\nStarting testing')
 for test_cond, test_fn, test_out_fn, test_query_1, test_query_2  in zip(args.test_cond, test_fns, test_out_fns, args.test_query_1, args.test_query_2):
     print(f'testing on {test_cond}, output path: {test_out_fn}')
 
-    ### LOAD EPOCHS ###
+    ### LOAD EPOCHS ###
     epochs = load_data(args, test_fn, test_query_1, test_query_2)
     test_split_query_indices, corrected_split_queries = get_split_indices(args.split_queries, epochs)
     test_tmin, test_tmax = epochs[0].tmin, epochs[0].tmax
@@ -185,16 +193,16 @@ for test_cond, test_fn, test_out_fn, test_query_1, test_query_2  in zip(args.tes
     # save_results(test_out_fn, accuracy, fn_end="acc")
     # save_preds(args, test_out_fn, mean_preds)
 
-    ### PLOT PERFORMANCE ###
+    ### PLOT PERFORMANCE ###
     plot_perf(args, test_out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, test_tmax=test_tmax, gen_cond=test_cond, version=version)
 
-    # # # plot pred
+    # # # plot pred
     # plot_perf(args, out_fn+f"_tested_on_{test_cond}", mean_preds, test_cond, ylabel='prediction')
 
-    if AUC_query is not None: # save the results for all the splits
+    if AUC_query is not None: # save the results for all the splits
         for i_query, query in enumerate(corrected_split_queries):
-            query = '_'.join(query.split()) # replace spaces by underscores
-            query = shorten_filename(query) # shorten string by removing unnecessary stuff
+            query = '_'.join(query.split()) # replace spaces by underscores
+            query = shorten_filename(query) # shorten string by removing unnecessary stuff
             save_results(test_out_fn+f'_for_{query}', AUC_query[:,:,i_query])
             plot_perf(args, test_out_fn+f'_for_{query}', AUC_query[:,:,i_query], args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, test_tmax=test_tmax, gen_cond=test_cond, version=version)
 

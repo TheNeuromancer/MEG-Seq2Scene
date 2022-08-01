@@ -41,6 +41,7 @@ parser.add_argument('--slices', action='store_true',  default=False, help='Wheth
 parser.add_argument('--only_agg', action='store_true',  default=False, help='Do plot for each available condition, or just the aggregates plots with multiple conditions')
 parser.add_argument('-r', '--remake', action='store_true',  default=False, help='recompute average again, even if plotting only aggregates')
 parser.add_argument('-v', '--verbose', action='store_true',  default=False, help='Print more stuff')
+parser.add_argument('--smooth_plot', default=0, type=int, help='Smoothing AUC before plotting')
 args = parser.parse_args()
 
 # import config parameters
@@ -56,7 +57,13 @@ feat2feats = {"Shape": ['carre', 'cercle', 'triangle', 'ca', 'cl', 'tr'], "Colou
 
 if args.slices:
     slices_loc = [0.17, 0.3, 0.43, 0.5, 0.72, 0.85]
-    slices_one_obj = [0.2, 0.85, 1.1, 2.5, 2.75]
+    slices_one_obj = [0.3, 0.9, 1.1, 2.5, 2.75]
+    if args.regression: # different slices
+        slices_two_obj = [3.2, 4., 4.8, 5.6, 6.15]
+        chance = 0
+    else:
+        slices_two_obj = [0.2, 0.9, 1.5, 2.1, 3.4, 4.2, 5.5, 6.2]
+        chance = 0.5
 else:
     slices = []
 
@@ -65,7 +72,8 @@ ybar = 0 if args.regression else 0.5 # vertical line
 print(ylabel)
 
 print('This script lists all the .npy files in all the subjects decoding output directories, takes the set of this and the averages all unique filenames to get on plot for all subjects per condition')
-decoding_dir = f"Decoding_ovr_v{args.version}" if args.ovr else f"Regression_decoding_v{args.version}" if args.regression else f"Decoding_v{args.version}"
+v = args.version
+decoding_dir = f"Decoding_ovr_v{v}" if args.ovr else f"Regression_decoding_v{v}" if args.regression else f"Decoding_v{v}"
 if args.subject in ["all", "v1", "v2",  "goods"]: # for v1 and v2 we filter later
     in_dir = f"{args.root_path}/Results/{decoding_dir}/{args.epochs_dir}/*/"
 else:
@@ -133,9 +141,11 @@ else:
         for train_cond in ["localizer", "obj", "scenes"]: # , "one_object", "two_objects", 
             if args.slices:
                 if train_cond in ["localizer"]: slices = slices_loc
-                if train_cond == "one_object": slices = slices_one_obj
-            for split_query in ["match", "nonmatch", "flash", "noflash", "match_or_Error_type=l0", "match_or_Error_type=l1", "match_or_Error_type=l2", False]:
-                for gen_cond in [None, "localizer", "obj", "scenes"]: # , "one_object", "two_objects", 
+                if train_cond == "obj": slices = slices_one_obj
+                if train_cond == "scenes": slices = slices_two_obj
+            for split_query in ["match", "nonmatch", "flash", "noflash", "match_or_Error_type=l0", "match_or_Error_type=l1", \
+                                "match_or_Error_type=l2", "Complexity=0", "Complexity=1", "Complexity=2", False]:
+                for gen_cond in [None, "localizer", "obj", "scenes"]:
                     # if train_cond == gen_cond: continue # skip when we both have one object, it is not generalization
                     all_patterns = []
                     all_AUC = []
@@ -160,7 +170,8 @@ else:
                         if "full_minus_split" in fn: continue
 
                         if args.verbose: print('loading file ', fn)
-                        all_AUC.append(np.load(fn))
+                        AUC = np.load(fn)
+                        all_AUC.append(AUC)
                         all_subs.append(op.basename(op.dirname(fn))[0:2])
                         all_items.append(op.basename(fn))
 
@@ -181,8 +192,12 @@ else:
                         if args.verbose: print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} for  split query {split_query}")
                         continue
                     if args.verbose: print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}")
+                    n_subs = len(all_AUC)
+                    if n_subs < 2: 
+                        print(f"Single subject found, moving on to next conditon")
+                        continue
                     gen_str = f"_tested_on_{gen_cond}" if gen_cond is not None else ""
-                    out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}{split_query_str}_{len(all_AUC)}ave"
+                    out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}{split_query_str}_{n_subs}ave"
 
                     all_subs_labels = np.unique(all_subs)
                     all_subs = dummy_class_enc.fit_transform(all_subs)
@@ -208,6 +223,7 @@ else:
                         continue
                         set_trace()
                     AUC_std = sem(all_AUC, 0, nan_policy='omit')
+
                     if not split_query and (gen_cond is None):
                         if len(all_patterns) == 0: 
                             print(f"Not a single pattern found ...") 
@@ -227,16 +243,20 @@ else:
                     max_auc_all_facconds.append(np.max(AUC_mean))
                     all_faccond_names.append(f"{label} trained on {train_cond}{' tested on ' if gen_cond is not None else ''}{gen_cond if gen_cond is not None else ''}")
 
-                    # ## plotting all patterns
-                    # if len(all_patterns):
-                    #     fig, axes = plt.subplots(len(all_patterns), figsize=(6, len(all_patterns)/2))
-                    #     for i_p, patt in enumerate(all_patterns):
-                    #         try:
-                    #             mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
-                    #         except:
-                    #             set_trace()
-                    #     plt.savefig(f'{out_fn}_{label}_{train_cond}_patternS_mag.png')
-                    #     plt.close()
+                    ## plotting all patterns
+                    if len(all_patterns):
+                        # fig, axes = plt.subplots(len(all_patterns), figsize=(6, len(all_patterns)/2))
+                        # for i_p, patt in enumerate(all_patterns):
+                        #     try:
+                        #         mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
+                        #     except:
+                        #         set_trace()
+                        # plt.savefig(f'{out_fn}_{label}_{train_cond}_patternS_mag.png')
+                        ## ave pattern
+                        fig, ax = plt.subplots()
+                        mne.viz.plot_topomap(np.squeeze(np.mean(all_patterns, 0))[mag_idx], mag_info, axes=ax)
+                        plt.savefig(f'{out_fn}_{label}_{train_cond}_ave_pattern_mag.png')
+                        plt.close()
 
                     if args.only_agg: continue # skip per condition plots, just save results for aggregate plots
 
@@ -253,12 +273,20 @@ else:
                         train_tmin, train_tmax = [float(s) for s in fn.split("#")[1].split(",")]
                         test_tmin, test_tmax = [float(s) for s in fn.split("#")[2].split(",")]
                         window = True
-                    
+
+                    if "Resp" in label: # response lock
+                        train_tmin, train_tmax = tmin_tmax_dict["response_locked"]
+                        test_tmin, test_tmax = tmin_tmax_dict["response_locked"]
+                        is_resplock = True
+                    else:
+                        is_resplock = False
+                    times = np.arange(train_tmin, train_tmax+1e-10, 1./args.sfreq)
+
                     is_contrast = True if (np.min(np.array(all_AUC)) < 0) or (np.max(np.array(all_AUC)) < .4) else False
 
                     if gen_cond is None or "win" in label:
-                        plot_diag(data_mean=AUC_mean, data_std=AUC_std, out_fn=out_fn, train_cond=train_cond, ybar=ybar,
-                            train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, window=window)
+                        plot_diag(data_mean=AUC_mean, data_std=AUC_std, out_fn=out_fn, train_cond=train_cond, ybar=ybar, resplock=is_resplock,
+                            train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, window=window, smooth_plot=args.smooth_plot)
                         
                         # ## plot diags for all subjects
                         # # plot_multi_diag(data=all_AUC, data_std=None, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, 
@@ -284,8 +312,16 @@ else:
                         #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
 
                     if not window:
-                        plot_GAT(data_mean=AUC_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, 
-                                 test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, gen_cond=gen_cond, slices=slices, version=version, window=window)
+                        plot_GAT(data_mean=AUC_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, ybar=ybar,
+                                 test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, resplock=is_resplock, gen_cond=gen_cond, slices=slices, version=version, window=window)
+
+
+                        if args.slices and gen_cond is None:
+                            plot_GAT_with_slices(AUC_mean, all_AUC, out_fn, train_cond=train_cond, times=times, ylabel=ylabel, cbar=True, chance=chance,
+                                         version=version, stat='cluster', slices=slices, ybar=ybar, same_aspect=not(args.regression))
+
+                            plot_GAT_with_slices(AUC_mean, all_AUC, out_fn, train_cond=train_cond, times=times, ylabel=ylabel, cbar=True, chance=chance,
+                                         version=version, stat='wilcoxon', slices=slices, ybar=ybar, same_aspect=not(args.regression))
 
                     if args.verbose: print(f"Finished {label} trained on {train_cond} with generalization {gen_cond}  for  split query {split_query}\n")
                     plt.close('all')
@@ -300,7 +336,7 @@ else:
 ## all basic decoders diagonals on the same plot
 tmin, tmax = tmin_tmax_dict["scenes"]
 times = np.arange(tmin, tmax+1e-10, 1./args.sfreq)
-word_onsets, image_onset = get_onsets("scenes", version=version)
+word_onsets, image_onset = get_onsets("scenes", version=version) # , resplock=resplock
 
 # for label, pattern in pattern_all_labels.items():
 #     fig = mne.viz.plot_topomap(pattern[mag_idx], mag_info, contours=0)
@@ -312,6 +348,10 @@ word_onsets, image_onset = get_onsets("scenes", version=version)
 # # from ipdb import set_trace; set_trace()   
 
 print(diag_auc_all_labels.keys())
+
+if args.regression:
+    labels = ['Complexity_scenes_None_']
+    joyplot_with_stats(data_dict=diag_auc_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_monocomplexity.png', word_onsets=word_onsets, image_onset=image_onset, hline=0)
 
 # if args.ovr:
 # mismatch type

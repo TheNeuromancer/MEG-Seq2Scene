@@ -35,6 +35,7 @@ parser.add_argument('--equalize_split_events', action='store_true', default=None
 parser.add_argument('-x', '--xdawn', action='store_true',  default=None, help='Whether to apply Xdawn spatial filtering before training decoder')
 parser.add_argument('-a', '--autoreject', action='store_true',  default=None, help='Whether to apply Autoreject on the epochs before training decoder')
 parser.add_argument('--quality_th', default=None, type=float, help='Whether to apply Autoreject on the epochs before training decoder')
+parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
@@ -45,6 +46,7 @@ parser.add_argument('--windows', default=[], action='append', help='tmin and tma
 parser.add_argument('--localizer', action='store_true', default=False, help='Whether to use only electrode that were significant in the localizer')
 parser.add_argument('--path2loc', default='Single_Chan_vs5/CMR_sent', help='path to the localizer results (dict with value 1 for each channel that passes the test, 0 otherwise')
 parser.add_argument('--pval-thresh', default=0.05, type=float, help='pvalue threshold under which a channel is kept for the localizer')
+parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
 args = parser.parse_args()
 
 # import config parameters
@@ -75,7 +77,6 @@ train_fn, test_fns, out_fn, test_out_fns = get_paths(args, dirname="Regression_d
 print('\nStarting training')
 ### LOAD EPOCHS ###
 epochs = load_data(args, train_fn)[0] # OVR-style data_loading: keep all, pass class queries to decode func which create the X and y.
-test_split_query_indices, corrected_split_queries = get_split_indices(args.split_queries, epochs)
 train_tmin, train_tmax = epochs[0].tmin, epochs[0].tmax
 ### GET DATA AND CONSTRUCT LABELS ###
 # X, y, nchan, ch_names = get_X_y_from_epochs_list(args, epochs, args.sfreq)
@@ -92,13 +93,13 @@ clf = mne.decoding.LinearModel(clf)
 
 ### DECODE ###
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
-all_models, R2, R = regression_decode(args, epochs, class_queries, clf)
+all_models, R, R_split_queries = regression_decode(args, epochs, class_queries, clf)
 print(f'Finished training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
 
 ### SAVE RESULTS ###
-save_results(out_fn, R2, all_models, fn_end="R2")
 save_results(out_fn, R, all_models, fn_end="R")
-save_best_pattern(out_fn, R2, all_models) ## Save best model's pattern
+save_best_pattern(out_fn, R, all_models) ## Save best model's pattern
+# save_results(out_fn, R2, all_models, fn_end="R2")
 
 # ### PLOT PERFORMANCE ### # no split query à priori
 # version = "v1" if int(args.subject[0:2]) < 8 else "v2"

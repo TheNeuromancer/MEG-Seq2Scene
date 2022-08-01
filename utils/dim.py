@@ -25,7 +25,7 @@ from statannotations.Annotator import Annotator
 # local import
 from .commons import *
 from .params import *
-from utils.decod import get_X_y_from_epochs_list
+from utils.decod import get_X_y_from_epochs_list, save_results
 
 
 def load_data(args, fn, queries):
@@ -33,6 +33,11 @@ def load_data(args, fn, queries):
     but takes arbitrary number of queries 
     and returns as many epochs objects '''
     epochs = mne.read_epochs(fn, preload=True, verbose=False)
+    if "two_objects-epo.fif" in fn:
+        epochs.metadata = complement_md(epochs.metadata)
+        epochs.metadata['Complexity'] = epochs.metadata.apply(add_complexity_to_md, axis=1)
+    if "Flash" not in epochs.metadata.keys():
+        epochs.metadata['Flash'] = 0 # old subject did not have flashes
     if args.autoreject:
         print(f"Applying autoreject in the first place")
         ar = AutoReject()
@@ -47,9 +52,6 @@ def load_data(args, fn, queries):
             print(f"We have {len(epochs)} events left after filtering with {args.filter}")
     if args.subtract_evoked:
         epochs = epochs.subtract_evoked(epochs.average())
-    # if "Right_obj" in query_1 or "Left_obj" in query_1 or "two_objects" in fn:
-    if queries and (any(["Right_obj" in q for q in queries]) or any(["Left_obj" in q for q in queries])):
-        epochs.metadata = complement_md(epochs.metadata)
     if queries: # load sub-epochs, one for each query
         epochs = [epochs[query] for query in queries]
     else: # load the whole epochs (typically for RSA)
@@ -120,17 +122,30 @@ def load_data(args, fn, queries):
     # if args.cat:
     #     X = savgol_filter(X, window_length=51, polyorder=3, deriv=0, delta=1.0, axis=-1, mode='interp', cval=0.0)
 
+    # if args.cat:
+    #     data = win_ave_smooth(data, nb_cat=args.cat, mean=args.mean)
+    #     new_info = epochs[0].info.copy()
+    #     old_ch_names = deepcopy(new_info['ch_names'])
+    #     for i in range(args.cat-1): new_info['ch_names'] += [f"{ch}_{i}" for ch in old_ch_names]
+    #     new_info['nchan'] = new_info['nchan'] * args.cat
+    #     old_info_chs = deepcopy(new_info['chs'])
+    #     for i in range(args.cat-1): new_info['chs'] += deepcopy(old_info_chs)
+    #     for i in range(new_info['nchan']): new_info['chs'][i]['ch_name'] = new_info['ch_names'][i] 
+    # else:
+    #     new_info = epochs[0].info
+    
+    new_info = epochs[0].info.copy() # default, overwritten if cat is not none
     if args.cat:
         data = win_ave_smooth(data, nb_cat=args.cat, mean=args.mean)
-        new_info = epochs[0].info.copy()
-        old_ch_names = deepcopy(new_info['ch_names'])
-        for i in range(args.cat-1): new_info['ch_names'] += [f"{ch}_{i}" for ch in old_ch_names]
-        new_info['nchan'] = new_info['nchan'] * args.cat
-        old_info_chs = deepcopy(new_info['chs'])
-        for i in range(args.cat-1): new_info['chs'] += deepcopy(old_info_chs)
-        for i in range(new_info['nchan']): new_info['chs'][i]['ch_name'] = new_info['ch_names'][i] 
-    else:
-        new_info = epochs[0].info
+        if not args.mean: # create new channel names because concatenation of timepoints equate adding channels
+            print(f"Concatenating {args.cat} consecutive timepoints")
+            old_ch_names = deepcopy(epochs[0].info['ch_names'])
+            new_ch_names = [f"{ch}_{i}" for i in range(args.cat) for ch in old_ch_names]
+            new_nchan = epochs[0].info['nchan'] * args.cat
+            new_ch_types = [typ for i in range(args.cat) for typ in epochs[0].info.get_channel_types('meg')]
+            new_info = mne.create_info(ch_names=new_ch_names, sfreq=epochs[0].info['sfreq'], ch_types=new_ch_types)
+        else:
+            print(f"Averaging {args.cat} consecutive timepoints")
 
     # print('zscoring each epoch')
     # for idx in range(X.shape[0]):
@@ -175,32 +190,38 @@ def load_data(args, fn, queries):
     return epochs
 
 
-def split_for_pca(args, X):
-    # returns all splits
-    cv = KFold(args.n_folds, shuffle=True, random_state=42)
-    return ([[X[train].mean(0), X[test].mean(0)] for train, test in cv.split(X)])
+## Old way
+# def split_for_pca(args, X):
+#     # returns all splits
+#     cv = KFold(args.n_folds, shuffle=True, random_state=42)
+#     return ([[X[train].mean(0), X[test].mean(0)] for train, test in cv.split(X)])
 
 
-def PCA_dim(args, X_train, X_test):
-    ''' dimensionality analysis 
-    using PCA and reconstruction '''
-    pca = PCA(args.n_comp)
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train, 0) # fit scaler on the overall evoked
-    pca.fit(X_train)
-    X_test = scaler.transform(X_test)
-    PCAed = pca.transform(X_test)
+# def PCA_dim(args, X_train, X_test):
+#     ''' dimensionality analysis 
+#     using PCA and reconstruction '''
+#     pca = PCA(args.n_comp)
+#     scaler = StandardScaler()
+#     X_train = scaler.fit_transform(X_train, 0) # fit scaler on the overall evoked
+#     pca.fit(X_train)
+#     X_test = scaler.transform(X_test)
+#     PCAed = pca.transform(X_test)
     
-    components = pca.components_ # n_comp, nchan
-    exvar, MSE, l2 = [], [], [] # score per component
-    for i_comp in range(args.n_comp):
-        reconstruction = np.dot(PCAed[:, 0:i_comp+1], components[0:i_comp+1])
+#     components = pca.components_ # n_comp, nchan
+#     exvar, MSE, l2 = [], [], [] # score per component
+#     for i_comp in range(args.n_comp):
+#         reconstruction = np.dot(PCAed[:, 0:i_comp+1], components[0:i_comp+1])
 
-        exvar.append(explained_variance_score(X_test, reconstruction))
-        MSE.append(np.mean((X_test - reconstruction)**2))
-        l2.append(np.linalg.norm(X_test - reconstruction))
+#         exvar.append(explained_variance_score(X_test, reconstruction))
+#         MSE.append(np.mean((X_test - reconstruction)**2))
+#         l2.append(np.linalg.norm(X_test - reconstruction))
 
-    return exvar, MSE, l2
+#     return exvar, MSE, l2
+
+
+## NEW WAY
+def participation_ratio(eigenvalues): # as defined in Gao 2017
+    return eigenvalues.sum()**2 / np.sum([eig**2 for eig in eigenvalues])
 
 
 # def catplot():
@@ -214,5 +235,5 @@ def PCA_dim(args, X_train, X_test):
 #     plt.close('all')
 
 
-def plot_average_over_time()
+# def plot_average_over_time()
 

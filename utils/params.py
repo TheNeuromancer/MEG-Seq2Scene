@@ -1,5 +1,5 @@
 # beginning and end of epochs for each block type
-tmin_tmax_dict = {"localizer": [-.5, 1.], "one_object": [-.5, 4.], "two_objects": [-.5, 8.], "obj": [-.5, 4.], "scenes": [-.5, 8.], "alltogether": [-.5, 8.]}
+tmin_tmax_dict = {"localizer": [-.5, 1.], "one_object": [-.5, 4.], "two_objects": [-.5, 8.], "response_locked": [-2, 1.], "obj": [-.5, 4.], "scenes": [-.5, 8.], "alltogether": [-.5, 8.]}
 
 # trigger values for each block type
 TRIG_DICT = {"localizer_block_start": 70,

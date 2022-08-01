@@ -32,9 +32,9 @@ class Config:
     reduc_dim_win: float = 0 # dimensionality reduction for the window decoding analysis 
     ## Decoding window parameters
     reduc_dim_sing: float = 0 # dimensionality reduction
-    cat: int = 5 # number of timepoints to concatenate
+    cat: int = 10 # number of timepoints to concatenate
     mean: bool = False # Wether to average instead of concatenate if using the "cat" argument
-    smooth: int = 11 # hanning smoothing window, in timesample,
+    smooth: int = 21 # hanning smoothing window, in timesample,
     clip: bool = True # Whether to clip to the 5th and 95th percentile for each channel
     subtract_evoked: bool = False # Whether to subtract the evoked signal from the epochs
     avg_clf: bool = False # Whether to average classifiers across cval folds

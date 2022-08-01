@@ -44,7 +44,7 @@ cat <<EOT >> $file_qsub
 #PBS -N $i
 #PBS -l walltime=199:59:00
 #PBS -l ncpus=1
-#PBS -l mem=5G
+#PBS -l mem=20G
 #PBS -q Nspin_long
 #PBS -o $out_file
 #PBS -e $err_file
@@ -62,3 +62,4 @@ qsub $file_qsub
 done
 
 #PBS -l nodes=1:ppn=8
+# Nspin_long

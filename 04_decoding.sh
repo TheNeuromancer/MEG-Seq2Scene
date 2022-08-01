@@ -37,7 +37,10 @@ echo "python 04_decoding.py \
 --train-query-2 \"Matching=='nonmatch'\" \
 --split-queries \"Matching=='match' or Error_type=='l0'\" \
 --split-queries \"Matching=='match' or Error_type=='l1'\" \
---split-queries \"Matching=='match' or Error_type=='l2'\" "
+--split-queries \"Matching=='match' or Error_type=='l2'\" \
+--split-queries \"Complexity==0\" \
+--split-queries \"Complexity==1\" \
+--split-queries \"Complexity==2\" "
 
 	echo "python 04_decoding.py \
 --train-cond 'two_objects' --label PropMismatch \
@@ -83,6 +86,99 @@ echo "python 04_decoding.py \
 --test-query-1 \"Button=='left'\" \
 --test-query-2 \"Button=='right'\" "
 # --split-queries \"Perf==1\" \
+
+
+
+
+
+
+## MISMTACHES RESPONSE LOCKED
+	## TRAIN ON ONE OBJECT
+	echo "python 04_decoding.py \
+--train-cond 'one_object' --label RespKindMismatch --response_lock \
+--timegen -s $sub \
+--train-query-1 \"Matching=='match'\" \
+--train-query-2 \"Matching=='nonmatch'\" \
+--split-queries \"Matching=='match' or Error_type=='colour'\" \
+--split-queries \"Matching=='match' or Error_type=='shape'\" \
+--test-cond 'two_objects' \
+--test-query-1 \"Matching=='match'\" \
+--test-query-2 \"Matching=='nonmatch'\" "
+
+
+	echo "python 04_decoding.py \
+--train-cond 'one_object' --label RespColourMismatch --response_lock \
+--timegen -s $sub \
+--train-query-1 \"Matching=='match'\" \
+--train-query-2 \"Error_type=='colour'\" "
+
+echo "python 04_decoding.py \
+--train-cond 'one_object' --label RespShapeMismatch --response_lock \
+--timegen -s $sub \
+--train-query-1 \"Matching=='match'\" \
+--train-query-2 \"Error_type=='shape'\" "
+
+	## TRAIN ON TWO OBJECTS
+	echo "python 04_decoding.py \
+--train-cond 'two_objects' --label RespKindMismatch --response_lock \
+--timegen -s $sub \
+--train-query-1 \"Matching=='match'\" \
+--train-query-2 \"Matching=='nonmatch'\" \
+--split-queries \"Matching=='match' or Error_type=='l0'\" \
+--split-queries \"Matching=='match' or Error_type=='l1'\" \
+--split-queries \"Matching=='match' or Error_type=='l2'\" \
+--split-queries \"Complexity==0\" \
+--split-queries \"Complexity==1\" \
+--split-queries \"Complexity==2\" "
+
+	echo "python 04_decoding.py \
+--train-cond 'two_objects' --label RespPropMismatch --response_lock \
+--timegen -s $sub \
+--train-query-1 \"Matching=='match'\" \
+--train-query-2 \"Error_type=='l0'\" "
+
+	echo "python 04_decoding.py \
+--train-cond 'two_objects' --label RespBindMismatch --response_lock \
+--timegen -s $sub \
+--train-query-1 \"Matching=='match'\" \
+--train-query-2 \"Error_type=='l1'\" "
+
+	echo "python 04_decoding.py \
+--train-cond 'two_objects' --label RespRelMismatch --response_lock \
+--timegen -s $sub \
+--train-query-1 \"Matching=='match'\" \
+--train-query-2 \"Error_type=='l2'\" "
+
+
+
+## DECODE BUTTON PRESSED RESPONSE LOCKED
+	echo "python 04_decoding.py \
+--train-cond 'one_object' --label RespButton --response_lock \
+--timegen -s $sub \
+--train-query-1 \"Button=='left'\" \
+--train-query-2 \"Button=='right'\" \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--test-cond 'two_objects' \
+--test-query-1 \"Button=='left'\" \
+--test-query-2 \"Button=='right'\" "
+# --split-queries \"Perf==1\" \
+
+	echo "python 04_decoding.py \
+--train-cond 'two_objects' --label RespButton --response_lock \
+--timegen -s $sub \
+--train-query-1 \"Button=='left'\" \
+--train-query-2 \"Button=='right'\" \
+--split-queries \"Matching=='match'\" \
+--split-queries \"Matching=='nonmatch'\" \
+--test-cond 'one_object' \
+--test-query-1 \"Button=='left'\" \
+--test-query-2 \"Button=='right'\" "
+# --split-queries \"Perf==1\" \
+
+
+
+
 
 
 ## FLASH 

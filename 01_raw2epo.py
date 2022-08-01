@@ -41,7 +41,7 @@ import matplotlib
 if args.show:
     matplotlib.use('Qt5Agg') # output to screen (locally or through ssh -X)
 else:
-    matplotlib.use('Agg') # no output to screen.
+    matplotlib.use('Agg') # no output to screen.
 import matplotlib.pyplot as plt
 
 
@@ -66,7 +66,7 @@ print(all_runs_fns)
 print(all_md_fns)
 n_runs = len(all_runs_fns)
 
-# Make output directory
+# Make output directory
 out_dir = op.join(f"{args.root_path}/Data/{args.epochs_dir}/{args.subject}")
 out_dir_plots = op.join(out_dir, 'plots')
 if not op.exists(out_dir_plots):
@@ -119,7 +119,7 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
     print("doing file ", raw_fn_in)
     run_nb = op.basename(raw_fn_in).split("run")[1].split("_")[0]
 
-    # Load data
+    # Load data
     raw = mne.io.Raw(raw_fn_in, preload=True, verbose='error', allow_maxshield=True)
 
     try:
@@ -188,9 +188,9 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
     block_type = fn2blocktype(raw_fn_in)
     trig = TRIG_DICT[f'{block_type}_trial_start']
 
-    ## get events
+    ## get events
     min_duration = 0.002
-    if block_type == "two_objects": # for some reason the two objects block do not zork with Chrsitos panacea
+    if block_type == "two_objects": # for some reason the two objects block do not zork with Chrsitos panacea
         # if args.subject == "05_mb140004" and "run6_2obj" in raw_fn_in:
         #     min_duration = 0.002
         events = mne.find_events(raw, stim_channel='STI101', verbose=True, min_duration=min_duration)
@@ -287,11 +287,8 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
     # add flashes to md
     if block_type in ['two_objects']: # 'one_object', 
         flashes = get_flash_indices(events)
-        try:
-            md["Flash"] = flashes
-        except:
-            set_trace()
-    
+        md["Flash"] = flashes
+        
     print(events.shape)
     events = events[events[:,2]==trig]
     print(events.shape)
@@ -314,7 +311,7 @@ for i_run, raw_fn_in in enumerate(all_runs_fns):
 
     elif block_type == 'two_objects':
         raw_2obj.append(raw)
-        ## HACKS FOR THE MISSING TRIALS
+        ## HACKS FOR THE MISSING TRIALS
         if args.subject == "01_js180232" and "run5" in raw_fn_in:
             md = md.iloc[len(md)-len(events)::] # just skip the first few trials
         events_2obj.append(events)
@@ -379,7 +376,7 @@ if md_1obj: md_1obj = pd.concat(md_1obj)
 if md_2obj: md_2obj = pd.concat(md_2obj)
 
 
-# localizer
+# localizer
 if raw_loc:
     tmin, tmax = tmin_tmax_dict['localizer']
     try:
@@ -391,7 +388,7 @@ if raw_loc:
         bad_epochs = get_deviant_epo(epochs_loc, thresh=args.epo_var_reject)
         epochs_loc = reject_bad_epochs(epochs_loc, bad_epochs)
 
-    if args.sfreq: # resample to the final sfreq
+    if args.sfreq: # resample to the final sfreq
         print("Resampling data to %.1f Hz" % args.sfreq)
         epochs_loc.resample(args.sfreq, npad='auto')
         
@@ -402,7 +399,7 @@ if raw_loc:
 if raw_1obj:
     tmin, tmax = tmin_tmax_dict['one_object']
     try:
-        epochs_1obj = mne.Epochs(raw_1obj, events_1obj, event_id=TRIG_DICT['one_object_trial_start'], tmin=tmin-1., tmax=tmax+1., metadata=md_1obj, preload=True)
+        epochs_1obj = mne.Epochs(raw_1obj, events_1obj, event_id=TRIG_DICT['one_object_trial_start'], tmin=tmin-1., tmax=tmax+2., metadata=md_1obj, preload=True)
     except:
         set_trace()
     if args.epo_var_reject:
@@ -410,7 +407,7 @@ if raw_1obj:
         bad_epochs = get_deviant_epo(epochs_1obj, thresh=args.epo_var_reject)
         epochs_1obj = reject_bad_epochs(epochs_1obj, bad_epochs)
 
-    if args.sfreq: # resample to the final sfreq
+    if args.sfreq: # resample to the final sfreq
         print("Resampling data to %.1f Hz" % args.sfreq)
         epochs_1obj.resample(args.sfreq, npad='auto')    
         
@@ -421,7 +418,7 @@ if raw_1obj:
 if raw_2obj:
     tmin, tmax = tmin_tmax_dict['two_objects']
     try:
-        epochs_2obj = mne.Epochs(raw_2obj, events_2obj, event_id=TRIG_DICT['two_objects_trial_start'], tmin=tmin-1., tmax=tmax+1., metadata=md_2obj, preload=True)
+        epochs_2obj = mne.Epochs(raw_2obj, events_2obj, event_id=TRIG_DICT['two_objects_trial_start'], tmin=tmin-1., tmax=tmax+3., metadata=md_2obj, preload=True)
     except:
         set_trace()
     if args.epo_var_reject:
@@ -429,7 +426,7 @@ if raw_2obj:
         bad_epochs = get_deviant_epo(epochs_2obj, thresh=args.epo_var_reject)
         epochs_2obj = reject_bad_epochs(epochs_2obj, bad_epochs)
 
-    if args.sfreq: # resample to the final sfreq
+    if args.sfreq: # resample to the final sfreq
         print("Resampling data to %.1f Hz" % args.sfreq)
         epochs_2obj.resample(args.sfreq, npad='auto')
         

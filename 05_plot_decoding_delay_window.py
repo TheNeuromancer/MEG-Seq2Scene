@@ -1,6 +1,6 @@
 import matplotlib
 # matplotlib.use('Qt5Agg')
-matplotlib.use('Agg') # no output to screen.
+matplotlib.use('Agg') # no output to screen.
 import matplotlib.pyplot as plt
 
 import mne
@@ -57,7 +57,7 @@ out_dir = f"{args.root_path}/Results/{decoding_dir}/{args.epochs_dir}/{args.subj
 
 print('\noutput files will be in: ' + out_dir)
 
-if op.exists(out_dir): # warn and stop if args.overwrite is set to False
+if op.exists(out_dir): # warn and stop if args.overwrite is set to False
     print('output file already exists...')
     if args.overwrite:
         print('overwrite is set to True ... overwriting')
@@ -68,7 +68,7 @@ else:
     print('Constructing output dirtectory: ', out_dir)
     os.makedirs(out_dir)
 
-# list all .npy files in the directory
+# list all .npy files in the directory
 all_fns = natsorted(glob(in_dir + '/*AUC.p'))
 
 # keep the first 8 subjects for the 1st version, all the remaining for v2
@@ -96,6 +96,7 @@ cmap10 = plt.cm.get_cmap('tab10', 10)
 
 all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
 all_labels = [lab for lab in all_labels if "delay" in lab]
+print(all_labels)
 max_auc_all_facconds = []
 all_faccond_names = []
 

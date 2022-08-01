@@ -9,6 +9,7 @@ import os.path as op
 import os
 from natsort import natsorted
 import pandas as pd
+import seaborn as sns 
 import pickle
 from copy import deepcopy
 from tqdm import tqdm, trange
@@ -25,6 +26,10 @@ from scipy.signal import savgol_filter
 from scipy.stats import ttest_1samp, sem, wilcoxon, pearsonr
 from autoreject import AutoReject
 from mne.stats import permutation_cluster_1samp_test, fdr_correction
+from mne.decoding import UnsupervisedSpatialFilter
+
+from pyriemann.estimation import Covariances, XdawnCovariances
+from pyriemann.tangentspace import TangentSpace
 
 
 # local import
@@ -57,8 +62,14 @@ Called in the main scripts """
 ################## PATHS AND DATA LOADING ###################
 # ///////////////////////////////////////////////////////// #
 
-def load_data(args, fn, query_1='', query_2=''):
+def load_data(args, fn, query_1='', query_2='', crop_final=True):
+    print(fn)
     epochs = mne.read_epochs(fn, preload=True, verbose=False)
+    if "two_objects-epo.fif" in fn:
+        epochs.metadata = complement_md(epochs.metadata)
+        epochs.metadata['Complexity'] = epochs.metadata.apply(add_complexity_to_md, axis=1)
+    if "Flash" not in epochs.metadata.keys():
+        epochs.metadata['Flash'] = 0 # old subject did not have flashes
     if args.filter: # filter metadata before anything else
         epochs = epochs[args.filter]
         if not len(epochs): 
@@ -84,12 +95,6 @@ def load_data(args, fn, query_1='', query_2=''):
     if args.subtract_evoked:
         epochs = epochs.subtract_evoked(epochs.average())
     # if "Right_obj" in query_1 or "Left_obj" in query_1 or "two_objects" in fn:
-    print(fn)
-    if "two_objects-epo.fif" in fn:
-        epochs.metadata = complement_md(epochs.metadata)
-        epochs.metadata['Complexity'] = epochs.metadata.apply(add_complexity_to_md, axis=1)
-    if "Flash" not in epochs.metadata.keys():
-        epochs.metadata['Flash'] = 0 # old subject did not have flashes
     if query_1 and query_2: # load 2 sub-epochs, one for each query
         epochs = [epochs[query_1], epochs[query_2]]
     elif query_1: # load a single sub-epochs
@@ -126,15 +131,19 @@ def load_data(args, fn, query_1='', query_2=''):
 
 
     if args.freq_band:
-        # freq_bands = dict(delta=(1, 3.99), theta=(4, 7.99), alpha=(8, 12.99), beta=(13, 29.99), low_gamma=(30, 69.99), high_gamma=(70, 150))
-        freq_bands = dict(low_high=(0.03, 80), low_low=(0.03, 40), high_low=(2, 40), high_vlow=(2, 20), 
-                                      low_vlow=(0.03, 20), low_vhigh=(0.03, 160), high_vhigh=(2, 160), 
-                                      vhigh_vhigh=(20, 160), vhigh_high=(20, 80), vhigh_low=(20, 40))
+        freq_bands = dict(delta=(1, 3.99), theta=(4, 7.99), alpha=(8, 12.99), beta=(13, 29.99), low_gamma=(30, 69.99), high_gamma=(70, 150))
+        # freq_bands = dict(low_high=(0.03, 80), low_low=(0.03, 40), high_low=(2, 40), high_vlow=(2, 20), 
+        #                               low_vlow=(0.03, 20), low_vhigh=(0.03, 160), high_vhigh=(2, 160), 
+        #                               vhigh_vhigh=(20, 160), vhigh_high=(20, 80), vhigh_low=(20, 40))
         fmin, fmax = freq_bands[args.freq_band]
         print("\nFILTERING WITH FREQ BAND: ", (fmin, fmax))
 
         # bandpass filter
         epochs = [epo.filter(fmin, fmax, n_jobs=-1) for epo in epochs]  
+        # remove evoked response
+        epochs = [epo.subtract_evoked() for epo in epochs]
+        # get analytic signal (envelope)
+        epochs = [epo.apply_hilbert(envelope=True) for epo in epochs]
 
     if args.sfreq < epochs[0].info['sfreq']: 
         if args.sfreq < epochs[0].info['lowpass']:
@@ -166,11 +175,14 @@ def load_data(args, fn, query_1='', query_2=''):
     if args.cat:
         data = win_ave_smooth(data, nb_cat=args.cat, mean=args.mean)
         if not args.mean: # create new channel names because concatenation of timepoints equate adding channels
+            print(f"Concatenating {args.cat} consecutive timepoints")
             old_ch_names = deepcopy(epochs[0].info['ch_names'])
             new_ch_names = [f"{ch}_{i}" for i in range(args.cat) for ch in old_ch_names]
             new_nchan = epochs[0].info['nchan'] * args.cat
             new_ch_types = [typ for i in range(args.cat) for typ in epochs[0].info.get_channel_types('meg')]
             new_info = mne.create_info(ch_names=new_ch_names, sfreq=epochs[0].info['sfreq'], ch_types=new_ch_types)
+        else:
+            print(f"Averaging {args.cat} consecutive timepoints")
 
     # print('zscoring each epoch')
     # for idx in range(X.shape[0]):
@@ -179,12 +191,13 @@ def load_data(args, fn, query_1='', query_2=''):
 
     epochs = [mne.EpochsArray(datum, new_info, metadata=meta, tmin=old_epo.times[0], verbose="warning") for datum, meta, old_epo in zip(data, metadatas, epochs)]
 
-    # crop after getting high gammas and smoothing to avoid border issues
+    # crop after getting filtering and smoothing to avoid border issues
     block_type = op.basename(fn).split("-epo.fif")[0]
     tmin, tmax = tmin_tmax_dict[block_type]
-    print('initial tmin and tmax: ', [(epo.times[0], epo.times[-1]) for epo in epochs])
-    print('cropping to final tmin and tmax: ', tmin, tmax)
-    epochs = [epo.crop(tmin, tmax) for epo in epochs]
+    if crop_final:
+        print('initial tmin and tmax: ', [(epo.times[0], epo.times[-1]) for epo in epochs])
+        print('cropping to final tmin and tmax: ', tmin, tmax)
+        epochs = [epo.crop(tmin, tmax) for epo in epochs]
 
 
     # CLIP THE DATA
@@ -224,12 +237,24 @@ def get_class_queries(query):
         class_queries = [f"Colour2=='{c}'" for c in colors]
     elif query == "Shape2":
         class_queries = [f"Shape2=='{s}'" for s in shapes]
+    # elif query == "XColour1": 
+    #     class_queries = [f"Colour1=='{c}' and Colour2!='{c}'" for c in colors]
+    # elif query == "XShape1":
+    #     class_queries = [f"Shape1=='{s}' and Shape2!='{s}'" for s in shapes]
+    # elif query == "XColour2": 
+    #     class_queries = [f"Colour2=='{c}' and Colour1!='{c}'" for c in colors]
+    # elif query == "XShape2":
+    #     class_queries = [f"Shape2=='{s}' and Shape1!='{s}'" for s in shapes]
     elif query == "Shape1+Colour1":
         class_queries = [f"Shape1=='{s}' and Colour1=='{c}'" for s in shapes for c in colors]
     elif query == "Shape2+Colour2":
         class_queries = [f"Shape2=='{s}' and Colour2=='{c}'" for s in shapes for c in colors]
-    elif "Left" in query or "Right" in query:
+    elif "Left_obj" in query or "Right_obj" in query:
         class_queries = [f"{query}=='{s}_{c}'" for s in shapes for c in colors]
+    elif "Left_color" in query or "Right_color" in query:
+        class_queries = [f"{query}=='{c}'" for c in colors]
+    elif "Left_shape" in query or "Right_shape" in query:
+        class_queries = [f"{query}=='{s}'" for s in shapes]
     elif query == "Relation": 
         class_queries = ["Relation==\"à gauche d'\"", "Relation==\"à droite d'\""]
     elif query == "Perf":
@@ -252,10 +277,20 @@ def get_class_queries(query):
         class_queries = ["Matching=='match'", "Error_type=='l2'"]
     elif query == "Mismatches": # scene mismatches
         class_queries = ["Error_type=='l0'", "Error_type=='l1'", "Error_type=='l2'"]
+    elif query == "MismatchSide": # for prop mismatch only
+        class_queries = ["Mismatch_side=='left'", "Mismatch_side=='right'"]
+    elif query == "MismatchLeft": # for prop mismatch only
+        class_queries = ["Mismatch_side=='left'", "Matching=='match'"]
+    elif query == "MismatchRight": # for prop mismatch only
+        class_queries = ["Mismatch_side=='right'", "Matching=='match'"]
     elif query == "SameShape": 
-        class_queries = ["Shape1==Shape2 and Colour1!=Colour2", "Shape1!=Shape2 and Colour1!=Colour2"]
+        class_queries = ["Shape1==Shape2 and Colour1!=Colour2", "Shape1!=Shape2 and Colour1!=Colour2 and index%2==1"]
     elif query == "SameColour": 
-        class_queries = ["Colour1==Colour2 and Shape1!=Shape2", "Colour1!=Colour2 and Shape1!=Shape2"]
+        class_queries = ["Colour1==Colour2 and Shape1!=Shape2", "Colour1!=Colour2 and Shape1!=Shape2 and index%2==0"]
+    # elif query == "SameShape": 
+    #     class_queries = ["Shape1==Shape2", "Shape1!=Shape2"]
+    # elif query == "SameColour": 
+    #     class_queries = ["Colour1==Colour2", "Colour1!=Colour2"]
     elif query == "SameObject": 
         class_queries = ["Colour1==Colour2 and Shape1==Shape2", "Colour1!=Colour2 and Shape1!=Shape2"]
     elif query == "Complexity":  # for regression decoding
@@ -297,17 +332,22 @@ def get_averaged_clf(args, all_models, n_times):
 
 
 def decode(args, X, y, clf, n_times, test_split_query_indices):
-    
     if args.dummy:
         cv = StratifiedKFold(n_splits=2, shuffle=False)
     else:
         cv = get_cv(args.train_cond, args.crossval, args.n_folds)
+    n_folds = 2 if args.dummy else args.n_folds
     
     if args.reduc_dim:
+        if args.reduc_dim > 1: 
+            args.reduc_dim = int(args.reduc_dim)
         pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
     else:
         pipeline = make_pipeline(RobustScaler(), clf)
-
+    counts = np.array([np.sum(y==clas) for clas in [0,1]])
+    if args.micro_ave: 
+        print(f"Using extensive trial micro-averaging. Expecting {int(np.sum([c*(c-1)/2 for c in counts]))} trials instead of {counts.sum()}")
+        if args.max_trials: print(f"Also keeping a maximum of {args.max_trials} after micro-averaging")
     all_models = []
     if args.timegen:
         AUC = np.zeros((n_times, n_times))
@@ -323,17 +363,27 @@ def decode(args, X, y, clf, n_times, test_split_query_indices):
             mean_preds_test_query_split = None
 
         for train, test in cv.split(X, y):
+            if args.micro_ave:
+                X_train, y_train = micro_averaging(X[train], y[train], args.micro_ave)
+                X_test, y_test = micro_averaging(X[test, :, :], y[test], args.micro_ave)
+                if args.max_trials and len(y_train) > args.max_trials: 
+                    indices = np.random.choice(y_train.size, args.max_trials, replace=False)
+                    X_train, y_train = X_train[indices], y_train[indices]
+                if args.max_trials and len(y_test) > args.max_trials: 
+                    indices = np.random.choice(y_test.size, args.max_trials, replace=False)
+                    X_test, y_test = X_test[indices], y_test[indices]
+            else:
+                X_train, y_train = X[train], y[train]
+                X_test, y_test = X[test], y[test]
             all_models.append([])
             for t in trange(n_times):
-                pipeline.fit(X[train, :, t], y[train])
+                pipeline.fit(X_train[:,:,t], y_train)
                 all_models[-1].append(deepcopy(pipeline))
                 for tgen in range(n_times):
-                    
-                    # normal test
-                    pred = predict(pipeline, X[test, :, tgen])
-                    AUC[t, tgen] += roc_auc_score(y_true=y[test], y_score=pred) / args.n_folds
-                    mean_preds[t, tgen] += np.mean(pred) / args.n_folds
-                    # accuracy[t, tgen] += accuracy_score(y[test], pred>0.5) / args.n_folds
+                    pred = predict(pipeline, X_test[:,:,tgen]) # normal test
+                    AUC[t, tgen] += roc_auc_score(y_true=y_test, y_score=pred) / n_folds
+                    mean_preds[t, tgen] += np.mean(pred) / n_folds
+                    # accuracy[t, tgen] += accuracy_score(y[test], pred>0.5) / n_folds
 
                     if test_split_query_indices: # split the test indices according to the query
                         for i_query, split_indices in enumerate(test_split_query_indices):
@@ -350,8 +400,12 @@ def decode(args, X, y, clf, n_times, test_split_query_indices):
                                         picked = np.random.choice(candidates, size=nb_ev, replace=False)
                                         picked_all_classes.extend(picked)
                                     test_query = np.array(picked_all_classes)
-                            pred = predict(pipeline, X[test_query, :, tgen])
-                            AUC_test_query_split[t, tgen, i_query] += roc_auc_score(y_true=y[test_query], y_score=pred) #/ args.n_folds
+                            if args.micro_ave:
+                                X_test_query, y_test_query = micro_averaging(X[test_query,:,tgen], y[test_query], args.micro_ave)
+                            else:
+                                X_test_query, y_test_query = X[test_query,:,tgen], y[test_query]
+                            pred = predict(pipeline, X_test_query)
+                            AUC_test_query_split[t, tgen, i_query] += roc_auc_score(y_true=y_test_query, y_score=pred) #/ n_folds
                             AUC_test_query_counts[t, tgen, i_query] += 1 # keep track of the number of AUC computed (should = n_folds)
         if test_split_query_indices: AUC_test_query_split = AUC_test_query_split / AUC_test_query_counts # replace division by n_folds because for many cases we don't have correct test indices in each fold.
                         
@@ -401,8 +455,19 @@ def test_decode(args, X, y, all_models, test_split_query_indices):
             AUC_test_query_split = np.zeros((n_times_train, n_times_test, len(test_split_query_indices)))
         else:
             AUC_test_query_split = None
+
+        if args.micro_ave:
+            X_test, y_test = micro_averaging(X, y, args.micro_ave) 
+            if args.max_trials and len(y_test) > args.max_trials: 
+                indices = np.random.choice(y_test.size, args.max_trials, replace=False)
+                X_test, y_test = X_test[indices], y_test[indices]
+        else:
+            X_test, y_test = X, y
+        # called X_test and y_test to leave original X and y, thus allowing to do the split queries
+        print(f"Using {len(y_test)} test trials")
+
         for tgen in trange(n_times_test):
-            t_data = X[:, :, tgen]
+            t_data = X_test[:, :, tgen]
             for t in range(n_times_train):
                 all_folds_preds = []
                 for i_fold in range(n_folds):
@@ -410,15 +475,25 @@ def test_decode(args, X, y, all_models, test_split_query_indices):
                     all_folds_preds.append(predict(pipeline, t_data))
 
                 mean_folds_preds = np.mean(all_folds_preds, 0)
-                AUC[t, tgen] = roc_auc_score(y_true=y, y_score=mean_folds_preds)
+                AUC[t, tgen] = roc_auc_score(y_true=y_test, y_score=mean_folds_preds)
                 mean_preds[t, tgen] = np.mean(mean_folds_preds)
-                accuracy[t, tgen] += accuracy_score(y, mean_folds_preds>0.5)
+                accuracy[t, tgen] += accuracy_score(y_test, mean_folds_preds>0.5)
 
-                if test_split_query_indices: # split the test indices according to the query
-                    for i_query, split_indices in enumerate(test_split_query_indices):
-                        if len(np.unique(y[split_indices])) < 2: # not enough classes to compute AUC, just pass
-                            continue
-                        AUC_test_query_split[t, tgen, i_query] = roc_auc_score(y_true=y[split_indices], y_score=mean_folds_preds[split_indices]) #/ args.n_folds
+            if test_split_query_indices: # split the test indices according to the query
+                for i_query, split_indices in enumerate(test_split_query_indices):
+                    if len(np.unique(y[split_indices])) < 2: # not enough classes to compute AUC, just pass
+                        continue
+                    if args.micro_ave:
+                        X_test_query, y_test_query = micro_averaging(X[split_indices,:,tgen], y[split_indices], args.micro_ave)
+                    else:
+                        X_test_query, y_test_query = X[split_indices,:,tgen], y[split_indices]
+
+                    all_folds_preds_query = []
+                    for i_fold in range(n_folds):
+                        pipeline = all_models[t, i_fold]
+                        all_folds_preds_query.append(predict(pipeline, X_test_query))
+                    mean_folds_preds_query = np.mean(all_folds_preds_query, 0)
+                    AUC_test_query_split[t, tgen, i_query] = roc_auc_score(y_true=y_test_query, y_score=mean_folds_preds_query)
 
     else: # diag only
         AUC = np.zeros(n_times_train)
@@ -442,46 +517,81 @@ def test_decode(args, X, y, all_models, test_split_query_indices):
 ## OVR AND WINDOW DECODING
 
 
-def decode_window(args, clf, epochs, class_queries):
+def decode_window(args, clf, epochs, class_queries, trials_per_sub=None):
     """ train single decoder for the whole time of the epochs
         class_queries: list of strings, pandas queries to get each class
     """
     X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     n_trials = len(X)
-    X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
+    if not args.riemann: # pyriemann.Covariances takes same shape as epochs.get_data()
+        X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
+    # n_times = len(epochs.times)
+    if args.subject == 'all': # add subject id to X
+        x_sub = np.concatenate([np.ones(sz)*i for i, sz in enumerate(trials_per_sub)])
+        X = np.concatenate([X, x_sub[:, np.newaxis]], 1)
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+    if args.micro_ave_win: 
+        print(f"Using extensive trial micro-averaging. Expecting {int(np.sum([c*(c-1)/2 for c in counts]))} trials instead of {counts.sum()}")
+        if args.max_trials_win: print(f"Also keeping a maximum of {args.max_trials_win} after micro-averaging")
     
-    cv = get_cv(args.train_cond, args.crossval_win, args.n_folds_win)
+    if args.dummy:
+        cv = StratifiedKFold(n_splits=2, shuffle=False)
+    else:
+        cv = get_cv(args.train_cond, args.crossval_win, args.n_folds_win)
+    n_folds = 2 if args.dummy else args.n_folds_win
     
     onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
-    if args.reduc_dim_win:
-        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim_win), clf)
+    print(X.shape)
+
+    if args.riemann:
+        print(f"Using Riemannian transformation before fitting classifier)")
+        pipeline = make_pipeline(UnsupervisedSpatialFilter(PCA(50)), Covariances(), TangentSpace(), RobustScaler(), clf)
     else:
-        pipeline = make_pipeline(RobustScaler(), clf)
+        if args.reduc_dim_win:
+            if args.reduc_dim_win > 1: 
+                args.reduc_dim_win = int(args.reduc_dim_win)
+            print(f"Using dimensionality reduction: {args.reduc_dim_win}")
+            pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim_win), clf)
+        else:
+            pipeline = make_pipeline(RobustScaler(), clf)
 
     models_all_folds = []
     AUC, accuracy = 0, 0
     for train, test in tqdm(cv.split(X, y, groups=groups)): # groups is ignored for non-groupedKFold
-        pipeline.fit(X[train], y[train])
+        if args.micro_ave_win:
+            X_train, y_train = micro_averaging(X[train], y[train], args.micro_ave_win)
+            X_test, y_test = micro_averaging(X[test], y[test], args.micro_ave_win)
+            if args.max_trials_win and len(y_train) > args.max_trials_win: 
+                indices = np.random.choice(y_train.size, args.max_trials_win, replace=False)
+                X_train, y_train = X_train[indices], y_train[indices]
+            if args.max_trials_win and len(y_test) > args.max_trials_win: 
+                indices = np.random.choice(y_test.size, args.max_trials_win, replace=False)
+                X_test, y_test = X_test[indices], y_test[indices]
+        else:
+            X_train, y_train = X[train], y[train]
+            X_test, y_test = X[test], y[test]
+        
+        pipeline.fit(X_train, y_train)
         models_all_folds.append(deepcopy(pipeline))
-
-        preds = predict(pipeline, X[test], multiclass=True)
+        preds = predict(pipeline, X_test, multiclass=True)
         if preds.ndim == 2:
             preds = preds
         else:
             preds = onehotenc.transform(preds.reshape((-1,1)))
         
-        AUC += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds_win
-        accuracy += accuracy_score(y[test], preds.argmax(1)) / args.n_folds_win
+        AUC += roc_auc_score(y_true=y_test, y_score=preds, multi_class='ovr', average='weighted') / n_folds
+        accuracy += accuracy_score(y_test, preds.argmax(1)) / n_folds
+
+    print(f'AUC: {AUC:.3f}')
 
     return AUC, accuracy, models_all_folds
 
 
-def test_decode_window(args, epochs, class_queries, trained_models):
+def test_decode_window(args, epochs, class_queries, trained_models, trials_per_sub):
     """ X: n_trials, n_sensors
         y: n_trials
         class_queries: list of strings, pandas queries to get each class
@@ -489,15 +599,30 @@ def test_decode_window(args, epochs, class_queries, trained_models):
     """
     X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     n_trials = len(X)
-    X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
+    if not args.riemann:
+        X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
+    if args.subject == 'all': # add subject id to X
+        x_sub = np.concatenate([np.ones(sz)*i for i, sz in enumerate(trials_per_sub)])
+        X = np.concatenate([X, x_sub[:, np.newaxis]], 1)
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
     
     onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
+
+    if args.micro_ave_win:
+        X, y = micro_averaging(X, y, args.micro_ave_win) 
+        if args.max_trials_win and len(y) > args.max_trials_win: 
+            indices = np.random.choice(y.size, args.max_trials_win, replace=False)
+            X, y = X[indices], y[indices]
+    else:
+        X, y = X, y
+    print(f"Using {len(y)} test trials")
+
     AUC, accuracy = 0, 0
-    for i_fold in range(args.n_folds_win):
+    n_folds = 2 if args.dummy else args.n_folds_win
+    for i_fold in range(n_folds):
         pipeline = trained_models[i_fold]
         preds = predict(pipeline, X, multiclass=True)
         if preds.ndim == 2:
@@ -505,12 +630,14 @@ def test_decode_window(args, epochs, class_queries, trained_models):
         else:
             preds = onehotenc.transform(preds.reshape((-1,1)))
         
-        AUC += roc_auc_score(y_true=y, y_score=preds, multi_class='ovr', average='weighted') / args.n_folds_win
-        accuracy += accuracy_score(y, preds.argmax(1)) / args.n_folds_win
+        AUC += roc_auc_score(y_true=y, y_score=preds, multi_class='ovr', average='weighted') / n_folds
+        accuracy += accuracy_score(y, preds.argmax(1)) / n_folds
     # ## AVERAGE PREDICTIONS OR PERFORMANCE? usually perf is better (for training at least)
     # all_folds_preds.append(y_pred)
     # mean_fold_pred = np.mean(all_folds_preds, 0)
     # AUC[t, tgen] = roc_auc_score(y_true=y, y_score=mean_fold_pred, multi_class='ovr')                
+
+    print(f'test AUC: {AUC:.3f}')
 
     return AUC, accuracy
 
@@ -521,7 +648,7 @@ def test_decode_sliding_window(args, epochs, class_queries, trained_models, nb_c
         class_queries: list of strings, pandas queries to get each class
         trained_models: list of sklearn estimators, one for each class
     """
-    X, y, groups, _ = get_X_y_from_queries(epochs, class_queries)
+    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     n_times = X.shape[2]
     X = win_ave_smooth(X, nb_cat, mean=False)[0]
     classes, counts = np.unique(y, return_counts=True)
@@ -530,14 +657,23 @@ def test_decode_sliding_window(args, epochs, class_queries, trained_models, nb_c
     
     onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
+
+    if args.micro_ave_win:
+        X, y = micro_averaging(X, y, args.micro_ave_win) 
+        if args.max_trials_win and len(y) > args.max_trials_win: 
+            indices = np.random.choice(y.size, args.max_trials_win, replace=False)
+            X, y = X[indices], y[indices]
+    else:
+        X, y = X, y
+    print(f"Using {len(y)} test trials")
        
     AUC = np.zeros(n_times)
     accuracy = np.zeros(n_times)
-#    mean_preds = np.zeros(n_times)
+    n_folds = 2 if args.dummy else args.n_folds_win
     for t in range(n_times):
         t_data = X[:, :, t]
         all_folds_preds = []
-        for i_fold in range(args.n_folds_win):
+        for i_fold in range(n_folds):
             pipeline = trained_models[i_fold]
             preds = predict(pipeline, t_data, multiclass=True)
             if preds.ndim == 2:
@@ -545,8 +681,8 @@ def test_decode_sliding_window(args, epochs, class_queries, trained_models, nb_c
             else:
                 preds = onehotenc.transform(preds.reshape((-1,1)))
 
-            AUC[t] += roc_auc_score(y_true=y, y_score=preds, multi_class='ovr', average='weighted') / args.n_folds_win
-            accuracy[t] += accuracy_score(y, preds.argmax(1)) / args.n_folds_win
+            AUC[t] += roc_auc_score(y_true=y, y_score=preds, multi_class='ovr', average='weighted') / n_folds
+            accuracy[t] += accuracy_score(y, preds.argmax(1)) / n_folds
                 
     return AUC, accuracy
 
@@ -563,13 +699,23 @@ def decode_ovr(args, clf, epochs, class_queries):
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+    for split_indices, split_query in zip(test_split_query_indices, args.split_queries):
+        print(f"Split query {split_query}, {len(split_indices)} trials")
     if n_classes < 2:
         raise RuntimeError(f"did not find enough classes for queries {class_queries} and subjects {args.subject}")
     if np.min(counts) < args.n_folds:
         print(f"that's too few trials ... decreasing n_folds to {np.min(counts)}")
         setattr(args, 'n_folds', np.min(counts))
 
-    cv = get_cv(args.train_cond, args.crossval, args.n_folds)
+    if args.micro_ave: 
+        print(f"Using extensive trial micro-averaging. Expecting {int(np.sum([c*(c-1)/2 for c in counts]))} trials instead of {counts.sum()}")
+        if args.max_trials: print(f"Also keeping a maximum of {args.max_trials} after micro-averaging")
+
+    if args.dummy:
+        cv = StratifiedKFold(n_splits=2, shuffle=False)
+    else:
+        cv = get_cv(args.train_cond, args.crossval, args.n_folds)
+    n_folds = 2 if args.dummy else args.n_folds
 
     onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
@@ -589,18 +735,30 @@ def decode_ovr(args, clf, epochs, class_queries):
         for t in trange(n_times):
             all_models.append([])
             for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
-                pipeline.fit(X[train, :, t], y[train])
+                if args.micro_ave:
+                    X_train, y_train = micro_averaging(X[train, :, t], y[train], args.micro_ave)
+                    X_test, y_test = micro_averaging(X[test, :, :], y[test], args.micro_ave)
+                    if args.max_trials and len(y_train) > args.max_trials: 
+                        indices = np.random.choice(y_train.size, args.max_trials, replace=False)
+                        X_train, y_train = X_train[indices], y_train[indices]
+                    if args.max_trials and len(y_test) > args.max_trials: 
+                        indices = np.random.choice(y_test.size, args.max_trials, replace=False)
+                        X_test, y_test = X_test[indices], y_test[indices]
+                else:
+                    X_train, y_train = X[train, :, t], y[train]
+                    X_test, y_test = X[test, :, :], y[test]
+                pipeline.fit(X_train, y_train)
                 all_models[-1].append(deepcopy(pipeline))
                 for tgen in range(n_times):
-                    preds = predict(pipeline, X[test, :, tgen], multiclass=True)
+                    preds = predict(pipeline, X_test[:,:,tgen], multiclass=True)
                     preds = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
                     if n_classes == 2: preds = preds[:,1] # not a proper OVR object, needs different method
                     if np.any(np.isnan(preds)):
                         print(f"nan in preds, probably due to lack of convergence of classifier, moving to next fold")
                         continue
-                    AUC[t, tgen] += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
+                    AUC[t, tgen] += roc_auc_score(y_true=y_test, y_score=preds, multi_class='ovr', average='weighted') / n_folds
                     # if not n_classes == 2: # then single set of probabilities...
-                    #     accuracy[t, tgen] += accuracy_score(y[test], preds.argmax(1)) / args.n_folds
+                    #     accuracy[t, tgen] += accuracy_score(y[test], preds.argmax(1)) / n_folds
                     if test_split_query_indices: # split the test indices according to the query
                         for i_query, split_indices in enumerate(test_split_query_indices):
                             test_query = test[np.isin(test, split_indices)]
@@ -616,11 +774,18 @@ def decode_ovr(args, clf, epochs, class_queries):
                                         picked = np.random.choice(candidates, size=nb_ev, replace=False)
                                         picked_all_classes.extend(picked)
                                     test_query = np.array(picked_all_classes)
-                            pred = predict(pipeline, X[test_query, :, tgen], multiclass=True)
+                            if args.micro_ave:
+                                if min(np.unique(y[test_query], return_counts=True)[1]) < 2: # not enough classes to compute AUC after class averaging, just pass
+                                    continue
+                                X_test_query, y_test_query = micro_averaging(X[test_query, :, tgen], y[test_query], args.micro_ave)
+                            else:
+                                X_test_query, y_test_query = X[test_query, :, tgen], y[test_query]
+                            # pred = predict(pipeline, X[test_query, :, tgen], multiclass=True)
+                            pred = predict(pipeline, X_test_query, multiclass=True)
                             pred = pred if pred.ndim == 2 else onehotenc.transform(pred.reshape((-1,1)))
                             if n_classes == 2: 
                                 pred = pred[:,1] # not a proper OVR object, needs different method
-                            AUC_test_query_split[t, tgen, i_query] += roc_auc_score(y_true=y[test_query], y_score=pred, multi_class='ovr', average='weighted') #/ args.n_folds
+                            AUC_test_query_split[t, tgen, i_query] += roc_auc_score(y_true=y_test_query, y_score=pred, multi_class='ovr', average='weighted') #/ n_folds
                             AUC_test_query_counts[t, tgen, i_query] += 1 # keep track of the number of AUC computed (should = n_folds)
         if test_split_query_indices: AUC_test_query_split = AUC_test_query_split / AUC_test_query_counts # replace division by n_folds because for many cases we don't have correct test indices in each fold.
     else:
@@ -657,13 +822,23 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
     onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
+    if args.micro_ave:
+        X_test, y_test = micro_averaging(X, y, args.micro_ave) 
+        if args.max_trials and len(y_test) > args.max_trials: 
+            indices = np.random.choice(y_test.size, args.max_trials, replace=False)
+            X_test, y_test = X_test[indices], y_test[indices]
+    else:
+        X_test, y_test = X, y
+    # called X_test and y_test to leave original X and y, thus allowing to do the split queries
+    print(f"Using {len(y_test)} test trials")
+
     # full of nans because here we replace the values (only once), whereas in the train we count  the occurences where we could manage to do the split queries, then divide by this. 
     if args.timegen:
         AUC_test_query_split = np.full((n_times_train, n_times_test, len(test_split_query_indices)), np.nan) if test_split_query_indices else None    
         AUC = np.zeros((n_times_train, n_times_test))
         accuracy = np.zeros((n_times_train, n_times_test))
         for tgen in trange(n_times_test):
-            t_data = X[:, :, tgen]
+            t_data = X_test[:, :, tgen]
             for t in range(n_times_train):
                 all_folds_preds = []
                 for i_fold in range(n_folds):
@@ -673,14 +848,24 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                     all_folds_preds.append(y_pred)
                 mean_fold_pred = np.mean(all_folds_preds, 0)
                 if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
-                AUC[t, tgen] = roc_auc_score(y_true=y, y_score=mean_fold_pred, multi_class='ovr')
+                AUC[t, tgen] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
                 # accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1)) # dim error when n_classes = 2
 
                 if test_split_query_indices: # split the test indices according to the query
                     for i_query, split_indices in enumerate(test_split_query_indices):
                         if len(np.unique(y[split_indices])) < n_classes: # not enough classes to compute AUC, just pass
                             continue
-                        AUC_test_query_split[t, tgen, i_query] = roc_auc_score(y_true=y[split_indices], y_score=mean_fold_pred[split_indices], multi_class='ovr')
+                        if args.micro_ave:
+                            X_test_query, y_test_query = micro_averaging(X[split_indices,:,tgen], y[split_indices], args.micro_ave)
+                        else:
+                            X_test_query, y_test_query = X[split_indices,:,tgen], y[split_indices]
+
+                        all_folds_preds_query = []
+                        for i_fold in range(n_folds):
+                            pipeline = all_models[t, i_fold]
+                            all_folds_preds_query.append(predict(pipeline, X_test_query))
+                        mean_folds_preds_query = np.mean(all_folds_preds_query, 0)
+                        AUC_test_query_split[t, tgen, i_query] = roc_auc_score(y_true=y_test_query, y_score=mean_folds_preds_query, multi_class='ovr')
     else:
         raise NotImplementedError
     print(f'mean test AUC: {AUC.mean():.3f}')
@@ -708,7 +893,11 @@ def decode_single_ch_ovr(args, clf, epochs, class_queries):
         print(f"that's too few trials ... decreasing n_folds to {np.min(counts)}")
         setattr(args, 'n_folds', np.min(counts))
 
-    cv = get_cv(args.train_cond, args.crossval, args.n_folds)
+    if args.dummy:
+        cv = StratifiedKFold(n_splits=2, shuffle=False)
+    else:
+        cv = get_cv(args.train_cond, args.crossval, args.n_folds)
+    n_folds
 
     onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
@@ -791,28 +980,52 @@ def regression_decode(args, epochs, class_queries, clf):
     else:
         cv = get_cv(args.train_cond, args.crossval, args.n_folds)
 
+    if args.micro_ave: 
+        print(f"Using extensive trial micro-averaging. Expecting {int(np.sum([c*(c-1)/2 for c in counts]))} trials instead of {counts.sum()}")
+        if args.max_trials: print(f"Also keeping a maximum of {args.max_trials} after micro-averaging")
     pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf) if args.reduc_dim else make_pipeline(RobustScaler(), clf)
     all_models = []
+    R_test_query_split = np.zeros((n_times, n_times, len(test_split_query_indices))) if test_split_query_indices else None
+    R_test_query_counts = np.zeros((n_times, n_times, len(test_split_query_indices))) if test_split_query_indices else None
     if args.timegen:
-        R2 = np.zeros((n_times, n_times))
+        # R2 = np.zeros((n_times, n_times))
         R = np.zeros((n_times, n_times))
         for train, test in cv.split(X, y):
+            if args.micro_ave:
+                X_train, y_train = micro_averaging(X[train], y[train], args.micro_ave)
+                if args.max_trials and len(y_train) > args.max_trials: 
+                    indices = np.random.choice(y_train.size, args.max_trials, replace=False)
+                    X_train, y_train = X_train[indices], y_train[indices]
+                X_test, y_test = micro_averaging(X[test], y[test], args.micro_ave)
+            else:
+                X_train, y_train = X[train], y[train]
+                X_test, y_test = X[test], y[test]
+
             all_models.append([])
             for t in trange(n_times):
-                pipeline.fit(X[train, :, t], y[train])
+                pipeline.fit(X_train[:,:,t], y_train)
                 all_models[-1].append(deepcopy(pipeline))
                 for tgen in range(n_times):
-                    R2[t, tgen] += pipeline.score(X[test, :, tgen], y[test]) / args.n_folds # normal test
-                    pred = predict(pipeline, X[test, :, tgen])
-                    R[t, tgen] += pearsonr(pred, y[test])[0] / args.n_folds
+                    # R2[t, tgen] += pipeline.score(X[test, :, tgen], y[test]) / args.n_folds # normal test
+                    pred = predict(pipeline, X_test[:,:,tgen])
+                    R[t, tgen] += pearsonr(pred, y_test)[0] / args.n_folds
+
+                    if test_split_query_indices: # split the test indices according to the query
+                        for i_query, split_indices in enumerate(test_split_query_indices):
+                            test_query = test[np.isin(test, split_indices)]
+                            if len(test_query) == 0: continue # empty split query
+                            pred = predict(pipeline, X[test_query, :, tgen], multiclass=True)
+                            R_test_query_split[t, tgen, i_query] += pearsonr(pred, y[test_query])[0]
+                            R_test_query_counts[t, tgen, i_query] += 1 # keep track of the number of AUC computed (should = n_folds)
+        if test_split_query_indices: R_test_query_split = R_test_query_split / R_test_query_counts # replace division by n_folds because for many cases we don't have correct test indices in each fold.
                     # from ipdb import set_trace; set_trace()
-    print(f'mean trainning R2: {R2.mean():.3f}')
-    print(f'max trainning R2: {R2.max():.3f}')
+    print(f'mean trainning R: {R.mean():.3f}')
+    print(f'max trainning R: {R.max():.3f}')
     # put the pipeline object in an array without unpacking them
     all_models_array = np.empty((len(all_models), len(all_models[0])), dtype=object)
     all_models_array[:] = all_models # n_folds, n_times
     all_models_array = all_models_array.transpose(1,0) # go to shape n_times * n_folds
-    return all_models_array, R2, R
+    return all_models_array, R, R_test_query_split
 
 
 ### FROM THE MARSEILLE SCRIPT. NOT USED YET HERE.
@@ -955,25 +1168,27 @@ def save_patterns(args, out_fn, all_models): ## depecated, check dimensionality 
     np.save(out_fn + '_patterns.npy', patterns)
 
 
-def plot_perf(args, out_fn, data_mean, train_cond, train_tmin, train_tmax, test_tmin, test_tmax, ylabel="AUC", contrast=False, gen_cond=None, version="v1", window=False):
+def plot_perf(args, out_fn, data_mean, train_cond, train_tmin, train_tmax, test_tmin, test_tmax, ylabel="AUC", contrast=False, resplock=False, gen_cond=None, version="v1", window=False):
     """ plot performance of individual subject,
     called during training by decoding.py script
     """
     if gen_cond is None or args.windows:
-        plot_diag(data_mean=data_mean, data_std=None, out_fn=out_fn, train_cond=train_cond, 
+        plot_diag(data_mean=data_mean, data_std=None, out_fn=out_fn, train_cond=train_cond, resplock=resplock,
             train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=contrast, version=version, window=window)
 
     if args.timegen:
         plot_GAT(data_mean=data_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, 
-                 test_tmax=test_tmax, ylabel=ylabel, contrast=contrast, gen_cond=gen_cond, slices=[], version=version, window=window)
+                 test_tmax=test_tmax, ylabel=ylabel, contrast=contrast, resplock=resplock, gen_cond=gen_cond, slices=[], version=version, window=window)
     return
 
 
-def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", contrast=False, version="v1", window=False, ybar=.5):
+def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", contrast=False, resplock=False, version="v1", window=False, ybar=.5, smooth_plot=False):
     n_times_train = data_mean.shape[0]
     times_train = np.linspace(train_tmin, train_tmax, n_times_train)
     if window: # Decoding inside subwindow
         word_onsets, image_onset = [], []
+    elif resplock: # response locked
+        word_onsets, image_onset = [], [0]
     else:
         word_onsets, image_onset = get_onsets(train_cond, version=version)
 
@@ -983,12 +1198,15 @@ def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=No
          fig.axes[0].axvline(x=w_onset, linestyle='--', color='k')
     for img_onset in image_onset:
          fig.axes[0].axvline(x=img_onset, linestyle='-', color='k')
-    fig.axes[0].axhline(y=ybar, color='k', linestyle='-', alpha=.5)
+    if ybar is not None:
+        fig.axes[0].axhline(y=ybar, color='k', linestyle='-', alpha=.5)
     
     if data_mean.ndim > 1: # we have the full timegen
         data_mean_diag = np.diag(data_mean)
     else: # already have the diagonal
         data_mean_diag = data_mean
+    if smooth_plot:
+        data_mean_diag = smooth(data_mean_diag, window_len=smooth_plot, window='hanning')
     plot = plt.plot(times_train, data_mean_diag)
     if data_std is not None:
         if data_std.ndim > 1: # we have the full timegen
@@ -999,7 +1217,8 @@ def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=No
     plt.ylabel(ylabel)
     plt.xlabel("Time (s)")
 
-    plt.savefig(f'{out_fn}_{ylabel}_diag.png')
+    smooth_str = f"_{smooth_plot}smooth" if smooth_plot else ""
+    plt.savefig(f'{out_fn}_{ylabel}_diag{smooth_str}.png')
     plt.close()
 
 
@@ -1053,7 +1272,7 @@ def plot_multi_diag(data, out_fn, train_cond, train_tmin, train_tmax, data_std=N
     plt.close()
 
 
-def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, test_tmax, ylabel="AUC", contrast=False, gen_cond=None, gen_color='k', slices=[], version="v1", window=False):
+def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, test_tmax, ylabel="AUC", contrast=False, resplock=False, gen_cond=None, gen_color='k', slices=[], version="v1", window=False, ybar=.5):
     train_word_onsets, train_image_onset = get_onsets(train_cond, version=version)
     if window: # Decoding inside subwindow
         word_onsets, image_onset = [], []
@@ -1068,6 +1287,10 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
         word_onsets, image_onset = train_word_onsets, train_image_onset
         orientation = "vertical"
         shrink = 1.
+
+    if resplock: # response locked
+        word_onsets, image_onset = [], [0]
+        train_word_onsets, train_image_onset = [], [0]
 
     try:
         n_times_train = data_mean.shape[0]
@@ -1113,11 +1336,13 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
 
 
     ## ADD SLICES
-    if slices and ylabel=='AUC':
+    if slices: # and ylabel=='AUC':
         cmap = plt.cm.get_cmap('plasma', len(slices))
         # add colored line to th matrix plot
         for i_slice, sli in enumerate(slices):
-            plt.axhline(y=sli, linestyle=':', alpha=.9, color=cmap(i_slice))
+            # plt.axhline(y=sli, linestyle=':', alpha=.9, color=cmap(i_slice))
+            add_diamond_on_axis(color=cmap(i_slice), x=None, y=sli, ax=ax)
+
         plt.savefig(out_fn + '_wslices.png')
         plt.close()
 
@@ -1132,11 +1357,12 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
         for i_slice, sli in enumerate(slices):
             # data_mean_line = data_mean[(np.abs(times_train - sli)).argmin()]
             line_idx = (np.abs(times_train - sli)).argmin()
-            data_mean_line = np.mean(data_mean[line_idx-5:line_idx+5], 0)
+            data_mean_line = np.mean(data_mean[line_idx-10:line_idx+10], 0)
             
             # vertical dashed line for time reference
             if gen_cond is None:
                 plt.axvline(x=sli, color=cmap(i_slice), linestyle=':', alpha=.7)
+                ax.plot([sli], [ybar], marker="D", color=cmap(i_slice), clip_on=False, markersize=10, markeredgewidth=1.5, markeredgecolor="black", zorder=1e15)
 
             # actual trace plot
             plt.plot(times_test, data_mean_line, label=str(sli)+'s', color=cmap(i_slice))
@@ -1153,7 +1379,8 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
             #         plt.plot(times_test[cluster], np.ones_like(times[cluster])*(max_auc+0.02+0.01*i_slice), color=cmap(i_slice))
 
         plt.legend(title='training time', loc='upper right')
-        plt.axhline(y=0.5, color='k', linestyle='-', alpha=.3)
+        if ybar is not None:
+            plt.axhline(y=ybar, color='k', linestyle='-', alpha=.3)
         plt.ylabel(ylabel)
         plt.xlabel("Time (s)")            
         plt.savefig(out_fn + '_slices.png')
@@ -1162,32 +1389,176 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
     return
 
 
+def plot_GAT_with_slices(ave_matrix, all_matrices, out_fn, train_cond, times, ylabel="AUC", cbar=True, ybar=.5, 
+                         version="v1", slices=[], stat='wilcoxon', slice_ave=5, same_aspect=True,
+                         fontsize=12, slice_lw=3, word_lw=1, diamond_sz=8, mult_fac=5, chance=.5):
+    """ Joint plot with timegen and slices on another axis
+    """
+    fig, (ax_gat, ax_slices) = plt.subplots(1, 2, figsize=(12,6), dpi=200, sharex=True) #, sharey=True)
+    if same_aspect:
+        asp = np.diff(ax_gat.get_xlim())[0] / np.diff(ax_gat.get_ylim())[0]
+        ax_slices.set_aspect(asp) # this makes sure that the ratio of the axes is the same
+
+    word_onsets, image_onset = get_onsets(train_cond, version=version)
+
+    if ybar == 0.5:
+        vmin, vcenter, vmax = 0.4, 0.5, 0.6
+    elif ybar == 0:
+        vmin, vcenter, vmax = -.1, 0, 0.1
+    divnorm = matplotlib.colors.TwoSlopeNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
+    extent = [min(times), max(times), min(times), max(times)]
+    ax_gat.imshow(ave_matrix, norm=divnorm, cmap='bwr', origin='lower', extent=extent, zorder=0)
+    ax_gat.set_xlabel("Testing time (s)", fontsize=fontsize)
+    ax_gat.set_ylabel("Training time (s)", fontsize=fontsize)
+    ax_gat.set_xlim(times[0], times[-1])
+    ax_gat.set_ylim(times[0], times[-1])
+
+    if cbar:
+        cbar_ax = fig.add_axes([0.44, 0.92, 0.06, 0.02])  # position for the colorbar (horizontal)
+        mappable = [qwe for qwe in ax_gat.get_children() if isinstance(qwe, matplotlib.image.AxesImage)][0] # get mappable
+        # step = np.around((vmax-vmin) / 2, 1)
+        # ticks = np.arange(vmin, vmax+0.01, step)
+        ticks = [vmin, int(vcenter), vmax] if vcenter==0 else [vmin, vcenter, vmax] # little hack, change if more ticks are needed
+        cbar = fig.colorbar(mappable, cax=cbar_ax, ticks=ticks, orientation='horizontal') # vertical
+        # cbar_ax.yaxis.set_ticks_position('right') # left
+        cbar_ax.set_title(ylabel, fontsize=fontsize, pad=fontsize/1.4)
+        cbar.ax.tick_params(labelsize=fontsize/1.4)
+
+    cmap = plt.cm.get_cmap('plasma', len(slices))
+    for i_slice, sli in enumerate(slices): # each slice
+        color = cmap(i_slice)
+        add_diamond_on_axis(color=color, x=None, y=sli, ax=ax_gat, zorder=50) # diamond on gat
+        if stat:
+            signif = get_signif(get_slice(all_matrices, times, sli, slice_ave=slice_ave, dim=1), stat, chance=chance)
+            stat_fill = True
+        else:
+            signif = None
+            stat_fill = False
+        ave_slice_data = get_slice(ave_matrix, times, sli, slice_ave=slice_ave, dim=0)
+        try:
+            add_slice_line_1ax(ax_slices, sli, times, ave_slice_data-ybar, color=color, stat_fill=stat_fill, fill_where=signif, zorder=-10-len(slices)-i_slice, lw=slice_lw, h_lw=word_lw, mksz=diamond_sz, mult_fac=mult_fac) # higher zorder for the firsts slices so that they are on top
+        except:
+            from ipdb import set_trace; set_trace()
+    
+    ## vline at each word onset
+    for w_onset in word_onsets:
+        ax_gat.axvline(x=w_onset, color='k', linestyle='--', alpha=.5, lw=word_lw)
+        ax_gat.axhline(y=w_onset, color='k', linestyle='--', alpha=.5, lw=word_lw)
+        ax_slices.axvline(x=w_onset, color='k', linestyle='--', alpha=.5, lw=word_lw, ymin=times[0], ymax=1.01)
+    for img_onset in image_onset:
+        ax_gat.axvline(x=img_onset, color='k', linestyle='-', alpha=.5, lw=word_lw)
+        ax_gat.axhline(y=img_onset, color='k', linestyle='-', alpha=.5, lw=word_lw)
+        ax_slices.axvline(x=img_onset, color='k', linestyle='-', alpha=.5, lw=word_lw, ymin=times[0], ymax=1.01)
+
+    # bottom labels
+    ax_slices.set_xlabel("Testing time (s)", fontsize=fontsize)
+    ax_slices.tick_params(axis='both', which='major', labelsize=fontsize, bottom=True, left=True)
+    ax_gat.tick_params(axis='both', which='major', labelsize=fontsize, bottom=True, left=True)
+
+    # copy the xaxis on the top to show an example sentence
+    for ax in (ax_gat, ax_slices):
+        secax_x = add_sent_on_top(ax, word_onsets, image_onset, sent_type=train_cond, fontsize=fontsize)
+        secax_x.spines['top'].set_visible(False)
+
+    # # adjust subplots
+    plt.subplots_adjust(wspace=0.025) #, hspace=hspace)
+    # plt.tight_layout()
+
+    plt.savefig(f"{out_fn}_timegen_and_slices_{stat}.png", bbox_inches='tight')
+
+
+def get_slice(data, times, sli, slice_ave, dim=0):
+    ''' Get a slice from a matrix, from given dimension
+    and average with surrounding slice_ave lines to make it smoother
+    '''
+    slice_time = (np.abs(times - sli)).argmin()
+    if dim == 0:
+        slice_data = np.mean(data[slice_time-slice_ave:slice_time+slice_ave], 0)
+    elif dim == 1:
+        slice_data = np.mean(data[:, slice_time-slice_ave:slice_time+slice_ave], 1)
+    elif dim == 2:
+        slice_data = np.mean(data[:, :, slice_time-slice_ave:slice_time+slice_ave], 2)
+    return slice_data
+
+
+def get_signif(all_subs_data, stat, chance=.5):
+    ## all_subs_data should be (n_subs, n_times)
+    assert len(all_subs_data.shape)==2, f"all_subs_data should be of shape (n_subs, n_times) but found {all_subs_data.shape}"
+    n_subs, n_times = all_subs_data.shape
+    # compute stats
+    if stat == "cluster": # for cluster perm test we store the clusters and corresponding pvalues
+        fvalues, clusters, cluster_pvals, H0 = permutation_cluster_1samp_test(all_subs_data-chance, 
+                                        n_permutations=1000, threshold=None, tail=1, n_jobs=5, verbose=False, seed=42, out_type='mask')
+        signif = np.ones(n_times)
+        for cluster, cluster_pval in zip(clusters, cluster_pvals):
+            if cluster_pval < 0.05:
+                signif[cluster] = 0
+                # print(f"signif cluster for {times[i_dat][cluster][0]:.02} to {times[i_dat][cluster][-1]:.02}s, pval={cluster_pval}")
+    elif stat == "wilcoxon": # for wilcoxon we only store the pvalue for each timesample
+        signif = np.zeros(n_times)
+        chance_array = np.ones(n_subs) * chance
+        for t in range(n_times):
+            np.random.seed(seed=233423)
+            # try:
+            signif[t] = wilcoxon(all_subs_data[:, t], chance_array, alternative="greater")[1] #two-sided
+            # except ValueError: # ValueError: zero_method 'wilcox' and 'pratt' do not work if x - y is zero for all elements.
+            #     print("pwet")
+            #     signif[t] = 1
+    else: 
+        raise RuntimeError(f"Unknown stat method to get significant timepoints: {stat}")
+    signif = fdr_correction(np.array(signif), alpha=0.05)[0]
+    return signif
+
+
+
+def add_sent_on_top(ax, word_onsets, image_onset, sent_type='scenes', fontsize=20, shift=.02):
+    secax_x = ax.secondary_xaxis('top', functions=(lambda x: x, lambda x: x))
+    secax_x.set_xticks(word_onsets + image_onset)
+    xtickslabels = sentence_examples[sent_type][0] # corresponding ticks
+    secax_x.set_xticklabels(xtickslabels, fontdict={'fontsize': fontsize}, rotation="45", ha="left", va="baseline")  
+    ## Image
+    img_caracs = sentence_examples[sent_type][1]
+    ax_img_onset = ax.transLimits.transform((image_onset[0], 0))[0] # self.transLimits is the transformation that takes you from data to axes coordinates
+    if sent_type == "scenes":
+        ax.scatter(ax_img_onset-shift, 1.05, transform=ax.transAxes, clip_on=False, marker=img_caracs[0][0], color=img_caracs[0][1], s=100)
+        ax.scatter(ax_img_onset+shift, 1.05, transform=ax.transAxes, clip_on=False, marker=img_caracs[1][0], color=img_caracs[1][1], s=100)
+    elif sent_type == "obj":
+        ax.scatter(ax_img_onset, 1.05, transform=ax.transAxes, clip_on=False, marker=img_caracs[0], color=img_caracs[1], s=100)
+    return secax_x
+
+
 ## OLD, WITH statannot, WHILE THE NEW ONES USES THE MORE RECENT STATANNOTATIONS
-# def make_sns_barplot(df, x, y, hue=None, box_pairs=[], out_fn="tmp.png", ymin=None, hline=None, rotate_ticks=False, tight=False, ncol=1):
-#     fig, ax = plt.subplots(figsize=(18,14))
-#     g = sns.barplot(x=x, y=y, hue=hue, data=df, ax=ax, ci=68) # ci=68 <=> standard error
-#     ax.set_xlabel(x,fontsize=25)
-#     ax.set_ylabel(y, fontsize=25)
-#     if box_pairs:
-#         _ = add_stat_annotation(ax, plot="barplot", data=df, x=x, hue=hue, y=y, line_offset_to_box=0, \
-#                                 text_format='star', test='Wilcoxon', box_pairs=box_pairs, verbose=0, use_fixed_offset=True) 
-#     if hue is not None:
-#          = plt.gca().getax.legend().set_visible(False)
-#         leg.set_title(hue, prop={'size':25})
-#     if ymin is not None:
-#         ax.set_ylim(ymin)
-#     if hline is not None:
-#         ax.axhline(y=hline, lw=1, ls='--', c='grey', zorder=-10)
-#     if rotate_ticks:
-#         for tick in ax.get_xticklabels():
-#             tick.set_rotation(45)
-#             tick.set_ha('right')
-#     if tight:
-#         plt.tight_layout()
-#     if ncol > 1:
-#         plt.legend(ncol=ncol)
-#     plt.savefig(out_fn, transparent=True, dpi=400, bbox_inches='tight')
-#     plt.close()
+def make_sns_barplot(df, x, y, hue=None, box_pairs=[], out_fn="tmp.png", xmin=None, ymin=None, vline=None, hline=None, rotate_ticks=False, tight=False, ncol=1, order=None):
+    print("OLD PLOTTING FUNC make_sns_barplot, WITH statannot, WHILE THE NEW ONES USES THE MORE RECENT STATANNOTATIONS")
+    from statannot import add_stat_annotation
+    fig, ax = plt.subplots(figsize=(18,14))
+    g = sns.barplot(x=x, y=y, hue=hue, data=df, ax=ax, ci=68, order=order) # ci=68 <=> standard error
+    ax.set_xlabel(x,fontsize=25)
+    ax.set_ylabel(y, fontsize=25)
+    if box_pairs:
+        _ = add_stat_annotation(ax, plot="barplot", data=df, x=x, hue=hue, y=y, line_offset_to_box=0, \
+                                text_format='star', test='Wilcoxon', box_pairs=box_pairs, verbose=0, use_fixed_offset=True) 
+    # if hue is not None:
+    #     leg = plt.gca().getax.legend().set_visible(False)
+    #     leg.set_title(hue, prop={'size':25})
+    if xmin is not None:
+        ax.set_xlim(xmin)
+    if ymin is not None:
+        ax.set_ylim(ymin)
+    if vline is not None:
+        ax.axvline(x=vline, lw=1, ls='--', c='grey', zorder=-10)
+    if hline is not None:
+        ax.axhline(y=hline, lw=1, ls='--', c='grey', zorder=-10)
+    if rotate_ticks:
+        for tick in ax.get_xticklabels():
+            tick.set_rotation(45)
+            tick.set_ha('right')
+    if tight:
+        plt.tight_layout()
+    if ncol > 1:
+        plt.legend(ncol=ncol)
+    plt.savefig(out_fn, transparent=True, dpi=400, bbox_inches='tight')
+    plt.close()
 
 
 def plot_all_props(ave_dict, std_dict, times, out_fn, labels=['S1', 'C1', 'R', 'S2', 'C2'], word_onsets=[], image_onset=[]): # 'R'
@@ -1220,8 +1591,11 @@ def add_slice_line_1ax(ax, slice_time, times, data_line, mult_fac=3, alpha=.4, f
         ax.fill_between(times, data_line+slice_time, slice_time, alpha=alpha, clip_on=False, zorder=zorder, color=color)
     if stat_fill: # fill only when significant
         ax.fill_between(times, data_line+slice_time, slice_time, where=fill_where, color=color, alpha=alpha, clip_on=False, zorder=zorder)
-    # Remove axes details that don't play well with overlap
-    ax.set_yticks([])
+
+    # diamond on the axis at the decoder training time
+    ax.plot([slice_time], [slice_time], marker="D", color=color, clip_on=False, markersize=mksz, markeredgewidth=1, markeredgecolor="black", zorder=1e15)
+    
+    ax.set_yticks([]) # Remove axes details that don't play well with overlap
 #     ax.set_xticks([])    
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
@@ -1231,7 +1605,7 @@ def add_slice_line_1ax(ax, slice_time, times, data_line, mult_fac=3, alpha=.4, f
 
 
 def joyplot_with_stats(data_dict, times, out_fn, tmin=-.5, tmax=8, labels=['S1', 'C1', 'R', 'S2', 'C2'], \
-                       word_onsets=[], image_onset=[], fsz=16, title_fsz=26, stat='wilc', threshold=0.01, y_inc=0.05):
+                       word_onsets=[], image_onset=[], fsz=16, title_fsz=26, stat='wilc', threshold=0.01, y_inc=0.05, hline=.5):
     """ To plot multiple decoders diagonals on the same plot
     one per subplot, with statistics
     """
@@ -1239,12 +1613,13 @@ def joyplot_with_stats(data_dict, times, out_fn, tmin=-.5, tmax=8, labels=['S1',
         print(f"!!! Could not find key(s) {[lab for lab in labels if lab not in data_dict.keys()]} in the data_dict")
         return
     fig, axes = plt.subplots(len(labels), figsize=(18, len(labels)*3), sharey='col')
+    if len(labels) == 1: axes = [axes]
     for i, k in enumerate(labels):
         for w_onset in word_onsets:
             axes[i].axvline(x=w_onset, linestyle='--', color='k', ymin=0., ymax=1, lw=1, clip_on=False)
         for img_onset in image_onset:
             axes[i].axvline(x=img_onset, linestyle='-', color='k', lw=1, clip_on=False)
-        axes[i].axhline(y=0.5, color='k', linestyle='-', alpha=.7, lw=0.5)
+        axes[i].axhline(y=hline, color='k', linestyle='-', alpha=.7, lw=0.5)
 
         dat, std = np.mean(data_dict[k], 0), sem(data_dict[k], 0)
         time_mask = np.logical_and(tmin<=times, times<=tmax)
@@ -1255,17 +1630,17 @@ def joyplot_with_stats(data_dict, times, out_fn, tmin=-.5, tmax=8, labels=['S1',
         if stat == "wilc":
             np.random.seed(seed=233423)
             signif = np.zeros_like(local_times)
-            chance_array = np.ones_like(data_dict[k][:,0]) * 0.5
+            chance_array = np.ones_like(data_dict[k][:,0]) * hline
             for t in range(len(local_times)):
                 signif[t] = wilcoxon(data_dict[k][:, time_mask][:, t], chance_array, alternative="greater")[1] #two-sided
             signif = fdr_correction(np.array(signif), alpha=0.3)[0] #.astype(bool)
-            axes[i].fill_between(local_times, 0.5, dat, where=signif, alpha=0.8, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
-            # axes[i].fill_between(local_times, 0.5, signifed_dat, alpha=0.8, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
-        # fvalues, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(data_dict[k]-0.5, n_permutations=1000, threshold=1e-6, tail=1, n_jobs=-1, verbose=False, buffer_size=None)
+            axes[i].fill_between(local_times, hline, dat, where=signif, alpha=0.8, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
+            # axes[i].fill_between(local_times, hline, signifed_dat, alpha=0.8, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
+        # fvalues, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(data_dict[k]-hline, n_permutations=1000, threshold=1e-6, tail=1, n_jobs=-1, verbose=False, buffer_size=None)
         elif stat == "cluster_perm":
             for cluster, pval in zip(clusters, cluster_p_values):
                 if pval < 0.05:
-                    axes[i].fill_between(local_times[cluster], 0.5, dat[cluster], alpha=0.8, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
+                    axes[i].fill_between(local_times[cluster], hline, dat[cluster], alpha=0.8, zorder=-1, lw=0, color=cmaptab10(i), clip_on=False)
         ## Title label on the left
         axes[i].text(-0.02, .55, back2fullname(k.split("_")[0]), ha='center', va='center', transform=axes[i].transAxes, fontsize=title_fsz)
         # back2fullname(k.split("_")[0])
@@ -1279,7 +1654,7 @@ def joyplot_with_stats(data_dict, times, out_fn, tmin=-.5, tmax=8, labels=['S1',
             axes[i].spines[spine].set_visible(False)
         axes[i].yaxis.set_label_position("right") # put yaxis on the right
         axes[i].yaxis.tick_right()
-        yticks = np.arange(0.5, axes[i].get_ylim()[1], y_inc)
+        yticks = np.arange(.5, axes[i].get_ylim()[1], y_inc)
         axes[i].set_yticks(yticks)
         # if i == 0: 
         #     axes[i].set_yticks(yticks)
@@ -1345,6 +1720,43 @@ def plot_single_ch_perf(scores, info, out_fn, cmap_name='bwr', vmin=.4, vmax=.6,
 ***************************************
 Called by main functions """
 
+
+def add_diamond_on_axis(color, ax=None, x=None, y=None, markersize=8, shift_sign=0, alpha=1., zorder=1e15):
+    """ convenience to add a square "diamond" on plot's axis, as if to show a single line.
+    additional_shift_percent = float: percentage of the range (min to max value along the chosen axis)
+    to additionally shift the arrow of. Should be tested adn checked to find optimal value.
+    shift_sign = int in (0, 1): whether to inverse the shift (allows to put the triangle inside/outside of the figure)
+    Useful to show a specific training time in a timegen, for example
+    Do not change xmin/xmax or ymin/ymax after calling this function.
+    """
+    # padd the ticks on axis to leave some space to the triangles
+    if ax is None:
+        ax = plt.gca()
+    
+    additional_shift_percent = 0 # the diamond needs to be centered
+    # if shift_sign: additional_shift_percent *= -1 # no need for this if = 0
+
+    if x is not None:
+        ymin, ymax = ax.get_ylim()
+        shift = abs(ymin - ymax) * additional_shift_percent
+        if ymin < 0: shift = -shift # inverse the sign of the shift if the value is negative
+        ax.plot([x], [ymin-shift], "D", color=color, clip_on=False, markersize=markersize, markeredgewidth=1, markeredgecolor="black", alpha=alpha, zorder=zorder)
+        shift = abs(ymin - ymax) * additional_shift_percent
+        if ymin < 0: shift = -shift # inverse the sign of the shift if the value is negative
+        ax.plot([x], [ymax+shift], "D", color=color, clip_on=False, markersize=markersize, markeredgewidth=1, markeredgecolor="black", alpha=alpha, zorder=zorder)
+        ax.tick_params(axis='x', which='major', pad=12)
+
+    if y is not None:
+        xmin, xmax = ax.get_xlim()
+        shift = (abs(xmin) + abs(xmax)) * additional_shift_percent
+        if xmin < 0: shift = -shift # inverse the sign of the shift if the value is negative
+        ax.plot([xmin+shift], [y], "D", color=color, clip_on=False, markersize=markersize, markeredgewidth=1, markeredgecolor="black", alpha=alpha, zorder=zorder)
+        shift = (abs(xmin) + abs(xmax)) * additional_shift_percent
+        if xmin < 0: shift = -shift # inverse the sign of the shift if the value is negative
+        ax.plot([xmax-shift], [y], "D", color=color, clip_on=False, markersize=markersize, markeredgewidth=1, markeredgecolor="black", alpha=alpha, zorder=zorder)
+        ax.tick_params(axis='y', which='major', pad=12)
+
+
 def get_cv(train_cond, crossval, n_folds):
     """Choose crossvalidation scheme from argparse arguments"""
     if train_cond == "two_objects":
@@ -1390,7 +1802,7 @@ def get_split_indices(split_queries, epochs):
     return test_split_query_indices, actual_split_queries
 
 
-def get_X_y_from_epochs_list(args, epochs, sfreq):
+def get_X_y_from_epochs_list(args, epochs, sfreq): # remove sfreq ?
     n_queries = len(epochs) # 2
     nchan = {} # store the number of channels for available modalities
     ch_names = {} # store the channel names for available modalities
@@ -1454,6 +1866,38 @@ def get_X_y_from_queries(epochs, class_queries, split_queries):
         test_split_query_indices.append(md_for_split.query(split_query).index.values)
     X, y = np.array(X), np.array(y)
     return X, y, groups, test_split_query_indices
+
+
+def get_X_y_for_correlation(args, epochs, subsample_nonmatched):
+    """ Create X and y from epochs for the correlation analysis
+    a 'trial' in X is a pair of experimental trials
+    class is 1 if the 2 trials corresponds to the same sentence, 
+    0 otherwise. """
+    md = epochs.metadata
+    epo_data = epochs.get_data()
+    print(len(md), len(epo_data))
+    matched, nonmatched = [], []
+    for i, epo1 in enumerate(epo_data):
+        for j, epo2 in enumerate(epo_data):
+            if i == j: continue # reject same trial 
+            md1, md2 = md.iloc[i], md.iloc[j]
+            if (md1.Shape1==md2.Shape1 and md1.Colour1==md2.Colour1 \
+                and md1.Relation==md2.Relation \
+                and md1.Shape2==md2.Shape2 and md1.Colour2==md2.Colour2) \
+            or (args.mirror_img and (md1.Shape1==md2.Shape2 and md1.Colour1==md2.Colour2 \
+                and md1.Relation!=md2.Relation \
+                and md1.Shape2==md2.Shape1 and md1.Colour2==md2.Colour1)):
+                    
+                    matched.append((epo1, epo2))
+            else:   
+                    if subsample_nonmatched:
+                        if np.random.randint(0, subsample_nonmatched) == 0:
+                            nonmatched.append((epo1, epo2))
+
+    # from ipdb import set_trace; set_trace()
+    # print(len(matched), len(nonmatched))
+    return np.array(matched), np.array(nonmatched)
+
 
 
 class RidgeClassifierCVwithProba(RidgeClassifierCV):

@@ -1,6 +1,6 @@
 import matplotlib
 # matplotlib.use('Qt5Agg')
-matplotlib.use('Agg') # no output to screen.
+matplotlib.use('Agg') # no output to screen.
 import matplotlib.pyplot as plt
 
 import mne
@@ -19,6 +19,7 @@ from prettytable import PrettyTable
 from sklearn.preprocessing import LabelEncoder, LabelBinarizer
 from itertools import permutations, combinations
 import pandas as pd
+from copy import deepcopy
 
 from utils.decod import *
 from utils.params import *
@@ -57,7 +58,7 @@ out_dir = f"{args.root_path}/Results/{decoding_dir}/{args.epochs_dir}/{args.subj
 
 print('\noutput files will be in: ' + out_dir)
 
-if op.exists(out_dir): # warn and stop if args.overwrite is set to False
+if op.exists(out_dir): # warn and stop if args.overwrite is set to False
     print('output file already exists...')
     if args.overwrite:
         print('overwrite is set to True ... overwriting')
@@ -68,7 +69,7 @@ else:
     print('Constructing output dirtectory: ', out_dir)
     os.makedirs(out_dir)
 
-# list all .npy files in the directory
+# list all .npy files in the directory
 all_fns = natsorted(glob(in_dir + '/*AUC.p'))
 
 # keep the first 8 subjects for the 1st version, all the remaining for v2
@@ -95,8 +96,7 @@ dummy_labbin = LabelBinarizer()
 cmap10 = plt.cm.get_cmap('tab10', 10)
 
 all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
-max_auc_all_facconds = []
-all_faccond_names = []
+df_all_labels = []
 
 for label in all_labels:
     all_AUC = []
@@ -125,7 +125,7 @@ for label in all_labels:
     conds = natsorted([x for x in all_AUC[0].keys()])
     n_conds = len(conds)
 
-    auc_dict = {"Trained on": [], "Tested on": [], "AUC": [], "subject": []}
+    auc_dict = {"Trained on": [], "Tested on": [], "AUC": [], "subject": [], "label":[]}
     for train_cond in conds:
         for test_cond in conds:
             for i_sub in range(n_subs):
@@ -133,13 +133,17 @@ for label in all_labels:
                 auc_dict["Tested on"].append(test_cond)
                 auc_dict["AUC"].append(all_AUC[i_sub][train_cond][test_cond])
                 auc_dict["subject"].append(i_sub+1)
+                auc_dict["label"].append(label)
 
     df = pd.DataFrame.from_dict(auc_dict)
+    df_all_labels.append(deepcopy(df))
 
-    if "AllC" in label: # or "Csdelay" in label:
+    print(df["Trained on"].unique())
+    print(df["Tested on"].unique())
+    if "Cfull" in label or "Cdelay" in label or "SideC_delay" in label:
         cond_str1 = "Colour1"
         cond_str2 = "Colour2"
-    elif "AllS" in label: # or "Ssdelay" in label:
+    elif "Sfull" in label or "Sdelay" in label or "SideS_delay" in label:
         cond_str1 = "Shape1"
         cond_str2 = "Shape2"
     else:
@@ -147,16 +151,25 @@ for label in all_labels:
         cond_str2 = "Shape2+Colour2"
     
     box_pairs = []
-    # try:
-    box_pairs += [((f"{cond_str1}-two_objects", f"{cond_str1}-two_objects"), (f"{cond_str1}-two_objects", f"{cond_str1}-one_object"))]
-    box_pairs += [((f"{cond_str1}-two_objects", f"{cond_str1}-two_objects"), (f"{cond_str1}-two_objects", f"{cond_str2}-two_objects"))]
-    box_pairs += [((f"{cond_str1}-one_object", f"{cond_str1}-one_object"), (f"{cond_str1}-one_object", f"{cond_str1}-two_objects"))]
-    box_pairs += [((f"{cond_str1}-one_object", f"{cond_str1}-one_object"), (f"{cond_str1}-one_object", f"{cond_str2}-two_objects"))]
-    box_pairs += [((f"{cond_str2}-two_objects", f"{cond_str2}-two_objects"), (f"{cond_str2}-two_objects", f"{cond_str1}-two_objects"))]
-    box_pairs += [((f"{cond_str2}-two_objects", f"{cond_str2}-two_objects"), (f"{cond_str2}-two_objects", f"{cond_str1}-one_object"))]
+    # if "Side" in label:
+    #     box_pairs += [(("Shape1+Colour1-one_object", "Shape1+Colour1-one_object"), ("Shape1+Colour1-one_object", "Right_obj-two_objects"))]
+    #     box_pairs += [(("Shape1+Colour1-one_object", "Shape1+Colour1-one_object"), ("Shape1+Colour1-one_object", "Left_obj-two_objects"))]
+    #     # box_pairs += [(("Shape1+Colour1-one_object", "Shape1+Colour1-one_object"), ("Shape1+Colour1-one_object", "Left_obj-two_objects"))]
+    # else:
+    if "SideC" in label:
+        continue
+        box_pairs += [(("Left_color-two_objects", "Left_color-two_objects"), ("Left_color-two_objects", "Right_color-two_objects"))]
+    elif "SideS" in label:
+        box_pairs += [(("Left_shape-two_objects", "Left_shape-two_objects"), ("Left_shape-two_objects", "Right_shape-two_objects"))]
+    else:
+        box_pairs += [((f"{cond_str1}-two_objects", f"{cond_str1}-two_objects"), (f"{cond_str1}-two_objects", f"{cond_str1}-one_object"))]
+        box_pairs += [((f"{cond_str1}-two_objects", f"{cond_str1}-two_objects"), (f"{cond_str1}-two_objects", f"{cond_str2}-two_objects"))]
+        box_pairs += [((f"{cond_str1}-one_object", f"{cond_str1}-one_object"), (f"{cond_str1}-one_object", f"{cond_str1}-two_objects"))]
+        box_pairs += [((f"{cond_str1}-one_object", f"{cond_str1}-one_object"), (f"{cond_str1}-one_object", f"{cond_str2}-two_objects"))]
+        box_pairs += [((f"{cond_str2}-two_objects", f"{cond_str2}-two_objects"), (f"{cond_str2}-two_objects", f"{cond_str1}-two_objects"))]
+        box_pairs += [((f"{cond_str2}-two_objects", f"{cond_str2}-two_objects"), (f"{cond_str2}-two_objects", f"{cond_str1}-one_object"))]
+    
     make_sns_barplot(df, x='Tested on', y='AUC', hue='Trained on', box_pairs=box_pairs, out_fn=f'{out_fn}_AUC.png', hline=0.5, ymin=0.45)
-    # except:
-    #     print("\n\ncould not make all classical box pairs, can happen for the delay stuff where we used not to have one object block, but should be resolved now ... continuing for now\n\n")
     
 
     ## COSINE SIMILARITY
@@ -185,9 +198,12 @@ for label in all_labels:
 
     ## AUC gen to all time points
     if all_AUC_allt and "windows" in all_AUC_allt[0].keys():
-
         n_subs = len(all_AUC_allt)
-        print(len(all_AUC_allt))
+        print(f"found {len(all_AUC_allt)} files with all timepoints tested")
+        print(all_AUC_allt[0].keys())
+        if len(np.atleast_1d(all_AUC_allt[0][conds[0]][conds[0]])) == 1:
+            print("Problem loading all timepoints AUC, single timepoint found ... moving to next condition but look it up!")
+            continue
         # remove non-matched times
         print("\nRemoving subjects with a number of timepoints that do not match the first one")
         to_del = []
@@ -243,3 +259,28 @@ for label in all_labels:
 
     print(f"Finished {label}\n")
     plt.close('all')
+
+# stim vs delay plot
+df_all_labels = pd.concat(df_all_labels)
+df_all_labels['Trained during'] = df_all_labels.apply(lambda x: ("Stimulus" if 'full' in x.label else "Delay" if 'delay' in x.label else "Other"), axis=1)
+df_loc = deepcopy(df_all_labels)
+df_loc = df_loc.query("`Trained during` != 'Other'")
+df_loc = df_loc.query("`Trained on` in ['Shape1-one_object', 'Colour1-one_object', 'Shape1-two_objects', 'Colour1-two_objects', 'Shape2-two_objects', 'Colour2-two_objects']") 
+#['Colour1-one object', 'Shape1-one object', 'Shape1-two objects', 'Shape2-two objects', 'Colour1-two objects', 'Colour2-two obiects']")
+df_loc = df_loc.query("`Trained on` == `Tested on`")
+
+box_pairs = []
+# box_pairs += [((f"{cond_str1}-two_objects", f"{cond_str1}-two_objects"), (f"{cond_str1}-two_objects", f"{cond_str1}-one_object"))]
+# box_pairs += [((f"{cond_str1}-two_objects", f"{cond_str1}-two_objects"), (f"{cond_str1}-two_objects", f"{cond_str2}-two_objects"))]
+# box_pairs += [((f"{cond_str1}-one_object", f"{cond_str1}-one_object"), (f"{cond_str1}-one_object", f"{cond_str1}-two_objects"))]
+# box_pairs += [((f"{cond_str1}-one_object", f"{cond_str1}-one_object"), (f"{cond_str1}-one_object", f"{cond_str2}-two_objects"))]
+# box_pairs += [((f"{cond_str2}-two_objects", f"{cond_str2}-two_objects"), (f"{cond_str2}-two_objects", f"{cond_str1}-two_objects"))]
+# box_pairs += [((f"{cond_str2}-two_objects", f"{cond_str2}-two_objects"), (f"{cond_str2}-two_objects", f"{cond_str1}-one_object"))]
+
+order = ['Shape1-one_object', 'Colour1-one_object', 'Shape1-two_objects', 'Colour1-two_objects', 'Shape2-two_objects', 'Colour2-two_objects']
+make_sns_barplot(df_loc, x='Trained during', y='AUC', hue='Trained on', box_pairs=box_pairs, out_fn=f'{out_fn}_AUC_trainon.png', hline=0.5, ymin=0.45, order=order)
+
+make_sns_barplot(df_loc, x='AUC', y='Trained during', hue='Trained on', box_pairs=box_pairs, out_fn=f'{out_fn}_AUC_trainon_horizontal.png', vline=0.5, xmin=0.45, order=order)
+
+make_sns_barplot(df_loc, x='AUC', y='Trained on', hue='Trained during', box_pairs=box_pairs, out_fn=f'{out_fn}_AUC_traindur_horizontal.png', vline=0.5, xmin=0.45, order=order)
+

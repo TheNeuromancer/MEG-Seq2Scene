@@ -1,15 +1,17 @@
 import matplotlib
 # matplotlib.use('Qt5Agg')
-matplotlib.use('Agg') # no output to screen.
+matplotlib.use('Agg') # no output to screen.
 import mne
 import numpy as np
-from ipdb import set_trace
+# from ipdb import set_trace
 import argparse
 import pickle
 import time
 import importlib
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.model_selection import RandomizedSearchCV
 from itertools import permutations, combinations
+import xgboost as xgb
 
 # local imports
 from utils.decod import *
@@ -29,8 +31,13 @@ parser.add_argument('-x', '--xdawn', action='store_true',  default=False, help='
 parser.add_argument('--test_quality', action='store_true', default=False, help='Change the out directory name, used for testing the quality of single runs.')
 parser.add_argument('--filter', default='', help='md query to filter trials before anything else (eg to use only matching trials')
 
+parser.add_argument('--reduc_dim_win', default=None, type=float, help='argument passed to a PCA prior to fitting the decoder')
 parser.add_argument('--windows', action='append', default=[], help='list of time windows to train classifiers, test generalization and compute angles')
 parser.add_argument('--test-all-times', action='store_true', default=False, help='whether to test all time points after training on a single window')
+parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
+
+# not tested yet 
+parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
@@ -69,27 +76,61 @@ np.random.seed(args.seed)
 start_time = time.time()
 
 ### GET EPOCHS FILENAMES ###
-train_fns, _, out_fn, _ = get_paths(args, "Decoding_window")
-clf_idx = 2 if args.reduc_dim_win else 1
+if args.subject == 'all':
+    train_fns_all_subs = []
+    for sub in args.all_subjects:
+        sub_args = deepcopy(args)
+        sub_args.subject = sub
+        train_fns, _, out_fn, _ = get_paths(sub_args, "Decoding_window", mkdir=False, verbose=False)
+        train_fns_all_subs.append(train_fns)
+    train_fns_all_subs = np.array(train_fns_all_subs).T # n_queries * n_subjects
+    train_fns = train_fns_all_subs # same variable name as single subject 
+    out_args = deepcopy(args) # setup output dir and out_fn
+    out_args.train_cond = []
+    _, _, out_fn, _ = get_paths(out_args, "Decoding_window", mkdir=True, verbose=True)
+
+else:
+    train_fns, _, out_fn, _ = get_paths(args, "Decoding_window")
+    clf_idx = 2 if args.reduc_dim_win else 1
 
 
 ###########################
 ######## TRAINING #########
 ###########################
 
+
+clf = xgb.XGBClassifier(objective="multi:softprob", random_state=42, n_jobs=10, eval_metric="auc")
+if args.seed == 0:
+    print("pwet")
+#     params = {
+#             'min_child_weight': [1, 5, 10],
+#             'gamma': [0, 1, 5],
+#             'subsample': [0.6, 0.8, 1.0],
+#             'colsample_bytree': [0.3, 0.6, 1.],
+#             'max_depth': [2, 4, 6],
+#             "n_estimators": [100, 125, 150],
+#             "subsample": [0.4, 0.5, 0.6],
+#             "learning_rate": [0.03, 0.1, 0.5]
+#             }
+#     clf = RandomizedSearchCV(clf, param_distributions=params, random_state=42, n_iter=200, cv=5, verbose=1, n_jobs=1) #, return_train_score=True)
+
+
 # clf = LogisticRegression(C=1, class_weight='balanced', solver='liblinear', multi_class='auto')
-clf = LogisticRegressionCV(Cs=10, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=5, max_iter=10000)
+# clf = LogisticRegressionCV(Cs=10, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=5, max_iter=10000)
 # tuned_parameters = [{'kernel': ['linear'], 'C': np.logspace(-2, 4, 7)},
 #                     {'kernel': ['rbf'], 'gamma': [1, .1, 1e-2, 1e-3, 1e-4], 'C': np.logspace(-1, 3, 5)},
 #                     {'kernel': ['poly'], 'degree': [2, 3, 4, 5, 6], 'C': np.logspace(-1, 3, 5)}]
 # clf = SVC(class_weight='balanced')
 # clf = GridSearchCV(clf, tuned_parameters, scoring='roc_auc', cv=10, refit=True, verbose=1)
-clf = OneVsRestClassifier(clf, n_jobs=1)
 
-### DECODE ###
+# clf = OneVsRestClassifier(clf, n_jobs=1)
+
+
+### DECODE ###
 all_windows_models = []
 all_hyperplans = {}
 all_epochs = []
+all_trials_per_sub = []
 all_windows_epochs = []
 all_windows_queries = []
 all_windows_AUC = []
@@ -100,9 +141,27 @@ for window_str, query, cond, train_fn in zip(args.windows, args.train_query, arg
     all_hyperplans[window] = {}
     print(f"Doing window : {window}, {train_fn}")
 
-    ### LOAD EPOCHS ###
-    epochs = load_data(args, train_fn)[0]
+    ### LOAD EPOCHS ###
+    if args.subject == 'all':
+        epochs_list = []
+        for tfn in train_fn:
+            epo = load_data(args, tfn)[0]
+            if args.sfreq_win:
+                print(f"Resampling to final freq: {args.sfreq_win}")
+                epo = epo.resample(args.sfreq_win)
+            epochs_list.append(epo)
+            epochs_list[-1].info['dev_head_t'] = epochs_list[0].info['dev_head_t'] # overwrite head position to be able to concatenate epochs
+        trials_per_sub = [len(epo) for epo in epochs_list]
+        epochs = mne.concatenate_epochs(epochs_list)
+    else:
+        epochs = load_data(args, train_fn)[0]
+        if args.sfreq_win:
+            print(f"Resampling to final freq: {args.sfreq_win}")
+            epochs = epochs.resample(args.sfreq_win)
+        trials_per_sub = None
+
     all_epochs.append(epochs)
+    all_trials_per_sub.append(trials_per_sub)
     epo_window = epochs.copy().crop(*window)
     all_windows_epochs.append(epo_window)
     
@@ -112,7 +171,7 @@ for window_str, query, cond, train_fn in zip(args.windows, args.train_query, arg
     print(class_queries)
 
     ## DECODE
-    AUC, accuracy, ovr_model = decode_window(args, clf, epo_window, class_queries)
+    AUC, accuracy, ovr_model = decode_window(args, clf, epo_window, class_queries, trials_per_sub)
     all_windows_models.append(ovr_model)
     all_windows_accuracy.append(accuracy)
     all_windows_AUC.append(AUC)
@@ -157,24 +216,25 @@ for i_m, model in enumerate(all_windows_models):
             test_AUC = all_windows_AUC[i_m]
             test_accuracy = all_windows_accuracy[i_m]
         else:
-            test_AUC, test_accuracy = test_decode_window(args, epo_window, class_queries, model)
+            test_AUC, test_accuracy = test_decode_window(args, epo_window, class_queries, model, all_trials_per_sub[i_c])
         gen_AUC[f"{args.train_query[i_m]}-{args.train_cond[i_m]}"][f"{args.train_query[i_c]}-{args.train_cond[i_c]}"] = test_AUC
         gen_accuracy[f"{args.train_query[i_m]}-{args.train_cond[i_m]}"][f"{args.train_query[i_c]}-{args.train_cond[i_c]}"] = test_accuracy
         print(f"Generalization perf from {args.train_query[i_m]} {args.train_cond[i_m]} {args.windows[i_m]}s \
-to {args.train_query[i_c]} {args.train_cond[i_c]} {args.windows[i_c]}s: AUC = {test_AUC} ; accuracy = {test_accuracy}")
+to {args.train_query[i_c]} {args.train_cond[i_c]} {args.windows[i_c]}s: AUC = {test_AUC:.3f} ; accuracy = {test_accuracy:.3f}")
 
 save_pickle(f"{out_fn}_AUC.p", gen_AUC)
 save_pickle(f"{out_fn}_accuracy.p", gen_accuracy)
 
-
+print(f'Finished generalization. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
 
 ## TEST DECODING ALL TIME POINTs
-nb_cat = int((window[1] - window[0]) * args.sfreq) + 1 # nb of timepoints to concatenate to get the same length as the training window
+nb_cat = int((window[1] - window[0]) * args.sfreq_win) + 1 # nb of timepoints to concatenate to get the same length as the training window
 if args.test_all_times:
     gen_AUC = {}
     gen_accuracy = {}
     gen_AUC["windows"] = {} # save training windows
     for i_m, model in enumerate(all_windows_models):
+        print(f"Generalization ON ALL TIMEPOINTS perf from {args.train_query[i_m]} {args.train_cond[i_m]} {args.windows[i_m]}s")
         gen_AUC[f"{args.train_query[i_m]}-{args.train_cond[i_m]}"] = {}
         gen_accuracy[f"{args.train_query[i_m]}-{args.train_cond[i_m]}"] = {}
         gen_AUC["windows"][f"{args.train_query[i_m]}-{args.train_cond[i_m]}"] = window # save training windows
@@ -186,7 +246,10 @@ if args.test_all_times:
             for margin in range(0, 10):
                 try:
                     test_AUC, test_accuracy = test_decode_sliding_window(args, epo, class_queries, model, nb_cat+margin)
+                    break
                 except:
+                    if args.dummy:
+                        from ipdb import set_trace; set_trace()
                     continue
 
             gen_AUC[f"{args.train_query[i_m]}-{args.train_cond[i_m]}"][f"{args.train_query[i_c]}-{args.train_cond[i_c]}"] = test_AUC
@@ -197,7 +260,7 @@ if args.test_all_times:
     save_pickle(f"{out_fn}_AUC_allt.p", gen_AUC)
     save_pickle(f"{out_fn}_accuracy_allt.p", gen_accuracy)
 
-
+print(f'Finished generalization to all timepoints. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
 
 # # ## ACROSS WINDOWS AVERAGING COSINES 
 # # all_hyperplans_all_windows = []
@@ -214,32 +277,32 @@ if args.test_all_times:
 # #         cos_sim = cos_sim.mean(1).mean(2) # average over folds
 # #         print(f"(cosine average) cosine_similarity: {cos_sim}") #a1[np.newaxis,:], a2[np.newaxis,:])}")
 
-## ACROSS WINDOWS AVERAGING HYPERPLANES
-all_hyperplans_all_windows = []
-for i_win, (window, window_models) in enumerate(zip(args.windows, all_windows_models)):
-    all_hyperplans_all_windows.append([])
-    for i_class, classe in enumerate(class_queries):
-        all_hyperplans_all_windows[-1].append(np.mean([window_models[i][clf_idx].estimators_[i_class].coef_.ravel() for i in range(args.n_folds)], 0))
-all_cos_sims = []
-for i_c, classe in enumerate(class_queries):
-    class_hyperplanes = [hyperplan[i_c] for hyperplan in all_hyperplans_all_windows]
-    cos_sim = cosine_similarity(class_hyperplanes)
-    print(f"(hyperplanes average) cosine_similarity: {cos_sim}")
-    # print(f"\n doing windows {args.windows} for classe {classe}: {np.degrees(angle_between(*class_hyperplanes))}")
-    all_cos_sims.append(cos_sim[np.triu_indices(len(cos_sim), k=1)])
+# ## ACROSS WINDOWS AVERAGING HYPERPLANES
+# all_hyperplans_all_windows = []
+# for i_win, (window, window_models) in enumerate(zip(args.windows, all_windows_models)):
+#     all_hyperplans_all_windows.append([])
+#     for i_class, classe in enumerate(class_queries):
+#         all_hyperplans_all_windows[-1].append(np.mean([window_models[i][clf_idx].estimators_[i_class].coef_.ravel() for i in range(args.n_folds)], 0))
+# all_cos_sims = []
+# for i_c, classe in enumerate(class_queries):
+#     class_hyperplanes = [hyperplan[i_c] for hyperplan in all_hyperplans_all_windows]
+#     cos_sim = cosine_similarity(class_hyperplanes)
+#     print(f"(hyperplanes average) cosine_similarity: {cos_sim}")
+#     # print(f"\n doing windows {args.windows} for classe {classe}: {np.degrees(angle_between(*class_hyperplanes))}")
+#     all_cos_sims.append(cos_sim[np.triu_indices(len(cos_sim), k=1)])
 
-ave_cos_sims = np.mean(all_cos_sims, 0)
+# ave_cos_sims = np.mean(all_cos_sims, 0)
 
-n_conds = len(args.train_cond)
-idx_conds_comb = [x for x in combinations(np.arange(n_conds), 2)]
-conds_comb = [x for x in combinations(args.train_cond, 2)]
-query_comb = [x for x in combinations(args.train_query, 2)]
-window_comb = [x for x in combinations(args.windows, 2)]
-cos_sims_results = {}
-for (cond1, cond2), (query1, query2), (win1, win2), cos in zip(conds_comb, query_comb, window_comb, ave_cos_sims):
-    # cos_sims_results[f"{cond1}_{query1}_{win1}-vs-{cond2}_{query2}_{win2}"] = cos
-    cos_sims_results[f"{query1}-{cond1}--vs--{query2}-{cond2}"] = cos
-save_pickle(f"{out_fn}_cosine.p", cos_sims_results)
+# n_conds = len(args.train_cond)
+# idx_conds_comb = [x for x in combinations(np.arange(n_conds), 2)]
+# conds_comb = [x for x in combinations(args.train_cond, 2)]
+# query_comb = [x for x in combinations(args.train_query, 2)]
+# window_comb = [x for x in combinations(args.windows, 2)]
+# cos_sims_results = {}
+# for (cond1, cond2), (query1, query2), (win1, win2), cos in zip(conds_comb, query_comb, window_comb, ave_cos_sims):
+#     # cos_sims_results[f"{cond1}_{query1}_{win1}-vs-{cond2}_{query2}_{win2}"] = cos
+#     cos_sims_results[f"{query1}-{cond1}--vs--{query2}-{cond2}"] = cos
+# save_pickle(f"{out_fn}_cosine.p", cos_sims_results)
 
 
 
