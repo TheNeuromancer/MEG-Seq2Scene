@@ -255,6 +255,18 @@ def get_class_queries(query):
         class_queries = [f"{query}=='{c}'" for c in colors]
     elif "Left_shape" in query or "Right_shape" in query:
         class_queries = [f"{query}=='{s}'" for s in shapes]
+    elif "LeftNotR_color" in query or "RightNotL_color" in query: # inforce that the other side has a different color 
+        not_query = "Right_color" if 'NotR' in query else "Left_color" # side that should not have the color
+        query = query.replace("NotR", "").replace("NotL", "") # remove info from query to
+        class_queries = [f"{query}=='{c}' and {not_query} != '{c}'" for c in colors]
+        print(class_queries)
+    elif "LeftNotR_shape" in query or "RightNotL_shape" in query:
+        print("wesh")
+        not_query = "Right_shape" if 'NotR' in query else "Left_shape" # side that should not have the shape
+        query = query.replace("NotR", "").replace("NotL", "") # remove info from query to
+        class_queries = [f"{query}=='{c}' and {not_query} != '{c}'" for c in shapes]
+        print(class_queries)
+        print("wesh")
     elif query == "Relation": 
         class_queries = ["Relation==\"à gauche d'\"", "Relation==\"à droite d'\""]
     elif query == "Perf":
@@ -1343,8 +1355,8 @@ def plot_GAT(data_mean, out_fn, train_cond, train_tmin, train_tmax, test_tmin, t
             # plt.axhline(y=sli, linestyle=':', alpha=.9, color=cmap(i_slice))
             add_diamond_on_axis(color=cmap(i_slice), x=None, y=sli, ax=ax)
 
-        plt.savefig(out_fn + '_wslices.png')
-        plt.close()
+        # plt.savefig(out_fn + '_wslices.png')
+        # plt.close()
 
         max_auc = np.max(data_mean)
         all_slices_ave = []

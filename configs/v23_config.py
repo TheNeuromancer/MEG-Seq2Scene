@@ -5,7 +5,7 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "26"
+    version: str = "23"
     root_path: str = "/neurospin/unicog/protocols/MEG/Seq2Scene/"
     epochs_dir: str = "Epochs_100hz_nofilter"
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
@@ -17,10 +17,10 @@ class Config:
     ch_var_reject: int = 0 # threshold for the variance-based channel rejection, in number of std
     epo_var_reject: int = 0 # threshold for the variance-based epochs rejection, in number of std
     ref_run: int = 5 # reference run for head position for maxwell filter
-    l_freq: float = 0.1 # high-pass filter cutoff
-    h_freq: float = 30 # low-pass filter cutoff
+    l_freq: float = 0.01 # high-pass filter cutoff
+    h_freq: float = 100 # low-pass filter cutoff
     notch: int = 50 # land line frequency
-    sfreq: int = 100 # final sampling frequency
+    sfreq: int = 50 # final sampling frequency
 
     ## Decoding parameters
     n_folds: int = 5 # number of shuffle splits
@@ -36,19 +36,19 @@ class Config:
     ## Decoding single channel parameters
     reduc_dim_sing: float = 0 # dimensionality reduction
     ## General analysis parameters
-    cat: int = 5 # number of timepoints to concatenate
-    mean: bool = True # Wether to average instead of concatenate if using the "cat" argument
+    cat: int = 10 # number of timepoints to concatenate
+    mean: bool = False # Wether to average instead of concatenate if using the "cat" argument
     smooth: int = 21 # hanning smoothing window, in timesample,
     clip: bool = True # Whether to clip to the 5th and 95th percentile for each channel
     subtract_evoked: bool = False # Whether to subtract the evoked signal from the epochs
     avg_clf: bool = False # Whether to average classifiers across cval folds
     autoreject: bool = False
     xdawn: bool = False
-    quality_th: float = 0 # .75
+    quality_th: float = 0 #.75
     filter: str = "Perf==1"
-    equalize_events: bool = True # True
+    equalize_events: bool = True
     micro_ave: int = 2
-    max_trials: int = 0 # maximum number of trials (after micro-averaging)
+    max_trials: int = 1000 # maximum number of trials (after micro-averaging)
 
     riemann: bool = False # apply riemannian tranformation before fitting decoder
 

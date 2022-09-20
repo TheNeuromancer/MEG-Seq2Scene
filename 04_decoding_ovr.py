@@ -80,11 +80,14 @@ start_time = time.time()
 ### GET EPOCHS FILENAMES ###
 out_dir_name = "Decoding_ovr" if not args.test_quality else "Decoding_test_quality"
 train_fn, test_fns, out_fn, test_out_fns = get_paths(args, out_dir_name)
+
 if args.windows:
     args.windows = [w.replace(" ", "") for w in args.windows] # remove spaces
     wins = [f"#{'#'.join([args.windows[0], w])}#" for w in args.windows] # string to add to the out fns
     out_fn += wins[0]
     for i in range(len(test_out_fns)): test_out_fns[i] += wins[i+1]
+
+# if not args.overwrite:
 
 print('\nStarting training')
 ### LOAD EPOCHS ###

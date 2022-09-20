@@ -85,11 +85,12 @@ def get_paths(args, dirname='Decoding', mkdir=True, verbose=True):
             os.makedirs(out_dir)
     else:
         if verbose: print('output directory already exists')
-        if op.exists(f"{out_dir}_AUC.npy"):
+        if op.exists(f"{out_fn}_AUC.npy"):
             if args.overwrite:
                 if verbose: print('overwrite is set to True ... overwriting\n')
             else:
-                if verbose: print('overwrite is set to False ... exiting smoothly')
+                if verbose: 
+                    print('overwrite is set to False ... exiting smoothly')
                 exit()
     return train_fn, test_fns, out_fn, test_out_fns
 

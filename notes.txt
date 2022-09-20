@@ -30,13 +30,21 @@ v19: 50hz ; trial micro-averaging, 2000 trials. Trial microaveraging makes split
 v20: Pyriemann? Works only for windows decoding, because the covariance is computed over time (the time dimension is lost). Perf is very bad
 Trying again without pyriemann but with equalize events. 20000max trials, 50hz, .99reducdim
 also trying side mismatch decoding with micro_ave=3, equalize events, 10000maxtrials, window5-8.5s.
-
+Also trying CCA
 launched v21, all freq bands -- watch out low and high gamma already failed due to hfreq > sfreq
-v22: filtering 0.01hz-100hz
+v22: filtering 0.01hz-100hz - not much better? maybe a bit better!
+v23: proper CCA with cat10, nofitler, 50hz. 
+dimensionality, cat10, with trials averaging, but its shit so trying without trials averaging
+Maybe try subtract evoked?
+v24: master decoder: 100hz, nofilter, cat5, autoreject, NO micro-average. for color, shape and mismatch only.
+Not excellent. 
+Launched regression and Side with Not the same color on the other side.
 
-relaunched v18 sidemismatch decod
-and v20 same_diff_decod with correct n_folds DONE
-and test reactivation at image time with mismatch only trials (single  object) !! decoding_ovr.sr modified !!
+
+things that needs double checking: 
+CCA
+Dimensionality
+decoding of same/different
 
 
 cosine distance between decoders, as a timegen?

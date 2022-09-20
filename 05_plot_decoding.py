@@ -41,6 +41,7 @@ parser.add_argument('--slices', action='store_true',  default=False, help='Wheth
 parser.add_argument('--only_agg', action='store_true',  default=False, help='Do plot for each available condition, or just the aggregates plots with multiple conditions')
 parser.add_argument('-r', '--remake', action='store_true',  default=False, help='recompute average again, even if plotting only aggregates')
 parser.add_argument('-v', '--verbose', action='store_true',  default=False, help='Print more stuff')
+parser.add_argument('--freq_bands', action='store_true',  default=False, help='whether to load frequency bands separately, or everything all at once (if you did not run multiple freq bands)')
 parser.add_argument('--smooth_plot', default=0, type=int, help='Smoothing AUC before plotting')
 args = parser.parse_args()
 
@@ -122,6 +123,8 @@ dummy_labbin = LabelBinarizer()
 mag_idx, grad_idx = [pickle.load(open(f"{args.root_path}/Data/{s}_indices.p", "rb")) for s in ['mag', 'grad']]
 mag_info, grad_info = [pickle.load(open(f"{args.root_path}/Data/{s}_info.p", "rb")) for s in ['mag', 'grad']]
 
+freq_bands = ["delta", "theta", "alpha", "beta"] if args.freq_bands else [""]
+
 data_fn = f"{op.dirname(op.dirname(out_dir))}/all_data.p"
 diags_fn = f"{op.dirname(op.dirname(out_dir))}/all_diags.p"
 patterns_fn = f"{op.dirname(op.dirname(out_dir))}/all_patterns.p"
@@ -138,193 +141,206 @@ else:
     auc_all_labels = {}
     pattern_all_labels = {}
     for label in all_labels:
+        if "Mismatch" in label: 
+            print(f"skipping label {label}")
+            continue
         for train_cond in ["localizer", "obj", "scenes"]: # , "one_object", "two_objects", 
             if args.slices:
                 if train_cond in ["localizer"]: slices = slices_loc
                 if train_cond == "obj": slices = slices_one_obj
                 if train_cond == "scenes": slices = slices_two_obj
             for split_query in ["match", "nonmatch", "flash", "noflash", "match_or_Error_type=l0", "match_or_Error_type=l1", \
-                                "match_or_Error_type=l2", "Complexity=0", "Complexity=1", "Complexity=2", False]:
+                                "match_or_Error_type=l2", "Complexity=0", "Complexity=1", "Complexity=2", \
+                                "Change.str.containsshape", "Change.str.containscolour", False]:
                 for gen_cond in [None, "localizer", "obj", "scenes"]:
-                    # if train_cond == gen_cond: continue # skip when we both have one object, it is not generalization
-                    all_patterns = []
-                    all_AUC = []
-                    all_subs = []
-                    all_items = []
-                    for fn in all_fns:
-                        if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
-                        if f"-{train_cond}-" not in fn: continue
-                        if not split_query: # if not split_query or nonmatch markers, keep all non-splitqueries
-                            split_query_str = ""
-                            if "_for_" in fn: continue
-                        else:
-                            if f"for_{split_query}" not in fn: continue
-                            split_query_str = f"_for_{split_query}"
-                        # else:
-                        #     raise RuntimeError("split queries issue")
-                        if gen_cond is not None:
-                            if f"tested_on_{gen_cond}" not in fn: continue
-                        else: # ensure we don't have generalization results
-                            if "tested_on" in fn: continue
-                        # do not load the full mnius splits
-                        if "full_minus_split" in fn: continue
-
-                        if args.verbose: print('loading file ', fn)
-                        AUC = np.load(fn)
-                        all_AUC.append(AUC)
-                        all_subs.append(op.basename(op.dirname(fn))[0:2])
-                        all_items.append(op.basename(fn))
-
-                        # load corresponding pattern (for direct training only)
-                        if not split_query and (gen_cond is None): 
-                            # pattern_fn = f"{op.dirname(fn)}/{'_'.join(op.basename(fn).split('_')[0:2])}_best_pattern_t*.npy"
-                            pattern_fn = f"{op.dirname(fn)}/{op.basename(fn).replace('_AUC.npy', '')}_best_pattern_t*.npy"
-                            pattern_fn = glob(pattern_fn)
-                            if len(pattern_fn) == 0:
-                                print(f"!!!No pattern found!!! passing for now but look it up")
-                            elif len(pattern_fn) > 1:
-                                print(f"!!!Multiple patterns found!!! passing for now but look it up")
+                    for freq_band in freq_bands:
+                        if args.verbose: print(freq_band)
+                        # if train_cond == gen_cond: continue # skip when we both have one object, it is not generalization
+                        all_patterns = []
+                        all_AUC = []
+                        all_subs = []
+                        all_items = []
+                        for fn in all_fns:
+                            if freq_band not in fn:
+                                continue # if we do not have freq bands it will keep all files
+                            if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
+                            if f"-{train_cond}-" not in fn: continue
+                            if not split_query: # if not split_query or nonmatch markers, keep all non-splitqueries
+                                split_query_str = ""
+                                if "_for_" in fn: continue
                             else:
-                                all_patterns.append(np.load(pattern_fn[0]))
-                            
+                                if f"for_{split_query}" not in fn: continue
+                                split_query_str = f"_for_{split_query}"
+                            # else:
+                            #     raise RuntimeError("split queries issue")
+                            if gen_cond is not None:
+                                if f"tested_on_{gen_cond}" not in fn: continue
+                            else: # ensure we don't have generalization results
+                                if "tested_on" in fn: continue
+                            # do not load the full mnius splits
+                            if "full_minus_split" in fn: continue
 
-                    if not all_AUC: 
-                        if args.verbose: print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} for  split query {split_query}")
-                        continue
-                    if args.verbose: print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}")
-                    n_subs = len(all_AUC)
-                    if n_subs < 2: 
-                        print(f"Single subject found, moving on to next conditon")
-                        continue
-                    gen_str = f"_tested_on_{gen_cond}" if gen_cond is not None else ""
-                    out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}{split_query_str}_{n_subs}ave"
+                            if args.verbose: print('loading file ', fn)
+                            AUC = np.load(fn)
+                            all_AUC.append(AUC)
+                            all_subs.append(op.basename(op.dirname(fn))[0:2])
+                            all_items.append(op.basename(fn))
 
-                    all_subs_labels = np.unique(all_subs)
-                    all_subs = dummy_class_enc.fit_transform(all_subs)
-                    all_items = dummy_class_enc.fit_transform(all_items)
+                            # load corresponding pattern (for direct training only)
+                            if not split_query and (gen_cond is None): 
+                                # pattern_fn = f"{op.dirname(fn)}/{'_'.join(op.basename(fn).split('_')[0:2])}_best_pattern_t*.npy"
+                                pattern_fn = f"{op.dirname(fn)}/{op.basename(fn).replace('_AUC.npy', '')}_best_pattern_t*.npy"
+                                pattern_fn = glob(pattern_fn)
+                                if len(pattern_fn) == 0:
+                                    print(f"!!!No pattern found!!! passing for now but look it up")
+                                elif len(pattern_fn) > 1:
+                                    print(f"!!!Multiple patterns found!!! passing for now but look it up")
+                                else:
+                                    all_patterns.append(np.load(pattern_fn[0]))
+                                
 
-                    # average per subject, then accross subjects
-                    # if not np.all([all_AUC[0].shape == auc.shape for auc in all_AUC]):
-                    #     print(f"Shape mismatch ... rejecting one but look it up")
-                    #     # set_trace()
-                    #     shape = [226, 226] if train_cond=='obj' else [426, 426]
-                    #     all_AUC = [auc for auc in all_AUC if auc.shape == shape]
-                    if not len(all_AUC): 
-                        print(f"did find any auc for {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}, continuing")
-                        continue
-                    all_AUC = np.array(all_AUC)
-                    if args.regression: # clipping R2s
-                        all_AUC = np.clip(all_AUC, -1, 1)
-                    try:
-                        # AUC_mean = np.nanmean(all_AUC, 0)
-                        AUC_mean = np.nanmedian(all_AUC, 0)
-                    except:
-                        print(f"Shape mismatch ... continuing for now but look it up")
-                        continue
-                        set_trace()
-                    AUC_std = sem(all_AUC, 0, nan_policy='omit')
+                        if not all_AUC: 
+                            if args.verbose: print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} for  split query {split_query}")
+                            continue
+                        if args.verbose: print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}")
+                        n_subs = len(all_AUC)
+                        if n_subs < 2: 
+                            print(f"Single subject found, moving on to next conditon")
+                            continue
+                        if n_subs > 30: 
+                            set_trace()
+                        gen_str = f"_tested_on_{gen_cond}" if gen_cond is not None else ""
+                        freq_str = f"_{freq_band}" if args.freq_bands else ""
+                        out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}{split_query_str}{freq_str}_{n_subs}ave"
 
-                    if not split_query and (gen_cond is None):
-                        if len(all_patterns) == 0: 
-                            print(f"Not a single pattern found ...") 
-                        else:
-                            pattern = np.median(all_patterns, 0)
-                            if pattern.ndim == 2: # OVR, one additional dimension
-                                pattern = np.median(pattern, 0)
-                                all_patterns = np.concatenate(all_patterns) # first dim = subjs*classes
-                    
-                            pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot
+                        all_subs_labels = np.unique(all_subs)
+                        all_subs = dummy_class_enc.fit_transform(all_subs)
+                        all_items = dummy_class_enc.fit_transform(all_items)
 
-                    # store values for all labels for multi plot
-                    # if train_cond=="scenes": # and gen_cond is None and "win" not in label:
-                    auc_all_labels[f"{label}_{train_cond}_{gen_cond}_{split_query_str}"] = np.array(all_AUC)
+                        # average per subject, then accross subjects
+                        # if not np.all([all_AUC[0].shape == auc.shape for auc in all_AUC]):
+                        #     print(f"Shape mismatch ... rejecting one but look it up")
+                        #     # set_trace()
+                        #     shape = [226, 226] if train_cond=='obj' else [426, 426]
+                        #     all_AUC = [auc for auc in all_AUC if auc.shape == shape]
+                        if not len(all_AUC): 
+                            print(f"did find any auc for {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}, continuing")
+                            continue
+                        all_AUC = np.array(all_AUC)
+                        if args.regression: # clipping R2s
+                            all_AUC = np.clip(all_AUC, -1, 1)
+                        try:
+                            # AUC_mean = np.nanmean(all_AUC, 0)
+                            AUC_mean = np.nanmedian(all_AUC, 0)
+                        except:
+                            print(f"Shape mismatch ... continuing for now but look it up")
+                            continue
+                            set_trace()
+                        AUC_std = sem(all_AUC, 0, nan_policy='omit')
 
-                    # save max values to save to csv
-                    max_auc_all_facconds.append(np.max(AUC_mean))
-                    all_faccond_names.append(f"{label} trained on {train_cond}{' tested on ' if gen_cond is not None else ''}{gen_cond if gen_cond is not None else ''}")
-
-                    ## plotting all patterns
-                    if len(all_patterns):
-                        # fig, axes = plt.subplots(len(all_patterns), figsize=(6, len(all_patterns)/2))
-                        # for i_p, patt in enumerate(all_patterns):
-                        #     try:
-                        #         mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
-                        #     except:
-                        #         set_trace()
-                        # plt.savefig(f'{out_fn}_{label}_{train_cond}_patternS_mag.png')
-                        ## ave pattern
-                        fig, ax = plt.subplots()
-                        mne.viz.plot_topomap(np.squeeze(np.mean(all_patterns, 0))[mag_idx], mag_info, axes=ax)
-                        plt.savefig(f'{out_fn}_{label}_{train_cond}_ave_pattern_mag.png')
-                        plt.close()
-
-                    if args.only_agg: continue # skip per condition plots, just save results for aggregate plots
-
-
-                    ## Plots per condition
-                    if not "win" in label and not "delay" in label:
-                        window = False
-                        train_tmin, train_tmax = tmin_tmax_dict[train_cond]
-                        if gen_cond is not None:
-                            test_tmin, test_tmax = tmin_tmax_dict[gen_cond]
-                        else:
-                            test_tmin, test_tmax = train_tmin, train_tmax
-                    else: # windowed
-                        train_tmin, train_tmax = [float(s) for s in fn.split("#")[1].split(",")]
-                        test_tmin, test_tmax = [float(s) for s in fn.split("#")[2].split(",")]
-                        window = True
-
-                    if "Resp" in label: # response lock
-                        train_tmin, train_tmax = tmin_tmax_dict["response_locked"]
-                        test_tmin, test_tmax = tmin_tmax_dict["response_locked"]
-                        is_resplock = True
-                    else:
-                        is_resplock = False
-                    times = np.arange(train_tmin, train_tmax+1e-10, 1./args.sfreq)
-
-                    is_contrast = True if (np.min(np.array(all_AUC)) < 0) or (np.max(np.array(all_AUC)) < .4) else False
-
-                    if gen_cond is None or "win" in label:
-                        plot_diag(data_mean=AUC_mean, data_std=AUC_std, out_fn=out_fn, train_cond=train_cond, ybar=ybar, resplock=is_resplock,
-                            train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, window=window, smooth_plot=args.smooth_plot)
+                        if not split_query and (gen_cond is None):
+                            if len(all_patterns) == 0: 
+                                print(f"Not a single pattern found ...") 
+                            else:
+                                pattern = np.median(all_patterns, 0)
+                                if pattern.ndim == 2: # OVR, one additional dimension
+                                    pattern = np.median(pattern, 0)
+                                    all_patterns = np.concatenate(all_patterns) # first dim = subjs*classes
                         
-                        # ## plot diags for all subjects
-                        # # plot_multi_diag(data=all_AUC, data_std=None, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, 
-                        # #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
-                        # ## each sub + average of each subjects
-                        # all_subs_bin = dummy_labbin.fit_transform(all_subs).T.astype(bool)
-                        # sub_ave_AUC = np.array([np.mean(all_AUC[indices], 0) for indices in all_subs_bin])
-                        # # sub_std_AUC = np.array([np.std(all_AUC[indices], 0) for indices in all_subs_bin])
-                        # plot_multi_diag(data=sub_ave_AUC, data_std=None, out_fn=f"{out_fn}_subave", train_cond=train_cond, train_tmin=train_tmin, 
-                        #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version) #, labels=all_subs_labels)
+                                pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot
 
-                        # # same color for each subject
-                        # plot_multi_diag(data=all_AUC, data_std=None, out_fn=f"{out_fn}_colsub", train_cond=train_cond, train_tmin=train_tmin, 
-                        #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, cmap_groups=all_subs)
-                        # # same color for each training condition
-                        # plot_multi_diag(data=all_AUC, data_std=None, out_fn=f"{out_fn}_colitem", train_cond=train_cond, train_tmin=train_tmin, 
-                        #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, cmap_groups=all_items)
-                        # ## plots diags for the average of training condition - implement get label for this?
-                        # all_items_bin = dummy_labbin.fit_transform(all_items).T.astype(bool)
-                        # item_ave_AUC = np.array([np.mean(all_AUC[indices], 0) for indices in all_items_bin])
-                        # # item_std_AUC = np.array([np.std(all_AUC[indices], 0) for indices in all_items_bin])
-                        # plot_multi_diag(data=item_ave_AUC, data_std=None, out_fn=f"{out_fn}_condave", train_cond=train_cond, train_tmin=train_tmin, 
-                        #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
+                        # store values for all labels for multi plot
+                        # if train_cond=="scenes": # and gen_cond is None and "win" not in label:
+                        auc_all_labels[f"{label}_{train_cond}_{gen_cond}_{split_query_str}"] = np.array(all_AUC)
 
-                    if not window:
-                        plot_GAT(data_mean=AUC_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, ybar=ybar,
-                                 test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, resplock=is_resplock, gen_cond=gen_cond, slices=slices, version=version, window=window)
+                        # save max values to save to csv
+                        max_auc_all_facconds.append(np.max(AUC_mean))
+                        all_faccond_names.append(f"{label} trained on {train_cond}{' tested on ' if gen_cond is not None else ''}{gen_cond if gen_cond is not None else ''}")
+
+                        ## plotting all patterns
+                        if len(all_patterns):
+                            # fig, axes = plt.subplots(len(all_patterns), figsize=(6, len(all_patterns)/2))
+                            # for i_p, patt in enumerate(all_patterns):
+                            #     try:
+                            #         mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
+                            #     except:
+                            #         set_trace()
+                            # plt.savefig(f'{out_fn}_{label}_{train_cond}_patternS_mag.png')
+                            ## ave pattern
+                            fig, ax = plt.subplots()
+                            mne.viz.plot_topomap(np.squeeze(np.mean(all_patterns, 0))[mag_idx], mag_info, axes=ax)
+                            plt.savefig(f'{out_fn}_{label}_{train_cond}_ave_pattern_mag.png')
+                            plt.close()
+
+                        if args.only_agg: continue # skip per condition plots, just save results for aggregate plots
 
 
-                        if args.slices and gen_cond is None:
-                            plot_GAT_with_slices(AUC_mean, all_AUC, out_fn, train_cond=train_cond, times=times, ylabel=ylabel, cbar=True, chance=chance,
-                                         version=version, stat='cluster', slices=slices, ybar=ybar, same_aspect=not(args.regression))
+                        ## Plots per condition
+                        if not "win" in label and not "delay" in label: # remove mismatch side when you tun wth win in the label
+                            window = False
+                            train_tmin, train_tmax = tmin_tmax_dict[train_cond]
+                            if gen_cond is not None:
+                                test_tmin, test_tmax = tmin_tmax_dict[gen_cond]
+                            else:
+                                test_tmin, test_tmax = train_tmin, train_tmax
+                        else: # windowed
+                            print(fn)
+                            train_tmin, train_tmax = [float(s) for s in fn.split("#")[1].split(",")]
+                            test_tmin, test_tmax = [float(s) for s in fn.split("#")[2].split(",")]
+                            window = True
 
-                            plot_GAT_with_slices(AUC_mean, all_AUC, out_fn, train_cond=train_cond, times=times, ylabel=ylabel, cbar=True, chance=chance,
-                                         version=version, stat='wilcoxon', slices=slices, ybar=ybar, same_aspect=not(args.regression))
+                        if "Resp" in label: # response lock
+                            train_tmin, train_tmax = tmin_tmax_dict["response_locked"]
+                            test_tmin, test_tmax = tmin_tmax_dict["response_locked"]
+                            is_resplock = True
+                        else:
+                            is_resplock = False
+                        times = np.arange(train_tmin, train_tmax+1e-10, 1./args.sfreq)
 
-                    if args.verbose: print(f"Finished {label} trained on {train_cond} with generalization {gen_cond}  for  split query {split_query}\n")
-                    plt.close('all')
+                        is_contrast = True if (np.min(np.array(all_AUC)) < 0) or (np.max(np.array(all_AUC)) < .4) else False
+
+                        # if gen_cond is None or "win" in label:
+                        if train_tmax==test_tmax or "win" in label: # square time window, necessary for getting a diagonal
+                            plot_diag(data_mean=AUC_mean, data_std=AUC_std, out_fn=out_fn, train_cond=train_cond, ybar=ybar, resplock=is_resplock,
+                                train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, window=window, smooth_plot=args.smooth_plot)
+                            
+                            # ## plot diags for all subjects
+                            # # plot_multi_diag(data=all_AUC, data_std=None, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, 
+                            # #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
+                            # ## each sub + average of each subjects
+                            # all_subs_bin = dummy_labbin.fit_transform(all_subs).T.astype(bool)
+                            # sub_ave_AUC = np.array([np.mean(all_AUC[indices], 0) for indices in all_subs_bin])
+                            # # sub_std_AUC = np.array([np.std(all_AUC[indices], 0) for indices in all_subs_bin])
+                            # plot_multi_diag(data=sub_ave_AUC, data_std=None, out_fn=f"{out_fn}_subave", train_cond=train_cond, train_tmin=train_tmin, 
+                            #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version) #, labels=all_subs_labels)
+
+                            # # same color for each subject
+                            # plot_multi_diag(data=all_AUC, data_std=None, out_fn=f"{out_fn}_colsub", train_cond=train_cond, train_tmin=train_tmin, 
+                            #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, cmap_groups=all_subs)
+                            # # same color for each training condition
+                            # plot_multi_diag(data=all_AUC, data_std=None, out_fn=f"{out_fn}_colitem", train_cond=train_cond, train_tmin=train_tmin, 
+                            #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, cmap_groups=all_items)
+                            # ## plots diags for the average of training condition - implement get label for this?
+                            # all_items_bin = dummy_labbin.fit_transform(all_items).T.astype(bool)
+                            # item_ave_AUC = np.array([np.mean(all_AUC[indices], 0) for indices in all_items_bin])
+                            # # item_std_AUC = np.array([np.std(all_AUC[indices], 0) for indices in all_items_bin])
+                            # plot_multi_diag(data=item_ave_AUC, data_std=None, out_fn=f"{out_fn}_condave", train_cond=train_cond, train_tmin=train_tmin, 
+                            #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version)
+
+                        if not window:
+                            plot_GAT(data_mean=AUC_mean, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=test_tmin, ybar=ybar,
+                                     test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, resplock=is_resplock, gen_cond=gen_cond, slices=slices, version=version, window=window)
+
+
+                            if args.slices and gen_cond is None:
+                                plot_GAT_with_slices(AUC_mean, all_AUC, out_fn, train_cond=train_cond, times=times, ylabel=ylabel, cbar=True, chance=chance,
+                                             version=version, stat='cluster', slices=slices, ybar=ybar, same_aspect=not(args.regression))
+
+                                plot_GAT_with_slices(AUC_mean, all_AUC, out_fn, train_cond=train_cond, times=times, ylabel=ylabel, cbar=True, chance=chance,
+                                             version=version, stat='wilcoxon', slices=slices, ybar=ybar, same_aspect=not(args.regression))
+
+                        if args.verbose: print(f"Finished {label} trained on {train_cond} with generalization {gen_cond}  for  split query {split_query}\n")
+                        plt.close('all')
 
 
     print(f"saving all data to {data_fn} and {diags_fn}")

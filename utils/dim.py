@@ -21,6 +21,7 @@ from scipy.signal import savgol_filter
 from scipy.stats import ttest_1samp
 from autoreject import AutoReject
 from statannotations.Annotator import Annotator
+from tqdm import tqdm
 
 # local import
 from .commons import *

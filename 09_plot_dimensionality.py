@@ -91,15 +91,17 @@ else:
 
 train_cond, test_cond = 'scenes', 'scenes'
 train_tmin, train_tmax = tmin_tmax_dict[train_cond]
-ylabel = "Participation Ratio"
 
-# data_dict = {"Mirror": [], "Window": [], "Subject": []}
+## PR plots
+ylabel = "Participation Ratio"
 all_means, all_stds = {}, {}
-for complexity in (0, 1, 2, None):
+for complexity in (0, 1, 2, None): # PR over time plots
     data, all_subs = [], []
     for fn in all_fns:
+        if "reconstruction_L2" in fn: continue # reject reconstruction accuracy files
         if complexity is not None and not (f"Complexity={complexity}" in fn): continue
         if complexity is None and "Complexity" in fn: continue
+        # print(f"Loading {fn}")
         data.append(np.load(fn))
         all_subs.append(op.basename(op.dirname(fn))[0:2])
 
@@ -110,7 +112,7 @@ for complexity in (0, 1, 2, None):
     print(f"Doing  complexity={complexity}")
     data = np.array(data)
     complexity_str = f"_complexity={complexity}"
-    out_fn = f"{out_dir}/{len(data)}ave{complexity_str}"
+    out_fn = f"{out_dir}/{len(data)}ave{complexity_str}_PR"
     n_subs = len(all_subs)
 
     dat_mean, dat_std = np.mean(data, 0), np.std(data, 0)
@@ -119,7 +121,7 @@ for complexity in (0, 1, 2, None):
     all_means[f"Complexity={complexity}"] = dat_mean
     all_stds[f"Complexity={complexity}"] = dat_std
 
-## Aggregate plots
+## Aggregate PR plots
 n_times = dat_mean.shape[0]
 times = np.linspace(train_tmin, train_tmax, n_times)
 fig, ax = plt.subplots()
@@ -128,8 +130,39 @@ for label in labels:
     plt.plot(times, all_means[label], label=label)
     ax.fill_between(times, all_means[label]-all_stds[label], all_means[label]+all_stds[label], alpha=0.2)
 plt.legend()
-plt.savefig(f"{out_dir}/{len(data)}_all_complexity.png")
+plt.savefig(f"{out_dir}/{len(data)}_all_complexity_PR.png")
 
+
+## Reconstruction L2 plots
+ylabel = "Mean reconstruction error (L2)"
+data, all_subs = [], []
+for fn in all_fns:
+    if not "reconstruction_L2" in fn: continue # reject reconstruction accuracy files
+    data.append(np.load(fn))
+    all_subs.append(op.basename(op.dirname(fn))[0:2])
+if not data:
+    print(f"did not find any data for L2") # for mirror={mirror} and window={window}, and reducdim={reducdim}, moving on")
+    qwe
+data = np.array(data)
+print(data.shape)
+n_subs = len(all_subs)
+
+dat_mean, dat_std = np.mean(data, 0), np.std(data, 0)
+labels = ["Complexity=0", "Complexity=1", "Complexity=2"]
+for i in range(dat_mean.shape[1]):
+    out_fn = f"{out_dir}/{len(data)}ave_{labels[i]}_reconstruction_L2"
+    plot_diag(data_mean=dat_mean[:,i], data_std=dat_std[:,i], out_fn=out_fn, train_cond=train_cond, ybar=None, resplock=False, contrast=False, 
+              train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, version=version, window=None, smooth_plot=args.smooth_plot)
+
+n_times = dat_mean.shape[0]
+times = np.linspace(train_tmin, train_tmax, n_times)
+fig, ax = plt.subplots()
+labels = ["Complexity=0", "Complexity=1", "Complexity=2"]
+for i in range(dat_mean.shape[1]):
+    plt.plot(times, dat_mean[:,i], label=labels[i])
+    ax.fill_between(times, dat_mean[:,i]-dat_std[:,i], dat_mean[:,i]+dat_std[:,i], alpha=0.2)
+plt.legend()
+plt.savefig(f"{out_dir}/{len(data)}_all_complexity_reconstruction_l2.png")
 
 
 # set_trace()
