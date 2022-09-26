@@ -7,6 +7,8 @@ import argparse
 import pickle
 import time
 import importlib
+from ipdb import set_trace
+from scipy.signal import detrend
 
 from utils.dim import *
 
@@ -32,11 +34,11 @@ parser.add_argument('-r', '--response_lock', action='store_true',  default=None,
 parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
 parser.add_argument('--max_trials', default=None, type=int, help='Trial micro-averaging max nb of trials')
 # parser.add_argument('--reconstruct', action='store_true', default=False, help='Whether to reconstruct stimulus and test accuracy')
-parser.add_argument('--reconstruct_queries', default=[], action='append', help='If specified, reconstructs stimulus and test accuracy for each query')
+parser.add_argument('--queries', default=[], action='append', help='If specified, reconstructs stimulus and test accuracy for each query')
 
 # actually we set the nb of components to be highest possible (depending on the data), ie min(nchan, n_trials)
 # parser.add_argument('--n_comp', default=250, type=int, help='Number of PCA components to use for reconstruction')
-
+parser.add_argument('--detrend', action='store_true', default=False, help='detrend epochs beforehand')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
@@ -44,8 +46,8 @@ parser.add_argument('--n_folds', type=int, help='sampling frequency')
 
 # not implemented
 parser.add_argument('--localizer', action='store_true', default=False, help='Whether to use only electrode that were significant in the localizer')
-parser.add_argument('--path2loc', default='Single_Chan_vs5/CMR_sent', help='path to the localizer results (dict with value 1 for each channel that passes the test, 0 otherwise')
-parser.add_argument('--pval-thresh', default=0.05, type=float, help='pvalue threshold under which a channel is kept for the localizer')
+parser.add_argument('--auc_thresh', default=0.55, type=float, help='pvalue threshold under which a channel is kept for the localizer')
+parser.add_argument('--min_nb_ch', default=50, type=int, help='pvalue threshold under which a channel is kept for the localizer')
 args = parser.parse_args()
 
 # import config parameters
@@ -60,9 +62,6 @@ print(args)
 print("matplotlib: ", matplotlib.__version__)
 print("mne: ", mne.__version__)
 
-# if len(args.test_cond) != len(args.test_queries[0]) or len(args.test_cond) != len(args.test_queries[1]):
-#     raise RuntimeError("Test conditions and test-queries should have the same length")
-
 np.random.seed(args.seed)
 start_time = time.time()
 
@@ -72,6 +71,7 @@ start_time = time.time()
 
 ### GET EPOCHS FILENAMES ###
 train_fn, test_fns, out_fn, test_out_fns = get_paths(args, dirname='Dimensionality')
+if args.localizer: out_fn += f"_{args.auc_thresh}th"
 print(out_fn)
 
 print('\nStarting training')
@@ -81,71 +81,59 @@ if args.train_query:
 else:
     epochs = load_data(args, train_fn, [])[0]
     out_fn += "_all_trials"
-# test_split_query_indices = get_split_indices(args.split_queries, epochs)
-train_tmin, train_tmax = epochs.tmin, epochs.tmax
+
+
+tmin, tmax = epochs.tmin, epochs.tmax
 ### GET DATA AND CONSTRUCT LABELS ###
-# if args.train_query:
-    # X, y, nchan, ch_names = get_X_y_from_epochs_list(args, epochs, args.sfreq)
-# else: # no query, take all the data
-X = epochs.get_data()
-n_trials, nchan, n_times = X.shape
-if args.micro_ave: # just print, trial averaging happens later
+X = epochs.get_data().transpose((0,2,1)) # trials, times, channels
+if args.detrend:
+    out_fn += "_detrended"
+    # from ipdb import set_trace; set_trace()
+    detrend(X, axis=1, type='linear', overwrite_data=True)
+n_trials, n_times, nchan = X.shape
+if args.min_nb_ch > nchan: 
+    print(f"Not enough channels left after localizer, exiting smoothly")
+    exit()
+times = np.linspace(tmin, tmax, n_times)
+
+if args.micro_ave:
     print(f"Using extensive trial micro-averaging, starting with {len(X)} trials")
-#     X, _ = micro_averaging(X, np.ones(len(X)), args.micro_ave)
-#     if args.max_trials and len(X) > args.max_trials:
-#         indices = np.random.choice(np.arange(len(X)), args.max_trials, replace=False)
-#         X = X[indices]
-#     print(f"ending with {len(X)} trials")
+    X, _ = micro_averaging(X, np.ones(len(X)), args.micro_ave)
+    if args.max_trials and len(X) > args.max_trials:
+        indices = np.random.choice(np.arange(len(X)), args.max_trials, replace=False)
+        X = X[indices]
+    print(f"ending with {len(X)} trials")
 
-if args.reconstruct_queries:
-    print("ok")
-    X_queries = []
-    for query in args.reconstruct_queries:
-        X_queries.append(epochs[query].get_data())
-    if args.equalize_events:
-        nb_eve = min([len(x) for x in X_queries])
-        print(f"keeping {nb_eve} trials in each condition ")
-        indices = [np.random.choice(np.arange(nb_eve), nb_eve, replace=False) for x in X_queries]
-        X_queries = [x[inds] for x, inds in zip(X_queries, indices)]
-        X = np.concatenate(X_queries, 0)
-    reconstruct_L2 = np.zeros((n_times, len(X_queries)))
-# del epochs
+def get_window_indices(times, start, stop):
+    start_idx = np.argmin(np.abs(times - start))
+    stop_idx = np.argmin(np.abs(times - stop))
+    return start_idx, stop_idx
 
-n_trials, nchan, n_times = X.shape
-print(f"n_trials,: {n_trials,} nchan,: {nchan,} n_times: {n_times}")
-n_comp = np.min([nchan, n_trials]) # at most min(nchan, n_trials) components in the PCA
-out_fn += f"_{n_comp}comps" # update out_fn
-print(out_fn)
-
-pca = PCA(n_comp)
+pca = PCA()
 scaler = StandardScaler()
 
-all_PR = np.zeros(n_times)
-for t in tqdm(range(n_times)):
-    x = scaler.fit_transform(X[:,:,t])
+# if args.queries: all_PR_queries = {query: np.zeros(n_times) for query in args.queries}
+win_length = .1 #.05 # 50 ms
+all_windows = np.arange(tmin, tmax-win_length, win_length)
+all_windows = np.round(all_windows, 2)
+all_PR = np.zeros(len(all_windows))
+# for t in tqdm(range(n_times)):
+for w, win in enumerate(all_windows):
+    # print(f"using window from {win} to {win+win_length}")
+    win_start, win_stop = get_window_indices(times, win, win+win_length)
+    # print(f"corresponding indices: {win_start}, {win_stop}")
+    x = X[:, win_start:win_stop, :]
 
-    if args.micro_ave:
-        x, _ = micro_averaging(x, np.ones(len(x)), args.micro_ave)
-        if args.max_trials and len(x) > args.max_trials:
-            indices = np.random.choice(np.arange(len(x)), args.max_trials, replace=False)
-            x = x[indices]
-        # print(f"ending with {len(x)} trials")
+    # concat time and trials
+    x = np.concatenate(x)
+    x = scaler.fit_transform(x)
+    # print(x)
+    # from ipdb import set_trace; set_trace()
+
     pca.fit(x)
-    all_PR[t] = participation_ratio(pca.explained_variance_)
-    # print(all_PR[t])
+    all_PR[w] = participation_ratio(pca.explained_variance_)
 
-    if args.reconstruct_queries:
-        for q, X_query in enumerate(X_queries):
-            PCAed = pca.transform(scaler.transform(X_query[:,:,t]))
-            components = pca.components_ # n_comp, nchan
-            for i_comp in range(n_comp):
-                # reconstruction = pca.transform(X_query[:,:,t])
-                reconstruction = np.dot(PCAed[:, 0:i_comp+1], components[0:i_comp+1])
-                reconstruct_L2[t, q] += np.linalg.norm(X_query[:,:,t] - reconstruction) / n_comp
-
-
+print(all_PR)
 save_results(out_fn, all_PR, fn_end="PR")
-if args.reconstruct_queries:
-    save_results(out_fn, reconstruct_L2, fn_end="reconstruction_L2")
-
-# from ipdb import set_trace; set_trace()
+# if args.queries:
+#     save_results(out_fn, reconstruct_L2, fn_end="reconstruction_L2")

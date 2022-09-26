@@ -39,10 +39,6 @@ def load_data(args, fn, queries):
         epochs.metadata['Complexity'] = epochs.metadata.apply(add_complexity_to_md, axis=1)
     if "Flash" not in epochs.metadata.keys():
         epochs.metadata['Flash'] = 0 # old subject did not have flashes
-    if args.autoreject:
-        print(f"Applying autoreject in the first place")
-        ar = AutoReject()
-        epochs = ar.fit_transform(epochs) 
     if args.filter: # filter metadata before anything else
         print(epochs.metadata)
         epochs = epochs[args.filter]
@@ -51,6 +47,21 @@ def load_data(args, fn, queries):
             exit()
         else:
             print(f"We have {len(epochs)} events left after filtering with {args.filter}")
+    if args.autoreject and not args.dummy:
+        print(f"Applying autoreject in the first place")
+        ar = AutoReject()
+        epochs = ar.fit_transform(epochs) 
+    if args.quality_th:
+        print(f"Keeping only runs with a quality score above {args.quality_th}")
+        cond = full_fn_to_short[op.basename(fn).replace('-epo.fif', '')]
+        score_per_run = quality_from_cond(args.subject, cond)
+        runs_to_keep = [k for k, v in score_per_run.items() if v > args.quality_th]
+        print(f"Keeping runs {runs_to_keep}")
+        epochs = epochs[f"run_nb in {runs_to_keep}"]
+    if args.xdawn and not args.dummy:
+        print("TO IMPLEMENT LOADING THE RIGHT EPOCHS")
+        raise
+        # Xdawn
     if args.subtract_evoked:
         epochs = epochs.subtract_evoked(epochs.average())
     if queries: # load sub-epochs, one for each query
@@ -69,17 +80,10 @@ def load_data(args, fn, queries):
 
     ### SELECT ONLY CH THAT HAD AN EFFECT IN THE LOCALIZER
     if args.localizer:
-        print("not implemented yet ...")
-        raise
-        path2loc = glob(f'{args.root_path}/Results/{args.path2loc}/{args.subject}/*minpval_MEG.p')[0]
-        pval_dict = pickle.load(open(path2loc, 'rb'))
-        print(f'Keeping {sum(np.array(list(pval_dict.values()))<args.pval_thresh)} MEG channels out of {len(pval_dict)} based on localizer results\n')
-        ch_to_keep = []
-        for ch in pval_dict:
-            if pval_dict[ch] < args.pval_thresh:
-                ch_to_keep.append(ch.split('_')[2])
+        auc_loc = pickle.load(open(path2loc, 'rb'))[args.subject[0:2]]
+        print(f'Keeping {sum(auc_loc>args.auc_thresh)} MEG channels out of {len(auc_loc)} based on localizer results\n')
+        ch_to_keep = np.where(auc_loc > args.auc_thresh)[0]
         epochs = [epo.pick(ch_to_keep) for epo in epochs]
-
 
     if args.freq_band:
         # freq_bands = dict(delta=(1, 3.99), theta=(4, 7.99), alpha=(8, 12.99), beta=(13, 29.99), low_gamma=(30, 69.99), high_gamma=(70, 150))

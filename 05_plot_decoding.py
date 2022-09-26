@@ -332,7 +332,7 @@ else:
                                      test_tmax=test_tmax, ylabel=ylabel, contrast=is_contrast, resplock=is_resplock, gen_cond=gen_cond, slices=slices, version=version, window=window)
 
 
-                            if args.slices and gen_cond is None:
+                            if args.slices and gen_cond is None and train_cond != 'localizer':
                                 plot_GAT_with_slices(AUC_mean, all_AUC, out_fn, train_cond=train_cond, times=times, ylabel=ylabel, cbar=True, chance=chance,
                                              version=version, stat='cluster', slices=slices, ybar=ybar, same_aspect=not(args.regression))
 

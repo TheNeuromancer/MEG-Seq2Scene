@@ -23,6 +23,7 @@ ica_eog = {"theo_one_object": [0,1,2],
 
 # subjects with chance level acuracy
 bad_subjects = ["03", "09", "10", "12", "14"]
+bad_subs_dim = ['29', '26', '25', '23', '20', '16', '15', '10', '04', '02']
 
 colors = ["vert", "bleu", "rouge"]
 shapes = ["triangle", "cercle", "carre"]

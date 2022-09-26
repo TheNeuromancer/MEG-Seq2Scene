@@ -12,11 +12,12 @@ from itertools import combinations
 
 from utils.params import TRIG_DICT, tmin_tmax_dict
 
+path2loc = "/neurospin/unicog/protocols/MEG/Seq2Scene/Results/Localizer/Loc_word_trained_on_localizer.p"
 
 short_to_long_cond = {"loc": "localizer", "one_obj": "one_object", "two_obj": "two_objects",
                       "localizer": "localizer", "one_object":"one_object"}
 
-full_fn_to_short = {"two_objects": 'scenes', "one_object": 'obj'}
+full_fn_to_short = {"two_objects": 'scenes', "one_object": 'obj', "localizer": 'loc'}
 
 colors = ["vert", "bleu", "rouge"]
 shapes = ["triangle", "cercle", "carre"]

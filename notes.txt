@@ -39,6 +39,11 @@ Maybe try subtract evoked?
 v24: master decoder: 100hz, nofilter, cat5, autoreject, NO micro-average. for color, shape and mismatch only.
 Not excellent. 
 Launched regression and Side with Not the same color on the other side.
+v26, 26, 27, looking for best perf.
+
+Dimensionality: NOW using time windows !
+v28 = copy of v25 but with linear detrending
+v29: same with localizer. Also Decoding ovr with auc_thresh=.55
 
 
 things that needs double checking: 

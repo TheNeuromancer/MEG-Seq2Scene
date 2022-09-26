@@ -32,6 +32,7 @@ parser.add_argument('-s', '--subject', default='01_js180232',help='subject name'
 parser.add_argument('-o', '--out-dir', default='agg', help='output directory')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
 parser.add_argument('-v', '--verbose', action='store_true',  default=False, help='Print more stuff')
+parser.add_argument('--save_loc', action='store_true',  default=False, help='Save results as localizer')
 args = parser.parse_args()
 
 # import config parameters
@@ -136,6 +137,12 @@ for label in all_labels:
                 if args.verbose: print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} {f'for split query {split_query}' if split_query else ''}")
                 gen_str = f"_tested_on_{gen_cond}" if gen_cond is not None else ""
                 out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}{split_query_str}_{len(all_AUC)}ave"
+
+                if args.save_loc:
+                    AUC_dict = {s: auc for s, auc in zip(all_subs, all_AUC)}
+                    localizer_out_dir = op.dirname(op.dirname(op.dirname(op.dirname(op.dirname(out_dir)))))
+                    localizer_out_fn = f"{localizer_out_dir}/Localizer/{label}_trained_on_{train_cond}{gen_str}{split_query_str}.p"
+                    pickle.dump(AUC_dict, open(localizer_out_fn, "wb"))
 
                 all_subs_labels = np.unique(all_subs)
                 all_subs = dummy_class_enc.fit_transform(all_subs)

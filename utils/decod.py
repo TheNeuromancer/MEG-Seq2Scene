@@ -81,7 +81,7 @@ def load_data(args, fn, query_1='', query_2='', crop_final=True):
         print(f"Applying autoreject in the first place")
         ar = AutoReject()
         epochs = ar.fit_transform(epochs) 
-    if args.quality_th:
+    if args.quality_th and "localizer" not in fn:
         print(f"Keeping only runs with a quality score above {args.quality_th}")
         cond = full_fn_to_short[op.basename(fn).replace('-epo.fif', '')]
         score_per_run = quality_from_cond(args.subject, cond)
@@ -118,16 +118,11 @@ def load_data(args, fn, query_1='', query_2='', crop_final=True):
 
     ### SELECT ONLY CH THAT HAD AN EFFECT IN THE LOCALIZER
     if args.localizer:
-        print("not implemented yet ...")
-        raise
-        path2loc = glob(f'{args.root_path}/Results/{args.path2loc}/{args.subject}/*minpval_MEG.p')[0]
-        pval_dict = pickle.load(open(path2loc, 'rb'))
-        print(f'Keeping {sum(np.array(list(pval_dict.values()))<args.pval_thresh)} MEG channels out of {len(pval_dict)} based on localizer results\n')
-        ch_to_keep = []
-        for ch in pval_dict:
-            if pval_dict[ch] < args.pval_thresh:
-                ch_to_keep.append(ch.split('_')[2])
+        auc_loc = pickle.load(open(path2loc, 'rb'))[args.subject[0:2]]
+        print(f'Keeping {sum(auc_loc>args.auc_thresh)} MEG channels out of {len(auc_loc)} based on localizer results\n')
+        ch_to_keep = np.where(auc_loc > args.auc_thresh)[0]
         epochs = [epo.pick(ch_to_keep) for epo in epochs]
+
 
 
     if args.freq_band:
@@ -237,6 +232,14 @@ def get_class_queries(query):
         class_queries = [f"Colour2=='{c}'" for c in colors]
     elif query == "Shape2":
         class_queries = [f"Shape2=='{s}'" for s in shapes]
+    elif query == "Loc_shape":
+        class_queries = [f"Loc_word=='{s}'" for s in shapes]
+    elif query == "Loc_colour":
+        class_queries = [f"Loc_word=='{c}'" for c in colors]
+    elif query == "Loc_word":
+        class_queries = [f"Loc_word=='{c}'" for c in colors] + [f"Loc_word=='{s}'" for s in shapes]
+    elif query == "Loc_all":
+        class_queries = [f"Loc_word=='{c}' or Loc_word=='img_{c}'" for c in colors] + [f"Loc_word=='{s}' or  Loc_word=='img_{s}'" for s in shapes]
     # elif query == "XColour1": 
     #     class_queries = [f"Colour1=='{c}' and Colour2!='{c}'" for c in colors]
     # elif query == "XShape1":
@@ -909,7 +912,6 @@ def decode_single_ch_ovr(args, clf, epochs, class_queries):
         cv = StratifiedKFold(n_splits=2, shuffle=False)
     else:
         cv = get_cv(args.train_cond, args.crossval, args.n_folds)
-    n_folds
 
     onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
@@ -1250,7 +1252,7 @@ def plot_multi_diag(data, out_fn, train_cond, train_tmin, train_tmax, data_std=N
          fig.axes[0].axvline(x=w_onset, linestyle='--', color='k')
     for img_onset in image_onset:
          fig.axes[0].axvline(x=img_onset, linestyle='-', color='k')
-    fig.axes[0].axhline(y=0.5, color='k', linestyle='-', alpha=.5)
+    if ylabel=='AUC': fig.axes[0].axhline(y=0.5, color='k', linestyle='-', alpha=.5)
     
     if data.ndim > 2: # we have the full timegen
         data_diag = np.array([np.diag(d) for d in data])
