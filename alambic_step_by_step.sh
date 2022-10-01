@@ -15,7 +15,7 @@ if [ -z "$1" ]; then
 	exit
 fi
 
-max_running_jobs=270 # max nb of jobs running at the same time
+max_running_jobs=200 # max nb of jobs running at the same time
 
 # load commands from file
 IFS=$'\r\n' GLOBIGNORE='*' command eval  'job_array=($(cat $1))'
@@ -56,7 +56,7 @@ EOT
 
 qsub $file_qsub
 
-# sleep 1 # time to let the job start, with margin
+sleep 2 # time to let the job start, with margin
 #neurospin
 
 done

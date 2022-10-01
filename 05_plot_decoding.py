@@ -141,9 +141,9 @@ else:
     auc_all_labels = {}
     pattern_all_labels = {}
     for label in all_labels:
-        if "Mismatch" in label: 
-            print(f"skipping label {label}")
-            continue
+        # if "Mismatch" in label: 
+        #     print(f"skipping label {label}")
+        #     continue
         for train_cond in ["localizer", "obj", "scenes"]: # , "one_object", "two_objects", 
             if args.slices:
                 if train_cond in ["localizer"]: slices = slices_loc
@@ -186,17 +186,17 @@ else:
                             all_subs.append(op.basename(op.dirname(fn))[0:2])
                             all_items.append(op.basename(fn))
 
-                            # load corresponding pattern (for direct training only)
-                            if not split_query and (gen_cond is None): 
-                                # pattern_fn = f"{op.dirname(fn)}/{'_'.join(op.basename(fn).split('_')[0:2])}_best_pattern_t*.npy"
-                                pattern_fn = f"{op.dirname(fn)}/{op.basename(fn).replace('_AUC.npy', '')}_best_pattern_t*.npy"
-                                pattern_fn = glob(pattern_fn)
-                                if len(pattern_fn) == 0:
-                                    print(f"!!!No pattern found!!! passing for now but look it up")
-                                elif len(pattern_fn) > 1:
-                                    print(f"!!!Multiple patterns found!!! passing for now but look it up")
-                                else:
-                                    all_patterns.append(np.load(pattern_fn[0]))
+                            # # load corresponding pattern (for direct training only)
+                            # if not split_query and (gen_cond is None): 
+                            #     # pattern_fn = f"{op.dirname(fn)}/{'_'.join(op.basename(fn).split('_')[0:2])}_best_pattern_t*.npy"
+                            #     pattern_fn = f"{op.dirname(fn)}/{op.basename(fn).replace('_AUC.npy', '')}_best_pattern_t*.npy"
+                            #     pattern_fn = glob(pattern_fn)
+                            #     if len(pattern_fn) == 0:
+                            #         print(f"!!!No pattern found!!! passing for now but look it up")
+                            #     elif len(pattern_fn) > 1:
+                            #         print(f"!!!Multiple patterns found!!! passing for now but look it up")
+                            #     else:
+                            #         all_patterns.append(np.load(pattern_fn[0]))
                                 
 
                         if not all_AUC: 
@@ -238,16 +238,16 @@ else:
                             set_trace()
                         AUC_std = sem(all_AUC, 0, nan_policy='omit')
 
-                        if not split_query and (gen_cond is None):
-                            if len(all_patterns) == 0: 
-                                print(f"Not a single pattern found ...") 
-                            else:
-                                pattern = np.median(all_patterns, 0)
-                                if pattern.ndim == 2: # OVR, one additional dimension
-                                    pattern = np.median(pattern, 0)
-                                    all_patterns = np.concatenate(all_patterns) # first dim = subjs*classes
+                        # if not split_query and (gen_cond is None):
+                        #     if len(all_patterns) == 0: 
+                        #         print(f"Not a single pattern found ...") 
+                        #     else:
+                        #         pattern = np.median(all_patterns, 0)
+                        #         if pattern.ndim == 2: # OVR, one additional dimension
+                        #             pattern = np.median(pattern, 0)
+                        #             all_patterns = np.concatenate(all_patterns) # first dim = subjs*classes
                         
-                                pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot
+                        #         pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot
 
                         # store values for all labels for multi plot
                         # if train_cond=="scenes": # and gen_cond is None and "win" not in label:
@@ -257,20 +257,20 @@ else:
                         max_auc_all_facconds.append(np.max(AUC_mean))
                         all_faccond_names.append(f"{label} trained on {train_cond}{' tested on ' if gen_cond is not None else ''}{gen_cond if gen_cond is not None else ''}")
 
-                        ## plotting all patterns
-                        if len(all_patterns):
-                            # fig, axes = plt.subplots(len(all_patterns), figsize=(6, len(all_patterns)/2))
-                            # for i_p, patt in enumerate(all_patterns):
-                            #     try:
-                            #         mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
-                            #     except:
-                            #         set_trace()
-                            # plt.savefig(f'{out_fn}_{label}_{train_cond}_patternS_mag.png')
-                            ## ave pattern
-                            fig, ax = plt.subplots()
-                            mne.viz.plot_topomap(np.squeeze(np.mean(all_patterns, 0))[mag_idx], mag_info, axes=ax)
-                            plt.savefig(f'{out_fn}_{label}_{train_cond}_ave_pattern_mag.png')
-                            plt.close()
+                        # ## plotting all patterns
+                        # if len(all_patterns):
+                        #     # fig, axes = plt.subplots(len(all_patterns), figsize=(6, len(all_patterns)/2))
+                        #     # for i_p, patt in enumerate(all_patterns):
+                        #     #     try:
+                        #     #         mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
+                        #     #     except:
+                        #     #         set_trace()
+                        #     # plt.savefig(f'{out_fn}_{label}_{train_cond}_patternS_mag.png')
+                        #     ## ave pattern
+                        #     fig, ax = plt.subplots()
+                        #     mne.viz.plot_topomap(np.squeeze(np.mean(all_patterns, 0))[mag_idx], mag_info, axes=ax)
+                        #     plt.savefig(f'{out_fn}_{label}_{train_cond}_ave_pattern_mag.png')
+                        #     plt.close()
 
                         if args.only_agg: continue # skip per condition plots, just save results for aggregate plots
 
@@ -347,7 +347,7 @@ else:
     pickle.dump(auc_all_labels, open(data_fn, "wb"))
     diag_auc_all_labels = {k: np.array([np.diag(x) for x in v]) for k, v in auc_all_labels.items()}
     pickle.dump(diag_auc_all_labels, open(diags_fn, "wb"))
-    pickle.dump(pattern_all_labels, open(patterns_fn, "wb"))
+    # pickle.dump(pattern_all_labels, open(patterns_fn, "wb"))
 
 ## all basic decoders diagonals on the same plot
 tmin, tmax = tmin_tmax_dict["scenes"]

@@ -41,11 +41,11 @@ parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-ave
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
 parser.add_argument('--n_folds', type=int, help='sampling frequency')
 
+parser.add_argument('--localizer', action='store_true', default=False, help='Whether to use only electrode that were significant in the localizer')
+parser.add_argument('--auc_thresh', default=0.5, type=float, help='pvalue threshold under which a channel is kept for the localizer')
+
 # not implemented
 parser.add_argument('--windows', default=[], action='append', help='tmin and tmax to crop the epochs, one for each train and test cond')
-parser.add_argument('--localizer', action='store_true', default=False, help='Whether to use only electrode that were significant in the localizer')
-parser.add_argument('--path2loc', default='Single_Chan_vs5/CMR_sent', help='path to the localizer results (dict with value 1 for each channel that passes the test, 0 otherwise')
-parser.add_argument('--pval-thresh', default=0.05, type=float, help='pvalue threshold under which a channel is kept for the localizer')
 parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
 args = parser.parse_args()
 

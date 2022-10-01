@@ -97,50 +97,53 @@ else:
 
 
 ## ONE OBJECT
-train_tmin, train_tmax = tmin_tmax_dict["response_locked" if args.response_lock else "obj"]
-word_onsets, image_onset = get_onsets("response_locked" if args.response_lock else "obj", version=version)
-cmis_fns = [fn for fn in all_fns if "CMismatch" in fn]
-if not cmis_fns: print("did not found any color mismatch file ...")
-aucs = [np.load(fn) for fn in cmis_fns]
-# print([x.shape for x in aucs])
-cmis_auc = np.diag(np.mean(aucs, 0))
+try:
+    train_tmin, train_tmax = tmin_tmax_dict["response_locked" if args.response_lock else "obj"]
+    word_onsets, image_onset = get_onsets("response_locked" if args.response_lock else "obj", version=version)
+    cmis_fns = [fn for fn in all_fns if "CMismatch" in fn]
+    if not cmis_fns: print("did not found any color mismatch file ...")
+    aucs = [np.load(fn) for fn in cmis_fns]
+    # print([x.shape for x in aucs])
+    cmis_auc = np.diag(np.mean(aucs, 0))
 
-smis_fns = [fn for fn in all_fns if "SMismatch" in fn]
-smis_auc = np.diag(np.mean([np.load(fn) for fn in smis_fns], 0))
+    smis_fns = [fn for fn in all_fns if "SMismatch" in fn]
+    smis_auc = np.diag(np.mean([np.load(fn) for fn in smis_fns], 0))
 
-n_times = smis_auc.shape[0]
-times = np.linspace(train_tmin, train_tmax, n_times)
+    n_times = smis_auc.shape[0]
+    times = np.linspace(train_tmin, train_tmax, n_times)
 
-fig, ax = plt.subplots()
-lines = ax.plot(times, cmis_auc, label='Mismatch on Color')
-# ax.fill_between(times, cmis_auc-data_std_diag, data_mean_diag+data_std_diag, alpha=0.2)
-ax.plot(times, smis_auc, label='Mismatch on Shape')
-plt.legend()
-if not args.response_lock:
-    ax.set_xlim(image_onset[0]-.2)
-    ax.axvline(x=image_onset[0], linestyle='-', color='k')
-ax.axhline(y=0.5, color='k', linestyle='-', alpha=.5)
-plt.ylabel("AUC")
-plt.xlabel("Time (s)")
+    fig, ax = plt.subplots()
+    lines = ax.plot(times, cmis_auc, label='Mismatch on Color')
+    # ax.fill_between(times, cmis_auc-data_std_diag, data_mean_diag+data_std_diag, alpha=0.2)
+    ax.plot(times, smis_auc, label='Mismatch on Shape')
+    plt.legend()
+    if not args.response_lock:
+        ax.set_xlim(image_onset[0]-.2)
+        ax.axvline(x=image_onset[0], linestyle='-', color='k')
+    ax.axhline(y=0.5, color='k', linestyle='-', alpha=.5)
+    plt.ylabel("AUC")
+    plt.xlabel("Time (s)")
 
-out_fn = f"{out_dir}/{resp_str}OneObjMismatches_{len(cmis_fns)}ave"
-plt.savefig(f'{out_fn}_AUC_diag.png')
-plt.close()
+    out_fn = f"{out_dir}/{resp_str}OneObjMismatches_{len(cmis_fns)}ave"
+    plt.savefig(f'{out_fn}_AUC_diag.png')
+    plt.close()
+except:
+    pass
 
 
 ## TWO OBJECTS - separate decoders
 # try:   
 if True: 
     if args.ovr:
-        pmis_fns = [fn for fn in all_fns if "PropMismatch" in fn and not "Resp" in fn]
+        pmis_fns = [fn for fn in all_fns if "PropMismatch" in fn and not "Resp" in fn and not "_for_" in fn]
         pmis_auc = np.diag(np.mean([np.load(fn) for fn in pmis_fns], 0))
         pmis_auc_sem = np.diag(sem([np.load(fn) for fn in pmis_fns], 0))
 
-        bmis_fns = [fn for fn in all_fns if "BindMismatch" in fn and not "Resp" in fn]
+        bmis_fns = [fn for fn in all_fns if "BindMismatch" in fn and not "Resp" in fn and not "_for_" in fn]
         bmis_auc = np.diag(np.mean([np.load(fn) for fn in bmis_fns], 0))
         bmis_auc_sem = np.diag(sem([np.load(fn) for fn in bmis_fns], 0))
 
-        rmis_fns = [fn for fn in all_fns if "RelMismatch" in fn and not "Resp" in fn]
+        rmis_fns = [fn for fn in all_fns if "RelMismatch" in fn and not "Resp" in fn and not "_for_" in fn]
         rmis_auc = np.diag(np.mean([np.load(fn) for fn in rmis_fns], 0))
         rmis_auc_sem = np.diag(sem([np.load(fn) for fn in rmis_fns], 0))
 
@@ -195,38 +198,40 @@ if True:
 
 # else: # classical decoding
 ## TWO OBJECTS - single decoder and slit queries for each mismatch
-pmis_fns = [fn for fn in all_fns if "KindMismatch" in fn and "Error_type=l0" in fn]
-pmis_auc = np.diag(np.mean([np.load(fn) for fn in pmis_fns], 0))
-pmis_auc_sem = np.diag(sem([np.load(fn) for fn in pmis_fns], 0))
+try:
+    pmis_fns = [fn for fn in all_fns if "Matching" in fn and "Error_type='l0'" in fn]
+    pmis_auc = np.diag(np.mean([np.load(fn) for fn in pmis_fns], 0))
+    pmis_auc_sem = np.diag(sem([np.load(fn) for fn in pmis_fns], 0))
 
-bmis_fns = [fn for fn in all_fns if "KindMismatch" in fn and "Error_type=l1" in fn]
-bmis_auc = np.diag(np.mean([np.load(fn) for fn in bmis_fns], 0))
-bmis_auc_sem = np.diag(sem([np.load(fn) for fn in bmis_fns], 0))
+    bmis_fns = [fn for fn in all_fns if "Matching" in fn and "Error_type='l1'" in fn]
+    bmis_auc = np.diag(np.mean([np.load(fn) for fn in bmis_fns], 0))
+    bmis_auc_sem = np.diag(sem([np.load(fn) for fn in bmis_fns], 0))
 
-rmis_fns = [fn for fn in all_fns if "KindMismatch" in fn and "Error_type=l2" in fn]
-rmis_auc = np.diag(np.mean([np.load(fn) for fn in rmis_fns], 0))
-rmis_auc_sem = np.diag(sem([np.load(fn) for fn in rmis_fns], 0))
+    rmis_fns = [fn for fn in all_fns if "Matching" in fn and "Error_type='l2'" in fn]
+    rmis_auc = np.diag(np.mean([np.load(fn) for fn in rmis_fns], 0))
+    rmis_auc_sem = np.diag(sem([np.load(fn) for fn in rmis_fns], 0))
 
-train_tmin, train_tmax = tmin_tmax_dict["response_locked" if args.response_lock else "scenes"]
-word_onsets, image_onset = get_onsets("response_locked" if args.response_lock else "scenes", version=version)
-n_times = pmis_auc.shape[0]
-times = np.linspace(train_tmin, train_tmax, n_times)
+    train_tmin, train_tmax = tmin_tmax_dict["response_locked" if args.response_lock else "scenes"]
+    word_onsets, image_onset = get_onsets("response_locked" if args.response_lock else "scenes", version=version)
+    n_times = pmis_auc.shape[0]
+    times = np.linspace(train_tmin, train_tmax, n_times)
 
-fig, ax = plt.subplots()
-ax.plot(times, pmis_auc, label='Mismatch on Property')
-ax.plot(times, bmis_auc, label='Mismatch on Binding')
-ax.plot(times, rmis_auc, label='Mismatch on Relation')
-plt.legend()
-if not args.response_lock:
-    ax.set_xlim(image_onset[0]-.2, 7.)
-    ax.axvline(x=image_onset[0], linestyle='-', color='k')
-ax.axhline(y=0.5, color='k', linestyle='-', alpha=.5)
-plt.ylabel("AUC")
-plt.xlabel("Time (s)")
+    fig, ax = plt.subplots()
+    ax.plot(times, pmis_auc, label='Mismatch on Property')
+    ax.plot(times, bmis_auc, label='Mismatch on Binding')
+    ax.plot(times, rmis_auc, label='Mismatch on Relation')
+    plt.legend()
+    if not args.response_lock:
+        ax.set_xlim(image_onset[0]-.2, 7.)
+        ax.axvline(x=image_onset[0], linestyle='-', color='k')
+    ax.axhline(y=0.5, color='k', linestyle='-', alpha=.5)
+    plt.ylabel("AUC")
+    plt.xlabel("Time (s)")
 
-out_fn = f"{out_dir}/{resp_str}TwoObjMismatches_split_query_{len(pmis_fns)}ave"
-plt.savefig(f'{out_fn}_AUC_diag.png')
-
+    out_fn = f"{out_dir}/{resp_str}TwoObjMismatches_split_query_{len(pmis_fns)}ave"
+    plt.savefig(f'{out_fn}_AUC_diag.png')
+except:
+    pass
 
 
 
@@ -234,15 +239,15 @@ plt.savefig(f'{out_fn}_AUC_diag.png')
 ## TWO OBJECTS - single decoder and slit queries for complexity
 train_tmin, train_tmax = tmin_tmax_dict["response_locked" if args.response_lock else "scenes"]
 word_onsets, image_onset = get_onsets("response_locked" if args.response_lock else "scenes", version=version)
-pmis_fns = [fn for fn in all_fns if "KindMismatch" in fn and "Complexity=0" in fn]
+pmis_fns = [fn for fn in all_fns if "Matching" in fn and "Complexity=0" in fn]
 pmis_auc = np.diag(np.mean([np.load(fn) for fn in pmis_fns], 0))
 pmis_auc_sem = np.diag(sem([np.load(fn) for fn in pmis_fns], 0))
 
-bmis_fns = [fn for fn in all_fns if "KindMismatch" in fn and "Complexity=1" in fn]
+bmis_fns = [fn for fn in all_fns if "Matching" in fn and "Complexity=1" in fn]
 bmis_auc = np.diag(np.mean([np.load(fn) for fn in bmis_fns], 0))
 bmis_auc_sem = np.diag(sem([np.load(fn) for fn in bmis_fns], 0))
 
-rmis_fns = [fn for fn in all_fns if "KindMismatch" in fn and "Complexity=2" in fn]
+rmis_fns = [fn for fn in all_fns if "Matching" in fn and "Complexity=2" in fn]
 rmis_auc = np.diag(np.mean([np.load(fn) for fn in rmis_fns], 0))
 rmis_auc_sem = np.diag(sem([np.load(fn) for fn in rmis_fns], 0))
 

@@ -39,17 +39,28 @@ Maybe try subtract evoked?
 v24: master decoder: 100hz, nofilter, cat5, autoreject, NO micro-average. for color, shape and mismatch only.
 Not excellent. 
 Launched regression and Side with Not the same color on the other side.
-v26, 26, 27, looking for best perf.
+v25, 26, 27, looking for best perf. 25 is bad. 26 takes forever.
 
 Dimensionality: NOW using time windows !
 v28 = copy of v25 but with linear detrending
-v29: same with localizer. Also Decoding ovr with auc_thresh=.55
+v29: same with localizer (single words loc). Also Decoding ovr with auc_thresh=.55
+v31: dimensionality analysis with singleobjects localizer -> bof, trying with averaging trials
+v32: dim with cross word-img localzier, bof trying with avertaging trials. bof, trying without detrending.
+v33: dim with riemann. bof, trying overlapping windows
 
 
-things that needs double checking: 
-CCA
-Dimensionality
-decoding of same/different
+Gen of localised decoders : do we see the maintenance of representation waiting to be composed? Probably not. + for classifiers trained on one obj blocks, the one should be only to the following property!
+-> well first the shape decoder doesnt generalize well from loc to blocks ...
+Then, how do you get the "diagonal" generalization performance? To be fair you would need to select a single decoder and test it on each timepoint.
+
+Dimensionality analysis: decrease during the delay? Bigger for less complex sentences? Bingo ! Not really the case ...
+remove windows? do not need them since we use the localizer.
+
+Localizer for decoding. -> ok for lots of conditions ! should try with more folds
+
+Test new localiser with both words and images. Should be done by Monday evening. 
+
+
 
 
 cosine distance between decoders, as a timegen?

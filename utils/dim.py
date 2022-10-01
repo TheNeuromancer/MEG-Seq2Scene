@@ -22,6 +22,11 @@ from scipy.stats import ttest_1samp
 from autoreject import AutoReject
 from statannotations.Annotator import Annotator
 from tqdm import tqdm
+from sklearn.pipeline import make_pipeline
+from mne.decoding import UnsupervisedSpatialFilter
+from pyriemann.estimation import Covariances, XdawnCovariances
+from pyriemann.tangentspace import TangentSpace
+
 
 # local import
 from .commons import *

@@ -36,7 +36,7 @@ from pyriemann.tangentspace import TangentSpace
 from .commons import *
 from .params import *
 from .angles import *
-# from .split import *
+from .split import *
 
 
 cmaptab10 = plt.cm.get_cmap('tab10', 10)
@@ -718,7 +718,7 @@ def decode_ovr(args, clf, epochs, class_queries):
         print(f"Split query {split_query}, {len(split_indices)} trials")
     if n_classes < 2:
         raise RuntimeError(f"did not find enough classes for queries {class_queries} and subjects {args.subject}")
-    if np.min(counts) < args.n_folds:
+    if args.crossval != "shufflesplit" and np.min(counts) < args.n_folds:
         print(f"that's too few trials ... decreasing n_folds to {np.min(counts)}")
         setattr(args, 'n_folds', np.min(counts))
 
@@ -1705,9 +1705,10 @@ def plot_all_props_multi(ave_dict, std_dict, times, out_fn, labels=['S1', 'C1', 
     plt.savefig(out_fn)
 
 
-def plot_single_ch_perf(scores, info, out_fn, cmap_name='bwr', vmin=.4, vmax=.6, score_label='AUC', title=None, ticksize=14):
+def plot_single_ch_perf(scores, info, out_fn, cmap_name='bwr', vmin=.4, vcenter=0.5, vmax=.6, score_label='AUC', title=None, ticksize=14):
     from .plot_channels import plot_ch_scores
-    divnorm = matplotlib.colors.TwoSlopeNorm(vmin=vmin if vmin<0.5 else 0.49, vcenter=0.5, vmax=vmax if vmax>0.5 else 0.51)
+    # divnorm = matplotlib.colors.TwoSlopeNorm(vmin=vmin if vmin<0.5 else 0.49, vcenter=0.5, vmax=vmax if vmax>0.5 else 0.51)
+    divnorm = matplotlib.colors.TwoSlopeNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
     cmap = matplotlib.cm.get_cmap(cmap_name)
     img = plt.imshow([scores, scores], cmap=cmap, vmin=vmin, vmax=vmax, norm=divnorm) ## add dummy image for the cbar
     plt.gca().set_visible(False)
@@ -1773,15 +1774,15 @@ def add_diamond_on_axis(color, ax=None, x=None, y=None, markersize=8, shift_sign
 
 def get_cv(train_cond, crossval, n_folds):
     """Choose crossvalidation scheme from argparse arguments"""
-    if train_cond == "two_objects":
-        if crossval == 'shufflesplit':
-            cv = RepeatedStratifiedGroupKFold(n_splits=n_folds, n_repeats=10)
-        elif crossval == 'kfold':
-            print("Using StratifiedKFold instead of StratifiedGroupKFold")
-            cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)    
-            # cv = StratifiedGroupKFold(n_splits=n_folds)
-    elif crossval == 'shufflesplit':
-        cv = StratifiedShuffleSplit(n_splits=n_folds, test_size=0.5, random_state=42)
+    # if train_cond == "two_objects":
+    #     if crossval == 'shufflesplit':
+    #         cv = RepeatedStratifiedGroupKFold(n_splits=n_folds, n_repeats=10)
+    #     elif crossval == 'kfold':
+    #         print("Using StratifiedKFold instead of StratifiedGroupKFold")
+    #         cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)    
+    #         # cv = StratifiedGroupKFold(n_splits=n_folds)
+    if crossval == 'shufflesplit':
+        cv = StratifiedShuffleSplit(n_splits=n_folds, test_size=0.1, random_state=42)
     elif crossval == 'kfold':
         cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
     else:

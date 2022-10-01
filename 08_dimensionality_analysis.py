@@ -33,7 +33,7 @@ parser.add_argument('-a', '--autoreject', action='store_true',  default=None, he
 parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
 parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
 parser.add_argument('--max_trials', default=None, type=int, help='Trial micro-averaging max nb of trials')
-# parser.add_argument('--reconstruct', action='store_true', default=False, help='Whether to reconstruct stimulus and test accuracy')
+parser.add_argument('--evo', action='store_true', default=False, help='Whether to average trials of the same type')
 parser.add_argument('--queries', default=[], action='append', help='If specified, reconstructs stimulus and test accuracy for each query')
 
 # actually we set the nb of components to be highest possible (depending on the data), ie min(nchan, n_trials)
@@ -104,6 +104,10 @@ if args.micro_ave:
         X = X[indices]
     print(f"ending with {len(X)} trials")
 
+if args.evo:
+    X = X.mean(0)[np.newaxis,:,:]
+    out_fn += "_evoked"
+
 def get_window_indices(times, start, stop):
     start_idx = np.argmin(np.abs(times - start))
     stop_idx = np.argmin(np.abs(times - stop))
@@ -112,10 +116,17 @@ def get_window_indices(times, start, stop):
 pca = PCA()
 scaler = StandardScaler()
 
+if args.riemann:
+    print(f"Using Riemannian transformation before fitting PCA")
+    pipeline = make_pipeline(UnsupervisedSpatialFilter(PCA()), Covariances(), TangentSpace(), scaler, pca)
+else:
+    pipeline = make_pipeline(scaler, pca)
+
 # if args.queries: all_PR_queries = {query: np.zeros(n_times) for query in args.queries}
-win_length = .1 #.05 # 50 ms
-all_windows = np.arange(tmin, tmax-win_length, win_length)
+win_length = .05 #.05 = 50 ms ; .1 = 100 ms
+all_windows = np.arange(tmin, tmax-win_length, win_length/10)
 all_windows = np.round(all_windows, 2)
+# print(all_windows)
 all_PR = np.zeros(len(all_windows))
 # for t in tqdm(range(n_times)):
 for w, win in enumerate(all_windows):
@@ -125,13 +136,15 @@ for w, win in enumerate(all_windows):
     x = X[:, win_start:win_stop, :]
 
     # concat time and trials
-    x = np.concatenate(x)
-    x = scaler.fit_transform(x)
-    # print(x)
+    if not args.riemann:
+        x = np.concatenate(x)
+    # x = scaler.fit_transform(x)
     # from ipdb import set_trace; set_trace()
 
-    pca.fit(x)
-    all_PR[w] = participation_ratio(pca.explained_variance_)
+    # pca.fit(x)
+    pipeline.fit(x)
+    # all_PR[w] = - participation_ratio(pca.explained_variance_)
+    all_PR[w] = participation_ratio(pipeline[-1].explained_variance_)
 
 print(all_PR)
 save_results(out_fn, all_PR, fn_end="PR")
