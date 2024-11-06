@@ -22,8 +22,8 @@ IFS=$'\r\n' GLOBIGNORE='*' command eval  'job_array=($(cat $1))'
 
 # set up paths 
 timestamp=$(date "+%Y.%m.%d-%H.%M.%S")
-cluster_logs_path='/home/users/d/desborde/Documents/memoryreplay/cluster_logs/'$timestamp
-cluster_job_files_path='/home/users/d/desborde/Documents/memoryreplay/cluster_job_files/'$timestamp
+cluster_logs_path='/home/users/d/desborde/Documents/MEG-Seq2Scene/cluster_logs/'$timestamp
+cluster_job_files_path='/home/users/d/desborde/Documents/MEG-Seq2Scene/cluster_job_files/'$timestamp
 mkdir $cluster_logs_path
 mkdir $cluster_job_files_path
 
