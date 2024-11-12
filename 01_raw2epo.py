@@ -3,6 +3,7 @@ import os
 from glob import glob
 # from ipdb import set_trace
 import mne
+from mne.bem import fit_sphere_to_headshape
 import argparse
 import pandas as pd
 import numpy as np
@@ -46,6 +47,7 @@ import matplotlib.pyplot as plt
 
 
 in_dir = op.join(args.root_path + '/Data', 'orig', args.subject)
+print(f"Looking for raw file at {in_dir}")
 all_runs_fns = glob(in_dir + '/*run*.fif')
 all_runs_fns = sorted(all_runs_fns)
 
@@ -81,10 +83,10 @@ else:
 ref_info = mne.io.read_info(all_runs_fns[args.ref_run], verbose='warning')
 ref_run_head_pos = ref_info['dev_head_t']
 # compute head origin from digitization points (same for each run)
-_, head_origin, _ = mne.bem.fit_sphere_to_headshape(ref_info, dig_kinds=['hpi', 'cardinal', 'extra'], units='m')
+_, head_origin, _ = fit_sphere_to_headshape(ref_info, dig_kinds=['hpi', 'cardinal', 'extra'], units='m')
 # calibration files
-ct_sparse_fn = f"{args.root_path}/Data/SSS/ct_sparse_nspn.fif"
-sss_cal_fn = f"{args.root_path}/Data/SSS/sss_cal_nspn.dat"
+ct_sparse_fn = None #f"{args.root_path}/Data/SSS/ct_sparse_nspn.fif"
+sss_cal_fn = None # f"{args.root_path}/Data/SSS/sss_cal_nspn.dat"
 
 raw_loc = []
 raw_1obj = []
