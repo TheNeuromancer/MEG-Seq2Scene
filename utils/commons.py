@@ -344,9 +344,9 @@ def complement_md(md):
             right_shape.append(f"{line.Shape2}")
             left_color.append(f"{line.Colour1}")
             right_color.append(f"{line.Colour2}")
-            if 'colour1' in line.Change or 'shape1' in line.Change:
+            if 'colour1' in str(line.Change) or 'shape1' in str(line.Change):
                 mismatch_side.append("left")
-            elif 'colour2' in line.Change or 'shape2' in line.Change:
+            elif 'colour2' in str(line.Change) or 'shape2' in str(line.Change):
                 mismatch_side.append("right")
             else:
                 mismatch_side.append("None")
@@ -357,9 +357,9 @@ def complement_md(md):
             left_shape.append(f"{line.Shape2}")
             right_color.append(f"{line.Colour1}")
             left_color.append(f"{line.Colour2}")
-            if 'colour1' in line.Change or 'shape1' in line.Change:
+            if 'colour1' in str(line.Change) or 'shape1' in str(line.Change):
                 mismatch_side.append("right")
-            elif 'colour2' in line.Change or 'shape2' in line.Change:
+            elif 'colour2' in str(line.Change) or 'shape2' in str(line.Change):
                 mismatch_side.append("left")
             else:
                 mismatch_side.append("None")

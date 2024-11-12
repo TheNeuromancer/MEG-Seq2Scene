@@ -65,8 +65,6 @@ Called in the main scripts """
 def load_data(args, fn, query_1='', query_2='', crop_final=True):
     print(fn)
     epochs = mne.read_epochs(fn, preload=True, verbose=False)
-    print(epochs.metadata)
-    from ipdb import set_trace; set_trace()
     if "two_objects-epo.fif" in fn:
         epochs.metadata = complement_md(epochs.metadata)
         epochs.metadata['Complexity'] = epochs.metadata.apply(add_complexity_to_md, axis=1)
