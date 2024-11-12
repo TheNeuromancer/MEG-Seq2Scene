@@ -46,9 +46,10 @@ class Config:
     xdawn: bool = False
     quality_th: float = 0 # .75
     filter: str = "Perf==1"
-    equalize_events: bool = True # True
-    micro_ave: int = 2
+    equalize_events: bool = False # True
+    micro_ave: int = 0
     max_trials: int = 0 # maximum number of trials (after micro-averaging)
+    localizer: bool = False
 
     riemann: bool = False # apply riemannian tranformation before fitting decoder
 
