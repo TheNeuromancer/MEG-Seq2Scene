@@ -22,8 +22,8 @@ IFS=$'\r\n' GLOBIGNORE='*' command eval  'job_array=($(cat $1))'
 
 # set up paths 
 timestamp=$(date "+%Y.%m.%d-%H.%M.%S")
-cluster_logs_path='/home/users/d/desborde/Documents/MEG-Seq2Scene/cluster_logs/'$timestamp
-cluster_job_files_path='/home/users/d/desborde/Documents/MEG-Seq2Scene/cluster_job_files/'$timestamp
+cluster_logs_path='/home/users/d/desborde/Documents/s2s/cluster_logs/'$timestamp
+cluster_job_files_path='/home/users/d/desborde/Documents/s2s/cluster_job_files/'$timestamp
 mkdir $cluster_logs_path
 mkdir $cluster_job_files_path
 
@@ -50,7 +50,7 @@ cat <<EOT >> $file_sbatch
 #SBATCH --error=$err_file
 source ~/anaconda3/etc/profile.d/conda.sh
 conda activate mne
-cd ~/Documents/memoryreplay/memoreplay
+cd ~/Documents/s2s/MEG-Seq2Scene/
 ${job_array[i]}
 EOT
 
