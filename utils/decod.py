@@ -1880,6 +1880,7 @@ def get_X_y_from_queries(epochs, class_queries, split_queries):
     for split_query in split_queries:
         test_split_query_indices.append(md_for_split.query(split_query).index.values)
     X, y = np.array(X), np.array(y)
+    if not groups: groups = None # otherwise we get an annoying warning
     return X, y, groups, test_split_query_indices
 
 
