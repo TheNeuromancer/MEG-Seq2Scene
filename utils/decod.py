@@ -557,7 +557,7 @@ def decode_window(args, clf, epochs, class_queries, trials_per_sub=None):
         cv = get_cv(args.train_cond, args.crossval_win, args.n_folds_win)
     n_folds = 2 if args.dummy else args.n_folds_win
     
-    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     print(X.shape)
@@ -623,7 +623,7 @@ def test_decode_window(args, epochs, class_queries, trained_models, trials_per_s
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
     
-    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     if args.micro_ave_win:
@@ -670,7 +670,7 @@ def test_decode_sliding_window(args, epochs, class_queries, trained_models, nb_c
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
     
-    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     if args.micro_ave_win:
@@ -732,7 +732,7 @@ def decode_ovr(args, clf, epochs, class_queries):
         cv = get_cv(args.train_cond, args.crossval, args.n_folds)
     n_folds = 2 if args.dummy else args.n_folds
 
-    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     if args.reduc_dim:
@@ -834,7 +834,7 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
     if n_classes < 2:
         raise RuntimeError(f"did not find enough classes for queries {class_queries} and subjects {args.subject}")
 
-    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     if args.micro_ave:
@@ -913,7 +913,7 @@ def decode_single_ch_ovr(args, clf, epochs, class_queries):
     else:
         cv = get_cv(args.train_cond, args.crossval, args.n_folds)
 
-    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     if args.reduc_dim_sing:
@@ -951,7 +951,7 @@ def test_decode_single_ch_ovr(args, epochs, class_queries, all_models):
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
-    onehotenc = OneHotEncoder(sparse=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     AUC = np.zeros(nchan)
