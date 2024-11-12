@@ -113,7 +113,7 @@ else:
     # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
     # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-2, 4, 7)})
 clf = OneVsRestClassifier(clf, n_jobs=1)
-clf = mne.decoding.LinearModel(clf)
+# clf = mne.decoding.LinearModel(clf)
 
 ### DECODE ###
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
@@ -140,7 +140,7 @@ if args.test_quality: # save explicit score values, then exit
 save_results(out_fn, AUC) #, all_models)
 # save_results(out_fn, accuracy, fn_end="acc")
 # save_patterns(args, out_fn, all_models)
-save_best_pattern(out_fn, AUC, all_models) ## Save best model's pattern
+# save_best_pattern(out_fn, AUC, all_models) ## Save best model's pattern
 ### PLOT PERFORMANCE ###
 plot_perf(args, out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, \
           test_tmin=train_tmin, test_tmax=train_tmax, version=version)
