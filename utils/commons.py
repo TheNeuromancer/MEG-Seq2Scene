@@ -12,7 +12,7 @@ from itertools import combinations
 
 from utils.params import TRIG_DICT, tmin_tmax_dict
 
-path2loc = "/neurospin/unicog/protocols/MEG/Seq2Scene/Results/Localizer/Loc_all_trained_on_localizer.p" # AllObj_trained_on_obj.p
+path2loc = "/home/users/d/desborde/scratch/s2s/Results/Localizer/Loc_all_trained_on_localizer.p" # AllObj_trained_on_obj.p
 
 short_to_long_cond = {"loc": "localizer", "one_obj": "one_object", "two_obj": "two_objects",
                       "localizer": "localizer", "one_object":"one_object"}
