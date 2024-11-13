@@ -863,7 +863,10 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                     all_folds_preds.append(y_pred)
                 mean_fold_pred = np.mean(all_folds_preds, 0)
                 if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
-                AUC[t, tgen] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
+                try:
+                    AUC[t, tgen] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
+                except:
+                    from ipdb import set_trace; set_trace()
                 # accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1)) # dim error when n_classes = 2
 
                 if test_split_query_indices: # split the test indices according to the query
@@ -1863,6 +1866,7 @@ def get_X_y_from_queries(epochs, class_queries, split_queries):
     """ get X and y for decoding based on 
     an epochs object and a list of queries (for OVR)
     also returns split queries indices
+    groups will be None except when there is a split query
     """
     md = epochs.metadata
     X, y, groups = [], [], []
@@ -1880,8 +1884,7 @@ def get_X_y_from_queries(epochs, class_queries, split_queries):
     for split_query in split_queries:
         test_split_query_indices.append(md_for_split.query(split_query).index.values)
     X, y = np.array(X), np.array(y)
-    if not len(groups): groups = None # otherwise we get an annoying warning
-    print(groups)
+    if not split_queries: groups = None # otherwise we get an annoying warning
     return X, y, groups, test_split_query_indices
 
 
