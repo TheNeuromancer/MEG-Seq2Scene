@@ -649,7 +649,7 @@ def test_decode_window(args, epochs, class_queries, trained_models, trials_per_s
         accuracy += accuracy_score(y, preds.argmax(1)) / n_folds
     # ## AVERAGE PREDICTIONS OR PERFORMANCE? usually perf is better (for training at least)
     # all_folds_preds.append(y_pred)
-    # mean_fold_pred = np.mean(all_folds_preds, 0)
+    # mean_fold_pred = np.nanmean(all_folds_preds, 0)
     # AUC[t, tgen] = roc_auc_score(y_true=y, y_score=mean_fold_pred, multi_class='ovr')                
 
     print(f'test AUC: {AUC:.3f}')
@@ -861,12 +861,9 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                     preds = predict(pipeline, t_data, multiclass=True)
                     y_pred = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
                     all_folds_preds.append(y_pred)
-                mean_fold_pred = np.mean(all_folds_preds, 0)
+                mean_fold_pred = np.nanmean(all_folds_preds, 0)
                 if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
-                try:
-                    AUC[t, tgen] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
-                except:
-                    from ipdb import set_trace; set_trace()
+                AUC[t, tgen] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
                 # accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1)) # dim error when n_classes = 2
 
                 if test_split_query_indices: # split the test indices according to the query
@@ -970,7 +967,7 @@ def test_decode_single_ch_ovr(args, epochs, class_queries, all_models):
             else:
                 preds = onehotenc.transform(preds.reshape((-1,1)))
             all_folds_preds.append(preds)
-        mean_fold_pred = np.mean(all_folds_preds, 0)
+        mean_fold_pred = np.nanmean(all_folds_preds, 0)
         AUC[ch] = roc_auc_score(y_true=y, y_score=mean_fold_pred, multi_class='ovr')
         accuracy[ch] = accuracy_score(y, mean_fold_pred.argmax(1))
     print(f'mean AUC: {AUC.mean():.3f}')
