@@ -56,6 +56,6 @@ EOT
 
 sbatch $file_sbatch
 
-# sleep .1 # time to let the job start, with margin
+sleep .1 # time to let the job start, with margin
 
 done
