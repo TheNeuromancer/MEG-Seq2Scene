@@ -120,8 +120,8 @@ else:
 
 dummy_class_enc = LabelEncoder()
 dummy_labbin = LabelBinarizer()
-mag_idx, grad_idx = [pickle.load(open(f"{args.root_path}/Data/{s}_indices.p", "rb")) for s in ['mag', 'grad']]
-mag_info, grad_info = [pickle.load(open(f"{args.root_path}/Data/{s}_info.p", "rb")) for s in ['mag', 'grad']]
+# mag_idx, grad_idx = [pickle.load(open(f"{args.root_path}/Data/{s}_indices.p", "rb")) for s in ['mag', 'grad']]
+# mag_info, grad_info = [pickle.load(open(f"{args.root_path}/Data/{s}_info.p", "rb")) for s in ['mag', 'grad']]
 
 freq_bands = ["delta", "theta", "alpha", "beta"] if args.freq_bands else [""]
 
