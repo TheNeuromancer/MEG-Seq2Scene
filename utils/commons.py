@@ -47,7 +47,13 @@ def get_paths(args, dirname='Decoding', mkdir=True, verbose=True):
         train_fn = [natsorted(glob(in_dir + f'/{cond}*-epo.fif'))[0] for cond in args.train_cond]
     else:
         if verbose: print(in_dir + f'/{args.train_cond}*-epo.fif')
-        train_fn = natsorted(glob(in_dir + f'/{args.train_cond}*-epo.fif'))[0]
+        train_fn = natsorted(glob(in_dir + f'/{args.train_cond}*-epo.fif'))
+        if not len(train_fn):
+            raise RuntimeError(f"No epochs file found at {in_dir + f'/{args.train_cond}*-epo.fif'}")
+        elif len(train_fn) > 1:
+            raise RuntimeError(f"Found multiple epochs file at {in_dir + f'/{args.train_cond}*-epo.fif'}")
+        else:
+            train_fn = train_fn[0]
         # assert len(train_fn) == 1
     if verbose: print(train_fn)
     if verbose: print("\nGetting test filenames:")
