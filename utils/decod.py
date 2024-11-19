@@ -1529,7 +1529,7 @@ def add_sent_on_top(ax, word_onsets, image_onset, sent_type='scenes', fontsize=2
     secax_x = ax.secondary_xaxis('top', functions=(lambda x: x, lambda x: x))
     secax_x.set_xticks(word_onsets + image_onset)
     xtickslabels = sentence_examples[sent_type][0] # corresponding ticks
-    secax_x.set_xticklabels(xtickslabels, fontdict={'fontsize': fontsize}, rotation="45", ha="left", va="baseline")  
+    secax_x.set_xticklabels(xtickslabels, fontdict={'fontsize': fontsize}, rotation="vertial", ha="left", va="baseline")  # , rotation="45"
     ## Image
     img_caracs = sentence_examples[sent_type][1]
     ax_img_onset = ax.transLimits.transform((image_onset[0], 0))[0] # self.transLimits is the transformation that takes you from data to axes coordinates
