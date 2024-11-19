@@ -151,3 +151,10 @@ Inclure un flash sur tout l'écran, un truc gris ou salt and pepper, sur la moit
 Figure finale : on veut un truc a la JR ou a la Pedro avec un timecourse par propriété d'interet: forme1, couleur1, relation, forme2, couleur2, objet individuels, match/nonmatch 
 Trace de la prédiction pour chaque décodeur : quand est-ce que la perf est bonne ET quand est-ce qu'on a une réactivation. On peut les moyenner comme on le fait pour l'AUC. 
 Quand on a une réactivation, est ce qu'elle est jointe pour nom et adj (forme et couleur), ou bien séparée ? Quel délai ? Comment sont ségrégées les réactivations d'un objet et de l'autre ? => binding problem.
+
+
+
+
+Reprise en 2024 ! 
+v1: replication (more or less, maybe check v34 for a closer replication)
+v2: trying localizer corssmodal generalisation
