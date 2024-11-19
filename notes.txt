@@ -157,4 +157,4 @@ Quand on a une réactivation, est ce qu'elle est jointe pour nom et adj (forme e
 
 Reprise en 2024 ! 
 v1: replication (more or less, maybe check v34 for a closer replication)
-v2: trying localizer corssmodal generalisation
+v2: trying localizer crossmodal generalisation
