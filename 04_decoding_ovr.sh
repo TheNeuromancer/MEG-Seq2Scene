@@ -6,52 +6,59 @@ do
 
 # -c v34 ?
 
+	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+	--train-cond 'localizer' --label LocAll \
+--train-query 'Loc_all' \
+--test-cond 'one_object' \
+--test-query 'Colour1' "
 
 ## that is shit, we have some negative class that are positive on the test set ... (?)
 # # IMG LOCALIZER  TRAIN ON IMAGES AND TEST ON WORDS
-	echo "python 04_decoding_ovr.py -w --train-cond 'localizer' --label Img2WordAll \
---test-cond 'localizer' --timegen -s $sub \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
---train-query \"Loc_image\" \
---test-query \"Loc_word\" "
+	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+	--train-cond 'localizer' --label Img2WordAll \
+--train-query 'Loc_image' \
+--test-cond 'localizer' \
+--test-query 'Loc_word' "
 
-echo "python 04_decoding_ovr.py -w --train-cond 'localizer' --label Img2WordC \
---test-cond 'localizer' --timegen -s $sub \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
---train-query \"Loc_image_colour\" \
---test-query \"Loc_colour\" "
+echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+--train-cond 'localizer' --label Img2WordC \
+--train-query 'Loc_image_colour' \
+--test-cond 'localizer' \
+--test-query 'Loc_colour' \
+--test-cond 'one_object' \
+--test-query 'Colour1' "
 
-echo "python 04_decoding_ovr.py -w --train-cond 'localizer' --label Img2WordS \
---test-cond 'localizer' --timegen -s $sub \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
---train-query \"Loc_image_shape\" \
---test-query \"Loc_shape\" "
+echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+--train-cond 'localizer' --label Img2WordS \
+--train-query 'Loc_image_shape' \
+--test-cond 'localizer' \
+--test-query 'Loc_shape' \
+--test-cond 'one_object' \
+--test-query 'Shape1' "
 
 
 # # LOCALIZER TRAIN ON WORDS AND TEST ON IMAGES
-	echo "python 04_decoding_ovr.py -w --train-cond 'localizer' --label Word2ImgAll \
---test-cond 'localizer' --timegen -s $sub \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
---train-query \"Loc_word\" \
---test-query \"Loc_image\" "
+	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+	--train-cond 'localizer' --label Word2ImgAll \
+--train-query 'Loc_word' \
+--test-cond 'localizer' \
+--test-query 'Loc_image' "
 
-echo "python 04_decoding_ovr.py -w --train-cond 'localizer' --label Word2ImgC \
---test-cond 'localizer' --timegen -s $sub \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
---train-query \"Loc_colour\" \
---test-query \"Loc_image_colour\" "
+echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+--train-cond 'localizer' --label Word2ImgC \
+--train-query 'Loc_colour' \
+--test-cond 'localizer' \
+--test-query 'Loc_image_colour' \
+--test-cond 'one_object' \
+--test-query 'Colour1' "
 
-echo "python 04_decoding_ovr.py -w --train-cond 'localizer' --label Word2ImgS \
---test-cond 'localizer' --timegen -s $sub \
---split-queries \"Matching=='match'\" \
---split-queries \"Matching=='nonmatch'\" \
---train-query \"Loc_shape\" \
---test-query \"Loc_image_shape\" "
+echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+--train-cond 'localizer' --label Word2ImgS \
+--train-query 'Loc_shape' \
+--test-cond 'localizer' \
+--test-query 'Loc_image_shape' \
+--test-cond 'one_object' \
+--test-query 'Shape1' "
 
 
 
