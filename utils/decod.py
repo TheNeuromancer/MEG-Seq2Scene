@@ -238,13 +238,17 @@ def get_class_queries(query):
         class_queries = [f"Loc_word=='{c}'" for c in colors]
     elif query == "Loc_word":
         class_queries = [f"Loc_word=='{c}'" for c in colors] + [f"Loc_word=='{s}'" for s in shapes]
+    elif query == "Loc_crossColour":
+        class_queries = [f"Loc_word=='{c}' or Loc_word=='img_{c}'" for c in colors]
+    elif query == "Loc_crossShape":
+        class_queries = [f"Loc_word=='{s}' or  Loc_word=='img_{s}'" for s in shapes]
     elif query == "Loc_all":
         class_queries = [f"Loc_word=='{c}' or Loc_word=='img_{c}'" for c in colors] + [f"Loc_word=='{s}' or  Loc_word=='img_{s}'" for s in shapes]
     elif query == "Loc_image":
         class_queries = [f"Loc_word=='img_{c}'" for c in colors] + [f"Loc_word=='img_{s}'" for s in shapes]
     elif query == "Loc_image_shape":
         class_queries = [f"Loc_word=='img_{s}'" for s in shapes]
-    elif query == "Loc_image_colour":
+    elif query == "Loc_image_color":
         class_queries = [f"Loc_word=='img_{c}'" for c in colors]
     # elif query == "XColour1": 
     #     class_queries = [f"Colour1=='{c}' and Colour2!='{c}'" for c in colors]

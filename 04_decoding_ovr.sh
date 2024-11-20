@@ -6,11 +6,27 @@ do
 
 # -c v34 ?
 
+# Train on the localizer on both image and words 
 	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
-	--train-cond 'localizer' --label LocAll \
---train-query 'Loc_all' \
+	--train-cond 'localizer' --label LocCrossShapes \
+--train-query 'Loc_crossShape' \
 --test-cond 'one_object' \
---test-query 'Colour1' "
+--test-query 'Shape1' \
+--test-cond 'two_objects' \
+--test-query \"Shape1\" \
+--test-cond 'two_objects' \
+--test-query \"Shape2\" "
+
+	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+	--train-cond 'localizer' --label LocCrossColours \
+--train-query 'Loc_crossColour' \
+--test-cond 'one_object' \
+--test-query 'Colour1' \
+--test-cond 'two_objects' \
+--test-query \"Colour1\" \
+--test-cond 'two_objects' \
+--test-query \"Colour2\" "
+
 
 ## that is shit, we have some negative class that are positive on the test set ... (?)
 # # IMG LOCALIZER  TRAIN ON IMAGES AND TEST ON WORDS
@@ -59,7 +75,6 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-query 'Loc_image_shape' \
 --test-cond 'one_object' \
 --test-query 'Shape1' "
-
 
 
 
