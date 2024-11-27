@@ -882,7 +882,7 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                 if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
                 AUC[t, tgen] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
                 all_confusions[t, tgen] += confusion_matrix(y_test, mean_fold_pred.argmax(1), normalize='all')
-                all_preds[t, test] = mean_fold_pred
+                all_preds[t, tgen] = mean_fold_pred
                 # accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1)) # dim error when n_classes = 2
 
                 if test_split_query_indices: # split the test indices according to the query
