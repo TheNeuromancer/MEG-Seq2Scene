@@ -159,3 +159,4 @@ Reprise en 2024 !
 v1: replication (more or less, maybe check v34 for a closer replication)
 v2: trying localizer crossmodal generalisation
 v3: saving confusion matrices for RSA (9words, shapes and colors?) and full predictions for replays stuuuff.
+Saving preds works. we save only the diagonal (within-time) predictions, but for the generalization across conditions of a different length (eg, loc to obj), then we have to save the whole matrix, which is fckin big. Maybe soon look into single clf gen? 

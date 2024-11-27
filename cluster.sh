@@ -44,7 +44,7 @@ cat <<EOT >> $file_sbatch
 #SBATCH --job-name=$i
 #SBATCH --time=48:00:00
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=64G
+#SBATCH --mem=16G
 #SBATCH --partition=shared-cpu
 #SBATCH --output=$out_file
 #SBATCH --error=$err_file
