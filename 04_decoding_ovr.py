@@ -113,7 +113,7 @@ else:
     # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
     # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-2, 4, 7)})
 clf = OneVsRestClassifier(clf, n_jobs=1)
-# clf = mne.decoding.LinearModel(clf)
+clf = mne.decoding.LinearModel(clf)
 
 ### DECODE ###
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
