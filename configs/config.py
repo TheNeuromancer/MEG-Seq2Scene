@@ -23,7 +23,7 @@ class Config:
     sfreq: int = 100 # final sampling frequency
 
     ## Decoding parameters
-    n_folds: int = 5 # number of shuffle splits
+    n_folds: int = 5 # number of splits
     crossval: str = "kfold" # cross-validation scheme. "kfold" or "sufflesplit"
     reduc_dim: float = 0 # dimensionality reduction
     ## Decoding window parameters

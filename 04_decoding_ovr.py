@@ -107,8 +107,8 @@ if args.dummy: # speed everything up for a dummy run
     clf = LinearRegression(n_jobs=-1)
     setattr(args, 'n_folds', 2)
 else:
-    clf_cv = StratifiedShuffleSplit(10, random_state=42) # help avoid warnings when there are very few trials in one class
-    clf = LogisticRegressionCV(Cs=10, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
+    clf_cv = StratifiedShuffleSplit(args.n_folds, random_state=42) # help avoid warnings when there are very few trials in one class
+    clf = LogisticRegressionCV(Cs=args.n_folds, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
     # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=clf_cv, class_weight='balanced')
     # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
     # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-2, 4, 7)})

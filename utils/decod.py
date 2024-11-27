@@ -866,7 +866,8 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
     if args.timegen:
         AUC_test_query_split = np.full((n_times_train, n_times_test, len(test_split_query_indices)), np.nan) if test_split_query_indices else None    
         AUC = np.zeros((n_times_train, n_times_test))
-        accuracy = np.zeros((n_times_train, n_times_test))
+        # accuracy = np.zeros((n_times_train, n_times_test))
+        accuracy = None
         all_confusions = np.zeros((n_times_train, n_times_test, n_classes, n_classes)) # full confusion matrix
         all_preds = np.zeros((n_times_train, n_times_test, len(y), n_classes))
         for tgen in trange(n_times_test):
@@ -901,7 +902,15 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                         mean_folds_preds_query = np.mean(all_folds_preds_query, 0)
                         AUC_test_query_split[t, tgen, i_query] = roc_auc_score(y_true=y_test_query, y_score=mean_folds_preds_query, multi_class='ovr')
     else:
-        raise NotImplementedError
+        if n_times_test == n_times_train:
+            AUC_test_query_split = None
+            AUC = np.zeros(n_times_test)
+            # accuracy = np.zeros(n_times_test)
+            accuracy = None
+            all_confusions = np.zeros((n_times_test, n_classes, n_classes))
+        
+        else:
+            raise NotImplementedError("Diagonal generalization is ill-defined for different n_times_train and n_times_test")
     print(f'mean test AUC: {AUC.mean():.3f}')
     print(f'max test AUC: {AUC.max():.3f}')
 
