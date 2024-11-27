@@ -819,6 +819,7 @@ def decode_ovr(args, clf, epochs, class_queries):
     else:
         AUC = np.zeros(n_times)
         all_confusions = np.zeros((n_times, n_classes, n_classes)) # full confusion matrix
+        all_preds = np.zeros((n_times, len(y), n_classes)) # raw predictions
         for t in trange(n_times):
             all_models.append([])
             for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
@@ -829,6 +830,7 @@ def decode_ovr(args, clf, epochs, class_queries):
                 if n_classes == 2: preds = preds[:,1] # not a proper OVR object, needs different method
                 all_confusions[t] += confusion_matrix(y[test], preds.argmax(1), normalize='all') / n_folds
                 AUC[t] += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
+                all_preds[t, test] = preds
 
     # put the pipeline object in an array without unpacking them
     all_models_array = np.empty((len(all_models), len(all_models[0])), dtype=object)
