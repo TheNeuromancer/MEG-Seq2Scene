@@ -245,19 +245,19 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 
 
 ## COMPLEXITY
-	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
---train-cond 'two_objects' --label SameShape \
---train-query \"SameShape\" \
---test-cond 'two_objects' \
---test-query \"SameColour\" "
+# 	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+# --train-cond 'two_objects' --label SameShape \
+# --train-query \"SameShape\" \
+# --test-cond 'two_objects' \
+# --test-query \"SameColour\" "
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
 
-echo "python 04_decoding_ovr.py -w --timegen -s $sub \
---train-cond 'two_objects' --label SameColour \
---train-query \"SameColour\" \
---test-cond 'two_objects' \
---test-query \"SameShape\" "
+# echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+# --train-cond 'two_objects' --label SameColour \
+# --train-query \"SameColour\" \
+# --test-cond 'two_objects' \
+# --test-query \"SameShape\" "
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
 
@@ -363,20 +363,20 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 
 
 
-# ## BUTTON
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Button \
---train-cond 'two_objects' \
---train-query \"Button\" "
-# --split-queries \"Matching=='match'\" \
-# --split-queries \"Matching=='nonmatch'\" \
+# # ## BUTTON
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label Button \
+# --train-cond 'two_objects' \
+# --train-query \"Button\" "
+# # --split-queries \"Matching=='match'\" \
+# # --split-queries \"Matching=='nonmatch'\" \
 
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Button \
---train-cond 'one_object' \
---train-query \"Button\" "
-# --split-queries \"Matching=='match'\" \
-# --split-queries \"Matching=='nonmatch'\" \
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label Button \
+# --train-cond 'one_object' \
+# --train-query \"Button\" "
+# # --split-queries \"Matching=='match'\" \
+# # --split-queries \"Matching=='nonmatch'\" \
 
 # 	echo "python 04_decoding_ovr.py -w \
 # --timegen -s $sub --label RespButton --response_lock \
@@ -393,31 +393,31 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 # # --split-queries \"Matching=='nonmatch'\" \
 
 
-## FLASH
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Flash \
---train-cond 'two_objects' \
---train-query \"Flash\" "
-# --split-queries \"Matching=='match'\" \
-# --split-queries \"Matching=='nonmatch'\" \
+# ## FLASH
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label Flash \
+# --train-cond 'two_objects' \
+# --train-query \"Flash\" "
+# # --split-queries \"Matching=='match'\" \
+# # --split-queries \"Matching=='nonmatch'\" \
 
 
-## PERF
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Perf \
---train-cond 'two_objects' \
---train-query \"Perf\" \
---filter ''" # empty filter to overwrite the config with perf filtering
-# --split-queries \"Matching=='match'\" \
-# --split-queries \"Matching=='nonmatch'\" \
+# ## PERF
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label Perf \
+# --train-cond 'two_objects' \
+# --train-query \"Perf\" \
+# --filter ''" # empty filter to overwrite the config with perf filtering
+# # --split-queries \"Matching=='match'\" \
+# # --split-queries \"Matching=='nonmatch'\" \
 
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Perf \
---train-cond 'one_object' \
---train-query \"Perf\" \
---filter ''" # empty filter to overwrite the config with perf filtering
-# --split-queries \"Matching=='match'\" \
-# --split-queries \"Matching=='nonmatch'\" \
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label Perf \
+# --train-cond 'one_object' \
+# --train-query \"Perf\" \
+# --filter ''" # empty filter to overwrite the config with perf filtering
+# # --split-queries \"Matching=='match'\" \
+# # --split-queries \"Matching=='nonmatch'\" \
 
 # 	echo "python 04_decoding_ovr.py -w \
 # --timegen -s $sub --label RespPerf --response_lock \
@@ -458,20 +458,20 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 # --train-query \"Matching\" "
 # # 		## MISMATCHES
 
-# 	## ONE OBJECT MISMATCHES
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label ColourMismatch \
---train-cond 'one_object' \
---train-query \"ColourMismatch\" "
-# --split-queries \"Flash==0\" \
-# --split-queries \"Flash==1\" \
+# # 	## ONE OBJECT MISMATCHES
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label ColourMismatch \
+# --train-cond 'one_object' \
+# --train-query \"ColourMismatch\" "
+# # --split-queries \"Flash==0\" \
+# # --split-queries \"Flash==1\" \
 
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label ShapeMismatch \
---train-cond 'one_object' \
---train-query \"ShapeMismatch\" "
-# --split-queries \"Flash==0\" \
-# --split-queries \"Flash==1\" \
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label ShapeMismatch \
+# --train-cond 'one_object' \
+# --train-query \"ShapeMismatch\" "
+# # --split-queries \"Flash==0\" \
+# # --split-queries \"Flash==1\" \
 
 # 	echo "python 04_decoding_ovr.py -w \
 # --timegen -s $sub --label RespColourMismatch --response_lock \
@@ -487,95 +487,95 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 # # --split-queries \"Flash==0\" \
 # # --split-queries \"Flash==1\" \
 
-	## TWO OBJECTS MISMATCHES
-	echo "python 04_decoding_ovr.py -w -w \
---timegen -s $sub --label PropMismatch \
---train-cond 'two_objects' \
---train-query \"PropMismatch\" \
---split-queries \"Complexity==0\" \
---split-queries \"Complexity==1\" \
---split-queries \"Complexity==2\" "
+# 	## TWO OBJECTS MISMATCHES
+# 	echo "python 04_decoding_ovr.py -w -w \
+# --timegen -s $sub --label PropMismatch \
+# --train-cond 'two_objects' \
+# --train-query \"PropMismatch\" \
+# --split-queries \"Complexity==0\" \
+# --split-queries \"Complexity==1\" \
+# --split-queries \"Complexity==2\" "
 
-	echo "python 04_decoding_ovr.py -w -w \
---timegen -s $sub --label BindMismatch \
---train-cond 'two_objects' \
---train-query \"BindMismatch\" \
---split-queries \"Complexity==0\" \
---split-queries \"Complexity==1\" \
---split-queries \"Complexity==2\" "
+# 	echo "python 04_decoding_ovr.py -w -w \
+# --timegen -s $sub --label BindMismatch \
+# --train-cond 'two_objects' \
+# --train-query \"BindMismatch\" \
+# --split-queries \"Complexity==0\" \
+# --split-queries \"Complexity==1\" \
+# --split-queries \"Complexity==2\" "
 
-	echo "python 04_decoding_ovr.py -w -w \
---timegen -s $sub --label RelMismatch \
---train-cond 'two_objects' \
---train-query \"RelMismatch\" \
---split-queries \"Complexity==0\" \
---split-queries \"Complexity==1\" \
---split-queries \"Complexity==2\" "
-
-
-
-
-	echo "python 04_decoding_ovr.py -w -w \
---timegen -s $sub --label Matching \
---train-cond 'two_objects' \
---train-query \"Matching\" \
---split-queries \"Complexity==0\" \
---split-queries \"Complexity==1\" \
---split-queries \"Complexity==2\" \
---split-queries \"Error_type=='l0'\" \
---split-queries \"Error_type=='l1'\" \
---split-queries \"Error_type=='l2'\" "
+# 	echo "python 04_decoding_ovr.py -w -w \
+# --timegen -s $sub --label RelMismatch \
+# --train-cond 'two_objects' \
+# --train-query \"RelMismatch\" \
+# --split-queries \"Complexity==0\" \
+# --split-queries \"Complexity==1\" \
+# --split-queries \"Complexity==2\" "
 
 
 
-	echo "python 04_decoding_ovr.py -w -w \
---timegen -s $sub --label Mismatches \
---train-cond 'two_objects' \
---train-query \"Mismatches\" \
---split-queries \"Complexity==0\" \
---split-queries \"Complexity==1\" \
---split-queries \"Complexity==2\" \
---split-queries \"Error_type=='l0'\" \
---split-queries \"Error_type=='l1'\" \
---split-queries \"Error_type=='l2'\" "
+
+# 	echo "python 04_decoding_ovr.py -w -w \
+# --timegen -s $sub --label Matching \
+# --train-cond 'two_objects' \
+# --train-query \"Matching\" \
+# --split-queries \"Complexity==0\" \
+# --split-queries \"Complexity==1\" \
+# --split-queries \"Complexity==2\" \
+# --split-queries \"Error_type=='l0'\" \
+# --split-queries \"Error_type=='l1'\" \
+# --split-queries \"Error_type=='l2'\" "
 
 
-# response lock
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label RespPropMismatch --response_lock \
---train-cond 'two_objects' \
---train-query \"PropMismatch\" \
---split-queries \"Complexity==0\" \
---split-queries \"Complexity==1\" \
---split-queries \"Complexity==2\" "
 
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label RespBindMismatch --response_lock \
---train-cond 'two_objects' \
---train-query \"BindMismatch\" \
---split-queries \"Complexity==0\" \
---split-queries \"Complexity==1\" \
---split-queries \"Complexity==2\" "
-
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label RespRelMismatch --response_lock \
---train-cond 'two_objects' \
---train-query \"RelMismatch\" \
---split-queries \"Complexity==0\" \
---split-queries \"Complexity==1\" \
---split-queries \"Complexity==2\" "
+# 	echo "python 04_decoding_ovr.py -w -w \
+# --timegen -s $sub --label Mismatches \
+# --train-cond 'two_objects' \
+# --train-query \"Mismatches\" \
+# --split-queries \"Complexity==0\" \
+# --split-queries \"Complexity==1\" \
+# --split-queries \"Complexity==2\" \
+# --split-queries \"Error_type=='l0'\" \
+# --split-queries \"Error_type=='l1'\" \
+# --split-queries \"Error_type=='l2'\" "
 
 
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label RespMismatches --response_lock \
---train-cond 'two_objects' \
---train-query \"Mismatches\" \
---split-queries \"Complexity==0\" \
---split-queries \"Complexity==1\" \
---split-queries \"Complexity==2\" \
---split-queries \"Error_type=='l0'\" \
---split-queries \"Error_type=='l1'\" \
---split-queries \"Error_type=='l2'\" "
+# # response lock
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label RespPropMismatch --response_lock \
+# --train-cond 'two_objects' \
+# --train-query \"PropMismatch\" \
+# --split-queries \"Complexity==0\" \
+# --split-queries \"Complexity==1\" \
+# --split-queries \"Complexity==2\" "
+
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label RespBindMismatch --response_lock \
+# --train-cond 'two_objects' \
+# --train-query \"BindMismatch\" \
+# --split-queries \"Complexity==0\" \
+# --split-queries \"Complexity==1\" \
+# --split-queries \"Complexity==2\" "
+
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label RespRelMismatch --response_lock \
+# --train-cond 'two_objects' \
+# --train-query \"RelMismatch\" \
+# --split-queries \"Complexity==0\" \
+# --split-queries \"Complexity==1\" \
+# --split-queries \"Complexity==2\" "
+
+
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --label RespMismatches --response_lock \
+# --train-cond 'two_objects' \
+# --train-query \"Mismatches\" \
+# --split-queries \"Complexity==0\" \
+# --split-queries \"Complexity==1\" \
+# --split-queries \"Complexity==2\" \
+# --split-queries \"Error_type=='l0'\" \
+# --split-queries \"Error_type=='l1'\" \
+# --split-queries \"Error_type=='l2'\" "
 
 
 
