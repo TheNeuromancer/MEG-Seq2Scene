@@ -908,7 +908,20 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
             # accuracy = np.zeros(n_times_test)
             accuracy = None
             all_confusions = np.zeros((n_times_test, n_classes, n_classes))
-        
+            for t in trange(n_times_test):
+                t_data = X_test[:, :, t]
+                all_folds_preds = []
+                for i_fold in range(n_folds):
+                    pipeline = all_models[t][i_fold]
+                    preds = predict(pipeline, t_data, multiclass=True)
+                    y_pred = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
+                    all_folds_preds.append(y_pred)
+                mean_fold_pred = np.nanmean(all_folds_preds, 0)
+                if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
+                AUC[t] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
+                all_confusions[t] += confusion_matrix(y_test, mean_fold_pred.argmax(1), normalize='all')
+                all_preds[t] = mean_fold_pred
+                # accuracy[t] = accuracy_score(y, mean_fold_pred.argmax(1)) # dim error when n_classes = 2
         else:
             raise NotImplementedError("Diagonal generalization is ill-defined for different n_times_train and n_times_test")
     print(f'mean test AUC: {AUC.mean():.3f}')
