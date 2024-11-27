@@ -117,7 +117,7 @@ clf = OneVsRestClassifier(clf, n_jobs=1)
 
 ### DECODE ###
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
-AUC, _, all_models, AUC_query = decode_ovr(args, clf, epochs, class_queries)
+AUC, _, preds, confusions, all_models, AUC_query = decode_ovr(args, clf, epochs, class_queries)
 print(f'Finished training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
 
 if args.test_quality: # save explicit score values, then exit
@@ -138,8 +138,10 @@ if args.test_quality: # save explicit score values, then exit
 
 ### SAVE RESULTS ###
 save_results(out_fn, AUC) #, all_models)
+save_results(out_fn, confusions, fn_end="confusions") #, all_models)
+save_results(out_fn, preds, fn_end="preds")
 # save_results(out_fn, accuracy, fn_end="acc")
-# save_patterns(args, out_fn, all_models)
+save_patterns(args, out_fn, all_models)
 # save_best_pattern(out_fn, AUC, all_models) ## Save best model's pattern
 ### PLOT PERFORMANCE ###
 plot_perf(args, out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, \
@@ -153,7 +155,6 @@ if AUC_query is not None: # save the results for all the splits
         plot_perf(args, out_fn+f'_for_{query}', AUC_query[:,:,i_query], args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
         # save_preds(args, out_fn+f'_for_{query}', mean_preds_query[:,:,i_query])
 
-# from ipdb import set_trace; set_trace()
 print(f'Done with saving training plots and data. Elasped time since the script began: {(time.time()-start_time)/60:.2f}min')
 
 
@@ -174,10 +175,12 @@ for i_test, (cond, query, test_fn, test_out_fn) in enumerate(zip(args.test_cond,
 
     class_queries = get_class_queries(query)
 
-    AUC, _, AUC_query = test_decode_ovr(args, epochs, class_queries, all_models)
+    AUC, _, preds, confusions, AUC_query = test_decode_ovr(args, epochs, class_queries, all_models)
 
     ### SAVE RESULTS ###
     save_results(test_out_fn, AUC)
+    save_results(out_fn, confusions, fn_end="confusions") #, all_models)
+    save_results(out_fn, preds, fn_end="preds")
     # save_results(test_out_fn, accuracy, fn_end="acc")
     ### PLOT PERFORMANCE ###
     plot_perf(args, test_out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, \

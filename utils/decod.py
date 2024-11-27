@@ -17,7 +17,7 @@ from sklearn.preprocessing import StandardScaler, RobustScaler, label_binarize, 
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.linear_model import RidgeClassifier, RidgeClassifierCV, LogisticRegression, LogisticRegressionCV, LinearRegression, Ridge, RidgeCV
 from sklearn.svm import SVC, LinearSVC
-from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.metrics import roc_auc_score, accuracy_score, confusion_matrix
 from sklearn.model_selection import KFold, StratifiedKFold, StratifiedShuffleSplit, permutation_test_score, GridSearchCV # StratifiedGroupKFold, 
 from sklearn.utils.extmath import softmax
 from sklearn.decomposition import PCA
@@ -756,7 +756,8 @@ def decode_ovr(args, clf, epochs, class_queries):
     all_models = []
     if args.timegen:
         AUC = np.zeros((n_times, n_times))
-        all_confusions = []
+        all_confusions = np.zeros((n_times, n_times, n_classes, n_classes)) # full confusion matrix
+        all_preds = np.zeros((n_times, len(y), n_classes)) # raw predictions (for within-time only)
         for t in trange(n_times):
             all_models.append([])
             for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
@@ -781,7 +782,9 @@ def decode_ovr(args, clf, epochs, class_queries):
                     if np.any(np.isnan(preds)):
                         print(f"nan in preds, probably due to lack of convergence of classifier, moving to next fold")
                         continue
+                    all_confusions[t, tgen] += confusion_matrix(y_test, preds.argmax(1), normalize='all') / n_folds
                     AUC[t, tgen] += roc_auc_score(y_true=y_test, y_score=preds, multi_class='ovr', average='weighted') / n_folds
+                    if t == tgen: all_preds[t, test] = preds # within-time
                     # if not n_classes == 2: # then single set of probabilities...
                     #     accuracy[t, tgen] += accuracy_score(y[test], preds.argmax(1)) / n_folds
                     if test_split_query_indices: # split the test indices according to the query
@@ -815,6 +818,7 @@ def decode_ovr(args, clf, epochs, class_queries):
         if test_split_query_indices: AUC_test_query_split = AUC_test_query_split / AUC_test_query_counts # replace division by n_folds because for many cases we don't have correct test indices in each fold.
     else:
         AUC = np.zeros(n_times)
+        all_confusions = np.zeros((n_times, n_classes, n_classes)) # full confusion matrix
         for t in trange(n_times):
             all_models.append([])
             for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
@@ -823,6 +827,7 @@ def decode_ovr(args, clf, epochs, class_queries):
                 preds = predict(pipeline, X[test, :, t], multiclass=True)
                 preds = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
                 if n_classes == 2: preds = preds[:,1] # not a proper OVR object, needs different method
+                all_confusions[t] += confusion_matrix(y[test], preds.argmax(1), normalize='all') / n_folds
                 AUC[t] += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
 
     # put the pipeline object in an array without unpacking them
@@ -831,7 +836,7 @@ def decode_ovr(args, clf, epochs, class_queries):
 
     print(f'mean training AUC: {AUC.mean():.3f}')
     print(f'max training AUC: {AUC.max():.3f}')
-    return AUC, accuracy, all_models_array, AUC_test_query_split
+    return AUC, accuracy, all_preds, all_confusions, all_models_array, AUC_test_query_split
 
 
 def test_decode_ovr(args, epochs, class_queries, all_models):
@@ -862,6 +867,8 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
         AUC_test_query_split = np.full((n_times_train, n_times_test, len(test_split_query_indices)), np.nan) if test_split_query_indices else None    
         AUC = np.zeros((n_times_train, n_times_test))
         accuracy = np.zeros((n_times_train, n_times_test))
+        all_confusions = np.zeros((n_times_train, n_times_test, n_classes, n_classes)) # full confusion matrix
+        all_preds = np.zeros((n_times_train, n_times_test, len(y), n_classes))
         for tgen in trange(n_times_test):
             t_data = X_test[:, :, tgen]
             for t in range(n_times_train):
@@ -874,6 +881,8 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                 mean_fold_pred = np.nanmean(all_folds_preds, 0)
                 if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
                 AUC[t, tgen] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
+                all_confusions[t, tgen] += confusion_matrix(y_test, mean_fold_pred.argmax(1), normalize='all')
+                all_preds[t, test] = mean_fold_pred
                 # accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1)) # dim error when n_classes = 2
 
                 if test_split_query_indices: # split the test indices according to the query
@@ -896,7 +905,7 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
     print(f'mean test AUC: {AUC.mean():.3f}')
     print(f'max test AUC: {AUC.max():.3f}')
 
-    return AUC, accuracy, AUC_test_query_split
+    return AUC, accuracy, all_preds, all_confusions, AUC_test_query_split
 
 
 
