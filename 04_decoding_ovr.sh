@@ -30,11 +30,11 @@ do
 
 # # IMG LOCALIZER  TRAIN ON IMAGES AND TEST ON WORDS
 ## this does not work. Train on all images and test on their corresponding word.
-# 	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
-# 	--train-cond 'localizer' --label Img2WordAll \
-# --train-query 'Loc_image' \
-# --test-cond 'localizer' \
-# --test-query 'Loc_word' "
+	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+	--train-cond 'localizer' --label Img2WordAll \
+--train-query 'Loc_image' \
+--test-cond 'localizer' \
+--test-query 'Loc_word' "
 
 echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --train-cond 'localizer' --label Img2WordC \
@@ -62,11 +62,11 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 
 
 # # LOCALIZER TRAIN ON WORDS AND TEST ON IMAGES
-# 	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
-# 	--train-cond 'localizer' --label Word2ImgAll \
-# --train-query 'Loc_word' \
-# --test-cond 'localizer' \
-# --test-query 'Loc_image' "
+	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+	--train-cond 'localizer' --label Word2ImgAll \
+--train-query 'Loc_word' \
+--test-cond 'localizer' \
+--test-query 'Loc_image' "
 
 echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --train-cond 'localizer' --label Word2ImgC \
