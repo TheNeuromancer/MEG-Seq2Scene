@@ -96,15 +96,15 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 
 ## COLORS
 # 	# train words only
-# 	echo "python 04_decoding_ovr.py -w --train-cond 'localizer' --label Colour \
-# --timegen -s $sub \
-# --train-query \"Loc_colour\" \
-# --test-cond 'one_object' \
-# --test-query \"Colour1\" \
-# --test-cond 'two_objects' \
-# --test-query \"Colour1\" \
-# --test-cond 'two_objects' \
-# --test-query \"Colour2\" "
+	echo "python 04_decoding_ovr.py -w --train-cond 'localizer' --label Colour \
+--timegen -s $sub \
+--train-query \"Loc_colour\" \
+--test-cond 'one_object' \
+--test-query \"Colour1\" \
+--test-cond 'two_objects' \
+--test-query \"Colour1\" \
+--test-cond 'two_objects' \
+--test-query \"Colour2\" "
 # # --split-queries \"Matching=='match'\" \
 # # --split-queries \"Matching=='nonmatch'\" \
 
@@ -116,11 +116,11 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-cond 'localizer' \
 --test-query \"Loc_colour\" \
 --test-cond 'localizer' \
---test-query \"Loc_image_colour\" "
-# --test-cond 'two_objects' \
-# --test-query \"Colour1\" \
-# --test-cond 'two_objects' \
-# --test-query \"Colour2\" "
+--test-query \"Loc_image_colour\" 
+--test-cond 'two_objects' \
+--test-query \"Colour1\" \
+--test-cond 'two_objects' \
+--test-query \"Colour2\" "
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Change.str.contains('colour')\" "
 # --split-queries \"Matching=='match'\" "
@@ -172,11 +172,11 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-cond 'localizer' \
 --test-query \"Loc_shape\" \
 --test-cond 'localizer' \
---test-query \"Loc_image_shape\" "
-# --test-cond 'two_objects' \
-# --test-query \"Shape1\" \
-# --test-cond 'two_objects' \
-# --test-query \"Shape2\" "
+--test-query \"Loc_image_shape\" 
+--test-cond 'two_objects' \
+--test-query \"Shape1\" \
+--test-cond 'two_objects' \
+--test-query \"Shape2\" "
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Change.str.contains('shape')\" "
 # --split-queries \"Matching=='match'\" \
@@ -207,17 +207,17 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 
 ## OBJECTS
 		# train on all other trials, gen to first, then to 2nd object
-# 	echo "python 04_decoding_ovr.py -w \
-# --timegen -s $sub --train-cond 'one_object' --label AllObject \
-# --train-query \"Shape1+Colour1\" \
-# --test-cond 'two_objects' \
-# --test-query \"Shape1+Colour1\" \
-# --test-cond 'two_objects' \
-# --test-query \"Shape2+Colour2\" \
-# --test-cond 'two_objects' \
-# --test-query \"Right_obj\" \
-# --test-cond 'two_objects' \
-# --test-query \"Left_obj\" "
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --train-cond 'one_object' --label AllObject \
+--train-query \"Shape1+Colour1\" \
+--test-cond 'two_objects' \
+--test-query \"Shape1+Colour1\" \
+--test-cond 'two_objects' \
+--test-query \"Shape2+Colour2\" \
+--test-cond 'two_objects' \
+--test-query \"Right_obj\" \
+--test-cond 'two_objects' \
+--test-query \"Left_obj\" "
 # # --split-queries \"Matching=='match'\" \
 # # --split-queries \"Matching=='nonmatch'\" \
 

@@ -5,7 +5,7 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "2"
+    version: str = "3"
     root_path: str = "/home/users/d/desborde/scratch/s2s"
     epochs_dir: str = "Epochs_100hz_nofilter"
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
