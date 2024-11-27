@@ -910,6 +910,7 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
             # accuracy = np.zeros(n_times_test)
             accuracy = None
             all_confusions = np.zeros((n_times_test, n_classes, n_classes))
+            all_preds = np.zeros((n_times_test, len(y), n_classes))
             for t in trange(n_times_test):
                 t_data = X_test[:, :, t]
                 all_folds_preds = []
