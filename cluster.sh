@@ -33,19 +33,20 @@ do
   out_file=$cluster_logs_path/out_$i
   err_file=$cluster_logs_path/err_$i
 
-  # # get number of running jobs and compared to maximum authorized
+  # get number of running jobs and compared to maximum authorized
   # while [ $(qselect -u desborde | wc -l) -ge $max_running_jobs ]
-  # do
-  # 	sleep 1
-  # done
+  while [ $(squeue -u desborde -h -t pending,running -r | wc -l) -ge $max_running_jobs ]
+  do
+  	sleep 1
+  done
 
 cat <<EOT >> $file_sbatch
 #!/bin/bash
 #SBATCH --job-name=$i
-#SBATCH --time=48:00:00
+#SBATCH --time=02:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=16G
-#SBATCH --partition=public-cpu
+#SBATCH --partition=shared-cpu 
 #SBATCH --output=$out_file
 #SBATCH --error=$err_file
 source ~/anaconda3/etc/profile.d/conda.sh
@@ -53,9 +54,10 @@ conda activate mne
 cd ~/Documents/s2s/MEG-Seq2Scene/
 ${job_array[i]}
 EOT
+# public-cpu (very long jobs) or shared-cpu (for < 24h jobs)
 
 sbatch $file_sbatch
 
-sleep .1 # time to let the job start, with margin
+sleep 1 # time to let the job start, with margin
 
 done

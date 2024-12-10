@@ -39,6 +39,8 @@ parser.add_argument('--equalize_split_events', action='store_true', default=None
 parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
 parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
 
+parser.add_argument('--train-time', type=float, default=None, help='Time to train on (then does not train on all timepoints)')
+
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
 parser.add_argument('--n_folds', type=int, help='sampling frequency')
@@ -96,7 +98,12 @@ if args.response_lock:
 else:
     epochs = load_data(args, train_fn)[0]
 windows = [tuple([float(x) for x in win.split(",")]) for win in args.windows]
-if windows: epochs = epochs.crop(*windows[0])
+if windows: 
+    print(f"Using training time window:: {windows[0]}s")
+    epochs = epochs.crop(*windows[0])
+# if args.train_time is not None:
+#     print(f"Keeping a single training time: {args.train_time}s")
+#     epochs = epochs.crop(args.train_time, args.train_time, include_tmax=True)
 train_tmin, train_tmax = epochs.tmin, epochs.tmax
 
 ## GET QUERIES
@@ -170,7 +177,9 @@ for i_test, (cond, query, test_fn, test_out_fn) in enumerate(zip(args.test_cond,
 
     ### LOAD EPOCHS ###
     epochs = load_data(args, test_fn)[0]
-    if windows: epochs = epochs.crop(*windows[i_test+1]) # first window is for training
+    if windows: 
+        print(f"Using test time window:: {windows[0]}s")
+        epochs = epochs.crop(*windows[i_test+1]) # first window is for training
     test_tmin, test_tmax = epochs.tmin, epochs.tmax
 
     class_queries = get_class_queries(query)

@@ -6,6 +6,153 @@ do
 
 # -c v34 ?
 
+
+### SINGLE TIME POINT TRAINING (gen to the delay)
+## addition function
+add() { n="$@"; bc <<< "${n// /+}"; }
+
+for t in .17 .2 .3 .4 .5 .6 .8
+do
+	c1t=$(add $t .6)
+	rt=$(add $t 1.2)
+	s2t=$(add $t 1.8)
+	c2t=$(add $t 2.4)
+
+	# train on loc
+echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+--train-cond 'localizer' --label ImgC \
+--train-query 'Loc_image_colour' --window '$t,$t' \
+--test-cond 'one_object' \
+--test-query 'Colour1' --windows '1.5, 2.2' \
+--test-cond 'two_objects' \
+--test-query 'Colour1' --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query 'Colour2' --windows '3, 5' "
+
+echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+--train-cond 'localizer' --label ImgS \
+--train-query 'Loc_image_shape' --window '$t,$t' \
+--test-cond 'one_object' \
+--test-query 'Shape1' --windows '1.5, 2.2' \
+--test-cond 'two_objects' \
+--test-query 'Shape1' --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query 'Shape2' --windows '3, 5' "
+
+echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+--train-cond 'localizer' --label WordC \
+--train-query 'Loc_colour' --windows '$t,$t' \
+--test-cond 'one_object' \
+--test-query 'Colour1' --windows '1.5, 2.2' \
+--test-cond 'two_objects' \
+--test-query 'Colour1' --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query 'Colour2' --windows '3, 5' "
+
+echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+--train-cond 'localizer' --label WordS \
+--train-query 'Loc_shape' --windows '$t,$t' \
+--test-cond 'one_object' \
+--test-query 'Shape1' --windows '1.5, 2.2' \
+--test-cond 'two_objects' \
+--test-query 'Shape1' --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query 'Shape2' --windows '3, 5' "
+
+	# train on one object
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Shape \
+--train-cond 'one_object' \
+--train-query \"Shape1\" --windows '$t,$t' \
+--test-cond 'two_objects' \
+--test-query \"Shape1\" --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query \"Shape2\" --windows '3, 5' "
+
+	echo "python 04_decoding_ovr.py -w --timegen -s $sub --label Colour \
+--train-cond 'one_object' \
+--train-query \"Colour1\" --windows '$c1t,$c1t' \
+--test-cond 'two_objects' \
+--test-query \"Colour1\" --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query \"Colour2\" --windows '3, 5' "
+
+echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+--train-cond 'one_object' --label Object \
+--train-query \"Shape1+Colour1\" --windows '$c1t,$c1t' \
+--test-cond 'two_objects' \
+--test-query \"Shape1+Colour1\" --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query \"Shape2+Colour2\" --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query \"Right_obj\" --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query \"Left_obj\" --windows '3, 5' "
+
+
+	# train on two objects
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Shape1 \
+--train-cond 'two_objects' \
+--train-query \"Shape1\" --windows '$t,$t' \
+--test-cond 'two_objects' \
+--test-query \"Shape1\" --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query \"Shape2\" --windows '3, 5' "
+
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Shape2 \
+--train-cond 'two_objects' \
+--train-query \"Shape2\" --windows '$s2t,$s2t' \
+--test-cond 'two_objects' \
+--test-query \"Shape1\" --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query \"Shape2\" --windows '3, 5' "
+
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Colour1 \
+--train-cond 'two_objects' \
+--train-query \"Colour1\" --windows '$c1t,$c1t' \
+--test-cond 'two_objects' \
+--test-query \"Colour1\" --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query \"Colour2\" --windows '3, 5' "
+
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Colour2 \
+--train-cond 'two_objects' \
+--train-query \"Colour2\" --windows '$c2t,$c2t' \
+--test-cond 'two_objects' \
+--test-query \"Colour1\" --windows '3, 5' \
+--test-cond 'two_objects' \
+--test-query \"Colour2\" --windows '3, 5' "
+
+echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --label Relation \
+--train-cond 'two_objects' \
+--train-query \"Relation\" --windows '$rt,$rt' \
+--test-cond 'two_objects' \
+--test-query \"Relation\" --windows '3, 5' "
+
+		# train on scenes 1st obj
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --train-cond 'two_objects' --label All1stObj \
+--train-query \"Shape1+Colour1\" --windows '$c1t,$c1t' \
+--test-cond 'two_objects' \
+--test-query \"Shape1+Colour1\" --windows '3, 5' "
+
+		# train on scenes 2nd obj
+	echo "python 04_decoding_ovr.py -w \
+--timegen -s $sub --train-cond 'two_objects' --label All2ndObj \
+--train-query \"Shape2+Colour2\" --windows '$c2t,$c2t' \
+--test-cond 'two_objects' \
+--test-query \"Shape2+Colour2\" --windows '3, 5' "
+
+done
+done # this ends the subejct loop 
+exit 0
+
+
 # # Train on the localizer on both image and words -- may be usefull later for replays
 # 	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 # 	--train-cond 'localizer' --label LocCrossShapes \
@@ -28,13 +175,13 @@ do
 # --test-query \"Colour2\" "
 
 
-# # IMG LOCALIZER  TRAIN ON IMAGES AND TEST ON WORDS
-## this does not work. Train on all images and test on their corresponding word.
-	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
-	--train-cond 'localizer' --label Img2WordAll \
---train-query 'Loc_image' \
---test-cond 'localizer' \
---test-query 'Loc_word' "
+# # # IMG LOCALIZER  TRAIN ON IMAGES AND TEST ON WORDS
+# ## this does not work. Train on all images and test on their corresponding word.
+# 	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+# 	--train-cond 'localizer' --label Img2WordAll \
+# --train-query 'Loc_image' \
+# --test-cond 'localizer' \
+# --test-query 'Loc_word' "
 
 echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --train-cond 'localizer' --label Img2WordC \
@@ -61,12 +208,12 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-query 'Shape2' "
 
 
-# # LOCALIZER TRAIN ON WORDS AND TEST ON IMAGES
-	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
-	--train-cond 'localizer' --label Word2ImgAll \
---train-query 'Loc_word' \
---test-cond 'localizer' \
---test-query 'Loc_image' "
+# # # LOCALIZER TRAIN ON WORDS AND TEST ON IMAGES
+# 	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+# 	--train-cond 'localizer' --label Word2ImgAll \
+# --train-query 'Loc_word' \
+# --test-cond 'localizer' \
+# --test-query 'Loc_image' "
 
 echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --train-cond 'localizer' --label Word2ImgC \

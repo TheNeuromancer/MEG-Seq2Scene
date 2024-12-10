@@ -115,6 +115,7 @@ def get_out_fn(args, dirname='Decoding'):
     smooth_str = f"_{args.smooth}smooth" if args.smooth else ""
     shuffle_str = '_shuffled' if args.shuffle else ''
     fband_str = f'_{args.freq_band}' if args.freq_band else ''
+    trained_str = f'_trained{args.train_time}s' if args.train_time is not None else ''
     resp_str = f'_resplock' if args.response_lock else ''
     cond_str = f"_cond-{args.train_cond}-" if isinstance(args.train_cond, str) else "" # empty string if we have a list of training conditions.
     if hasattr(args, 'train_query_1'):
@@ -124,12 +125,12 @@ def get_out_fn(args, dirname='Decoding'):
         else:
             train_query_1 = ''
             train_query_2 = ''
-        out_fn = f'{out_dir}/{args.label}-{train_query_1}_vs_{train_query_2}{reduc_dim_str}{shuffle_str}{resp_str}{fband_str}{cond_str}'
+        out_fn = f'{out_dir}/{args.label}-{train_query_1}_vs_{train_query_2}{reduc_dim_str}{shuffle_str}{resp_str}{trained_str}{fband_str}{cond_str}'
     elif hasattr(args, 'train_query'):
         train_query = '_'.join(args.train_query.split()) if args.train_query else ''
-        out_fn = f'{out_dir}/{args.label}-{train_query}{reduc_dim_str}{shuffle_str}{resp_str}{fband_str}{cond_str}'
+        out_fn = f'{out_dir}/{args.label}-{train_query}{reduc_dim_str}{shuffle_str}{resp_str}{trained_str}{fband_str}{cond_str}'
     else: # RSA
-        out_fn = f'{out_dir}/{args.label}-{reduc_dim_str}{shuffle_str}{resp_str}{fband_str}{cond_str}'
+        out_fn = f'{out_dir}/{args.label}-{reduc_dim_str}{shuffle_str}{resp_str}{trained_str}{fband_str}{cond_str}'
 
     out_fn += "dawn-" if args.xdawn else ""
     out_fn += "autoreject-" if args.autoreject else ""
