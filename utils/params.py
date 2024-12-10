@@ -27,3 +27,5 @@ bad_subs_dim = ['29', '26', '25', '23', '20', '16', '15', '10', '04', '02']
 
 colors = ["vert", "bleu", "rouge"]
 shapes = ["triangle", "cercle", "carre"]
+
+t_confusion = [0.2, .25, .3, .35, 0.4, .45, .55, 0.6, .7, 0.8]

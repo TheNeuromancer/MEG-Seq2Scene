@@ -777,14 +777,15 @@ def decode_ovr(args, clf, epochs, class_queries):
                 all_models[-1].append(deepcopy(pipeline))
                 for tgen in range(n_times):
                     preds = predict(pipeline, X_test[:,:,tgen], multiclass=True)
-                    preds = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
-                    if n_classes == 2: preds = preds[:,1] # not a proper OVR object, needs different method
                     if np.any(np.isnan(preds)):
                         print(f"nan in preds, probably due to lack of convergence of classifier, moving to next fold")
                         continue
+                    preds = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
+                    # the confusion needs a shape (n_trials * n_classes), always, but the AUC needs only n_trials in case of 2 classes, so we put the reshaping afterwards
                     all_confusions[t, tgen] += confusion_matrix(y_test, preds.argmax(1), normalize='all') / n_folds
-                    AUC[t, tgen] += roc_auc_score(y_true=y_test, y_score=preds, multi_class='ovr', average='weighted') / n_folds
                     if t == tgen: all_preds[t, test] = preds # within-time
+                    if n_classes == 2: preds = preds[:,1] # not a proper OVR object, needs different method
+                    AUC[t, tgen] += roc_auc_score(y_true=y_test, y_score=preds, multi_class='ovr', average='weighted') / n_folds
                     # if not n_classes == 2: # then single set of probabilities...
                     #     accuracy[t, tgen] += accuracy_score(y[test], preds.argmax(1)) / n_folds
                     if test_split_query_indices: # split the test indices according to the query
@@ -882,10 +883,10 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                     y_pred = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
                     all_folds_preds.append(y_pred)
                 mean_fold_pred = np.nanmean(all_folds_preds, 0)
-                if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
-                AUC[t, tgen] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
                 all_confusions[t, tgen] += confusion_matrix(y_test, mean_fold_pred.argmax(1), normalize='all')
                 all_preds[t, tgen] = mean_fold_pred
+                if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
+                AUC[t, tgen] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
                 # accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1)) # dim error when n_classes = 2
 
                 if test_split_query_indices: # split the test indices according to the query

@@ -128,6 +128,7 @@ freq_bands = ["delta", "theta", "alpha", "beta"] if args.freq_bands else [""]
 data_fn = f"{op.dirname(op.dirname(out_dir))}/all_data.p"
 diags_fn = f"{op.dirname(op.dirname(out_dir))}/all_diags.p"
 patterns_fn = f"{op.dirname(op.dirname(out_dir))}/all_patterns.p"
+confusions_fn = f"{op.dirname(op.dirname(out_dir))}/all_confusions.p"
 if args.only_agg and op.exists(data_fn) and not args.remake:
     print(f"skipping loading each results and directly loading diag aggregates from {diags_fn}")
     diag_auc_all_labels = pickle.load(open(diags_fn, "rb"))
@@ -140,6 +141,7 @@ else:
     all_faccond_names = []
     auc_all_labels = {}
     pattern_all_labels = {}
+    confusion_all_labels = {}
     for label in all_labels:
         # if "Mismatch" in label: 
         #     print(f"skipping label {label}")
@@ -157,6 +159,7 @@ else:
                         if args.verbose: print(freq_band)
                         # if train_cond == gen_cond: continue # skip when we both have one object, it is not generalization
                         all_patterns = []
+                        all_confusions = []
                         all_AUC = []
                         all_subs = []
                         all_items = []
@@ -186,18 +189,27 @@ else:
                             all_subs.append(op.basename(op.dirname(fn))[0:2])
                             all_items.append(op.basename(fn))
 
-                            # # load corresponding pattern (for direct training only)
-                            # if not split_query and (gen_cond is None): 
-                            #     # pattern_fn = f"{op.dirname(fn)}/{'_'.join(op.basename(fn).split('_')[0:2])}_best_pattern_t*.npy"
-                            #     pattern_fn = f"{op.dirname(fn)}/{op.basename(fn).replace('_AUC.npy', '')}_best_pattern_t*.npy"
-                            #     pattern_fn = glob(pattern_fn)
-                            #     if len(pattern_fn) == 0:
-                            #         print(f"!!!No pattern found!!! passing for now but look it up")
-                            #     elif len(pattern_fn) > 1:
-                            #         print(f"!!!Multiple patterns found!!! passing for now but look it up")
-                            #     else:
-                            #         all_patterns.append(np.load(pattern_fn[0]))
-                                
+                            # load corresponding pattern and confusion matrix (for direct training only)
+                            if not split_query and (gen_cond is None): 
+                                # pattern_fn = f"{op.dirname(fn)}/{'_'.join(op.basename(fn).split('_')[0:2])}_best_pattern_t*.npy"
+                                pattern_fn = f"{op.dirname(fn)}/{op.basename(fn).replace('_AUC.npy', '')}_best_pattern_t*.npy"
+                                pattern_fn = glob(pattern_fn)
+                                if len(pattern_fn) == 0:
+                                    print(f"!!!No pattern found!!! passing for now but look it up")
+                                elif len(pattern_fn) > 1:
+                                    print(f"!!!Multiple patterns found!!! passing for now but look it up")
+                                else:
+                                    all_patterns.append(np.load(pattern_fn[0]))
+
+                                confusion_fn = f"{op.dirname(fn)}/{op.basename(fn).replace('_AUC.npy', '')}_confusions.npy"
+                                confusion_fn = glob(confusion_fn)
+                                if len(confusion_fn) == 0:
+                                    print(f"!!!No confusion found!!! passing for now but look it up")
+                                elif len(confusion_fn) > 1:
+                                    print(f"!!!Multiple confusions found!!! passing for now but look it up")
+                                else:
+                                    all_confusions.append(np.load(confusion_fn[0]))
+
 
                         if not all_AUC: 
                             if args.verbose: print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} for  split query {split_query}")
@@ -238,16 +250,27 @@ else:
                             set_trace()
                         AUC_std = sem(all_AUC, 0, nan_policy='omit')
 
-                        # if not split_query and (gen_cond is None):
-                        #     if len(all_patterns) == 0: 
-                        #         print(f"Not a single pattern found ...") 
-                        #     else:
-                        #         pattern = np.median(all_patterns, 0)
-                        #         if pattern.ndim == 2: # OVR, one additional dimension
-                        #             pattern = np.median(pattern, 0)
-                        #             all_patterns = np.concatenate(all_patterns) # first dim = subjs*classes
-                        
-                        #         pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot
+                        # pattern and confusions
+                        if not split_query and (gen_cond is None):
+                            if len(all_patterns) == 0: 
+                                print(f"Not a single pattern found ...") 
+                            else:
+                                pattern = np.median(all_patterns, 0)
+                                if pattern.ndim == 2: # OVR, one additional dimension
+                                    pattern = np.median(pattern, 0)
+                                    all_patterns = np.concatenate(all_patterns) # first dim = subjs*classes
+                                pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot
+
+                            if len(all_confusions) == 0: 
+                                print(f"Not a single confusion found ...") 
+                            else:
+                                all_confusions = np.array(all_confusions)
+                                confusion = np.nanmean(all_confusions, 0)
+                                # from ipdb import set_trace; set_trace()
+                                # if confusion.ndim == 2: # OVR, one additional dimension
+                                #     confusion = np.median(confusion, 0)
+                                #     all_confusions = np.concatenate(all_confusions) # first dim = subjs*classes
+                                confusion_all_labels[f"{label}_{train_cond}"] = confusion # store values for all labels for multi plot
 
                         # store values for all labels for multi plot
                         # if train_cond=="scenes": # and gen_cond is None and "win" not in label:
@@ -297,6 +320,27 @@ else:
                             is_resplock = False
                         times = np.arange(train_tmin, train_tmax+1e-10, 1./args.sfreq)
 
+                        # ## plotting confusion matrices
+                        if len(all_confusions):
+                            # fig, axes = plt.subplots(len(all_confusions), figsize=(6, len(all_confusions)/2))
+                            # for i_p, patt in enumerate(all_confusions):
+                            #     try:
+                            #         mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
+                            #     except:
+                            #         set_trace()
+                            # plt.savefig(f'{out_fn}_{label}_{train_cond}_confusionS_mag.png')
+                            ## ave confusion
+                            fig, ax = plt.subplots()
+                            # mne.viz.plot_topomap(np.squeeze(np.mean(all_confusions, 0))[mag_idx], mag_info, axes=ax)
+                            for t in t_confusion:
+                                t_idx = np.where(np.isclose(times, t))[0][0]
+                                # from ipdb import set_trace; set_trace()
+                                # t_idx = np.where (times == t)[0][0]
+                                plt.imshow(confusion[t_idx, t_idx], cmap='viridis', origin='lower')
+                                plt.colorbar()
+                                plt.savefig(f'{out_fn}_{label}_{train_cond}_ave_confusion_{t}s.png')
+                                plt.close()
+
                         is_contrast = True if (np.min(np.array(all_AUC)) < 0) or (np.max(np.array(all_AUC)) < .4) else False
 
                         # if gen_cond is None or "win" in label:
@@ -314,7 +358,7 @@ else:
                             # plot_multi_diag(data=sub_ave_AUC, data_std=None, out_fn=f"{out_fn}_subave", train_cond=train_cond, train_tmin=train_tmin, 
                             #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version) #, labels=all_subs_labels)
 
-                            # # same color for each subject
+                            # # same     for each subject
                             # plot_multi_diag(data=all_AUC, data_std=None, out_fn=f"{out_fn}_colsub", train_cond=train_cond, train_tmin=train_tmin, 
                             #                 train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, cmap_groups=all_subs)
                             # # same color for each training condition
