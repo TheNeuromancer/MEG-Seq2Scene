@@ -19,7 +19,7 @@ do
 	c2t=$(add $t 2.4)
 
 	# train on loc
-echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+echo "python 04_decoding_ovr.py -w -s $sub \
 --train-cond 'localizer' --label ImgC \
 --train-query 'Loc_image_colour' --window '$t,$t' \
 --test-cond 'one_object' \
@@ -29,7 +29,7 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-cond 'two_objects' \
 --test-query 'Colour2' --windows '3, 5' "
 
-echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+echo "python 04_decoding_ovr.py -w -s $sub \
 --train-cond 'localizer' --label ImgS \
 --train-query 'Loc_image_shape' --window '$t,$t' \
 --test-cond 'one_object' \
@@ -39,7 +39,7 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-cond 'two_objects' \
 --test-query 'Shape2' --windows '3, 5' "
 
-echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+echo "python 04_decoding_ovr.py -w -s $sub \
 --train-cond 'localizer' --label WordC \
 --train-query 'Loc_colour' --windows '$t,$t' \
 --test-cond 'one_object' \
@@ -49,7 +49,7 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-cond 'two_objects' \
 --test-query 'Colour2' --windows '3, 5' "
 
-echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+echo "python 04_decoding_ovr.py -w -s $sub \
 --train-cond 'localizer' --label WordS \
 --train-query 'Loc_shape' --windows '$t,$t' \
 --test-cond 'one_object' \
@@ -61,7 +61,7 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 
 	# train on one object
 	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Shape \
+-s $sub --label Shape \
 --train-cond 'one_object' \
 --train-query \"Shape1\" --windows '$t,$t' \
 --test-cond 'two_objects' \
@@ -69,7 +69,7 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-cond 'two_objects' \
 --test-query \"Shape2\" --windows '3, 5' "
 
-	echo "python 04_decoding_ovr.py -w --timegen -s $sub --label Colour \
+	echo "python 04_decoding_ovr.py -w -s $sub --label Colour \
 --train-cond 'one_object' \
 --train-query \"Colour1\" --windows '$c1t,$c1t' \
 --test-cond 'two_objects' \
@@ -77,7 +77,7 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-cond 'two_objects' \
 --test-query \"Colour2\" --windows '3, 5' "
 
-echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+echo "python 04_decoding_ovr.py -w -s $sub \
 --train-cond 'one_object' --label Object \
 --train-query \"Shape1+Colour1\" --windows '$c1t,$c1t' \
 --test-cond 'two_objects' \
@@ -92,7 +92,7 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 
 	# train on two objects
 	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Shape1 \
+-s $sub --label Shape1 \
 --train-cond 'two_objects' \
 --train-query \"Shape1\" --windows '$t,$t' \
 --test-cond 'two_objects' \
@@ -101,7 +101,7 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-query \"Shape2\" --windows '3, 5' "
 
 	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Shape2 \
+-s $sub --label Shape2 \
 --train-cond 'two_objects' \
 --train-query \"Shape2\" --windows '$s2t,$s2t' \
 --test-cond 'two_objects' \
@@ -110,7 +110,7 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-query \"Shape2\" --windows '3, 5' "
 
 	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Colour1 \
+-s $sub --label Colour1 \
 --train-cond 'two_objects' \
 --train-query \"Colour1\" --windows '$c1t,$c1t' \
 --test-cond 'two_objects' \
@@ -119,7 +119,7 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-query \"Colour2\" --windows '3, 5' "
 
 	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Colour2 \
+-s $sub --label Colour2 \
 --train-cond 'two_objects' \
 --train-query \"Colour2\" --windows '$c2t,$c2t' \
 --test-cond 'two_objects' \
@@ -128,7 +128,7 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --test-query \"Colour2\" --windows '3, 5' "
 
 echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --label Relation \
+-s $sub --label Relation \
 --train-cond 'two_objects' \
 --train-query \"Relation\" --windows '$rt,$rt' \
 --test-cond 'two_objects' \
@@ -136,14 +136,14 @@ echo "python 04_decoding_ovr.py -w \
 
 		# train on scenes 1st obj
 	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --train-cond 'two_objects' --label All1stObj \
+-s $sub --train-cond 'two_objects' --label All1stObj \
 --train-query \"Shape1+Colour1\" --windows '$c1t,$c1t' \
 --test-cond 'two_objects' \
 --test-query \"Shape1+Colour1\" --windows '3, 5' "
 
 		# train on scenes 2nd obj
 	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --train-cond 'two_objects' --label All2ndObj \
+-s $sub --train-cond 'two_objects' --label All2ndObj \
 --train-query \"Shape2+Colour2\" --windows '$c2t,$c2t' \
 --test-cond 'two_objects' \
 --test-query \"Shape2+Colour2\" --windows '3, 5' "
