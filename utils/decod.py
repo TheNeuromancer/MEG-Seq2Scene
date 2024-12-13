@@ -905,14 +905,14 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                         mean_folds_preds_query = np.mean(all_folds_preds_query, 0)
                         AUC_test_query_split[t, tgen, i_query] = roc_auc_score(y_true=y_test_query, y_score=mean_folds_preds_query, multi_class='ovr')
     else:
-        if n_times_test == n_times_train:
+        if (n_times_test == n_times_train) or (n_times_train == 1): # diagonal generalization needs same time window, or a single trained decoder
             AUC_test_query_split = None
             AUC = np.zeros(n_times_test)
             # accuracy = np.zeros(n_times_test)
             accuracy = None
             all_confusions = np.zeros((n_times_test, n_classes, n_classes))
             all_preds = np.zeros((n_times_test, len(y), n_classes))
-            for t in trange(n_times_test):
+            for t in trange(n_times_train):
                 t_data = X_test[:, :, t]
                 all_folds_preds = []
                 for i_fold in range(n_folds):
@@ -932,6 +932,56 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
     print(f'max test AUC: {AUC.max():.3f}')
 
     return AUC, accuracy, all_preds, all_confusions, AUC_test_query_split
+
+
+def decode_ovr_single_tp(args, clf, epochs, class_queries):
+    """ X: n_trials, n_sensors, n_times = 1
+        y: n_trials
+        class_queries: list of strings, pandas queries to get each class
+    """
+    n_times = len(epochs.times)
+    assert n_times == 1
+    if args.equalize_events:
+        epochs = equalize_events_single_epo(epochs, class_queries)
+    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    X = X.squeeze()
+    classes, counts = np.unique(y, return_counts=True)
+    n_classes = len(classes)
+    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+    for split_indices, split_query in zip(test_split_query_indices, args.split_queries):
+        print(f"Split query {split_query}, {len(split_indices)} trials")
+    if n_classes < 2:
+        raise RuntimeError(f"did not find enough classes for queries {class_queries} and subjects {args.subject}")
+    if args.micro_ave: 
+        print(f"Using extensive trial micro-averaging. Expecting {int(np.sum([c*(c-1)/2 for c in counts]))} trials instead of {counts.sum()}")
+        if args.max_trials: print(f"Also keeping a maximum of {args.max_trials} after micro-averaging")
+
+    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
+    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
+    
+    if args.reduc_dim:
+        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
+    else:
+        pipeline = make_pipeline(RobustScaler(), clf)
+
+    pipeline.fit(X, y)
+    patterns = []
+    for i in range(n_classes):
+        patterns.append(filters2patterns(pipeline[-1].estimators_[i].coef_, X, y))
+    return [pipeline], patterns
+
+
+def filters2patterns(filters, X, y):
+    """ Goes from a decoder's filters to patterns, 
+    ie by multipyling with the data covariance matrix. 
+    """
+    # Computes patterns using Haufe's trick: A = Cov_X . W . Precision_Y
+    inv_Y = 1.0
+    X = X - X.mean(0, keepdims=True)
+    if y.ndim == 2 and y.shape[1] != 1:
+        y = y - y.mean(0, keepdims=True)
+        inv_Y = np.linalg.pinv(np.cov(y.T))
+    return np.cov(X.T).dot(filters.T.dot(inv_Y)).T
 
 
 

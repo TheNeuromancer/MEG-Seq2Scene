@@ -39,8 +39,6 @@ parser.add_argument('--equalize_split_events', action='store_true', default=None
 parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
 parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
 
-parser.add_argument('--train-time', type=float, default=None, help='Time to train on (then does not train on all timepoints)')
-
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
 parser.add_argument('--n_folds', type=int, help='sampling frequency')
@@ -101,9 +99,6 @@ windows = [tuple([float(x) for x in win.split(",")]) for win in args.windows]
 if windows: 
     print(f"Using training time window:: {windows[0]}s")
     epochs = epochs.crop(*windows[0])
-# if args.train_time is not None:
-#     print(f"Keeping a single training time: {args.train_time}s")
-#     epochs = epochs.crop(args.train_time, args.train_time, include_tmax=True)
 train_tmin, train_tmax = epochs.tmin, epochs.tmax
 
 ## GET QUERIES
@@ -113,6 +108,8 @@ n_times = len(epochs.times)
 if args.dummy: # speed everything up for a dummy run
     clf = LinearRegression(n_jobs=-1)
     setattr(args, 'n_folds', 2)
+elif args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
+    clf = LogisticRegression(C=1, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, max_iter=10000)
 else:
     clf_cv = StratifiedShuffleSplit(args.n_folds, random_state=42) # help avoid warnings when there are very few trials in one class
     clf = LogisticRegressionCV(Cs=args.n_folds, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
@@ -120,49 +117,52 @@ else:
     # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
     # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-2, 4, 7)})
 clf = OneVsRestClassifier(clf, n_jobs=1)
-# clf = mne.decoding.LinearModel(clf)
+# clf = mne.decoding.LinearModel(clf) # returns an Error now ... save the patterns "by hand", with filters2patterns
 
 ### DECODE ###
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
-AUC, _, preds, confusions, all_models, AUC_query = decode_ovr(args, clf, epochs, class_queries)
-print(f'Finished training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
+if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
+    all_models, patterns = decode_ovr_single_tp(args, clf, epochs, class_queries)
+    save_results(out_fn, patterns, fn_end="patterns")
+else:
+    AUC, _, preds, confusions, all_models, AUC_query = decode_ovr(args, clf, epochs, class_queries)
+    if args.test_quality: # save explicit score values, then exit
+        quality_dir = f"{op.dirname(op.dirname(op.dirname(out_fn)))}/Quality_test"
+        if not op.exists(quality_dir):
+            os.makedirs(quality_dir)
+        mean_AUC = AUC.mean()
+        max_AUC = AUC.max()
+        min_AUC = AUC.min()
+        std_AUC = AUC.std()
+        quality_fn = f"{op.basename(op.dirname(out_fn))}_{op.basename(out_fn)}_min{min_AUC:.3f}_mean{mean_AUC:.3f}_std{std_AUC:.3f}_max{max_AUC:.3f}.txt"
+        with open(f"{quality_dir}/{quality_fn}", 'w') as f: # also save it the file just in case
+            f.write(f"mean = {mean_AUC:3f}")
+            f.write(f"max = {max_AUC:3f}")
+            f.write(f"min = {min_AUC:3f}")
+            f.write(f"std = {std_AUC:3f}")
+        exit()
 
-if args.test_quality: # save explicit score values, then exit
-    quality_dir = f"{op.dirname(op.dirname(op.dirname(out_fn)))}/Quality_test"
-    if not op.exists(quality_dir):
-        os.makedirs(quality_dir)
-    mean_AUC = AUC.mean()
-    max_AUC = AUC.max()
-    min_AUC = AUC.min()
-    std_AUC = AUC.std()
-    quality_fn = f"{op.basename(op.dirname(out_fn))}_{op.basename(out_fn)}_min{min_AUC:.3f}_mean{mean_AUC:.3f}_std{std_AUC:.3f}_max{max_AUC:.3f}.txt"
-    with open(f"{quality_dir}/{quality_fn}", 'w') as f: # also save it the file just in case
-        f.write(f"mean = {mean_AUC:3f}")
-        f.write(f"max = {max_AUC:3f}")
-        f.write(f"min = {min_AUC:3f}")
-        f.write(f"std = {std_AUC:3f}")
-    exit()
+    ### SAVE RESULTS ###
+    save_results(out_fn, AUC) #, all_models)
+    save_results(out_fn, confusions, fn_end="confusions") #, all_models)
+    save_results(out_fn, preds, fn_end="preds")
+    # save_results(out_fn, accuracy, fn_end="acc")
+    # save_patterns(args, out_fn, all_models) # 
+    # save_best_pattern(out_fn, AUC, all_models) ## Save best model's pattern
+    ### PLOT PERFORMANCE ###
+    plot_perf(args, out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, \
+              test_tmin=train_tmin, test_tmax=train_tmax, version=version)
+    if AUC_query is not None: # save the results for all the splits
+        for i_query, query in enumerate(args.split_queries):
+            if np.all(np.isnan(AUC_query[:,:,i_query])): continue # do not save if we only have nans (happens when the split query doesn't work for this subject, eg flash for the first subjects)
+            query = '_'.join(query.split()) # replace spaces by underscores
+            query = shorten_filename(query) # shorten string by removing unnecessary stuff
+            save_results(out_fn+f'_for_{query}', AUC_query[:,:,i_query])
+            plot_perf(args, out_fn+f'_for_{query}', AUC_query[:,:,i_query], args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
+            # save_preds(args, out_fn+f'_for_{query}', mean_preds_query[:,:,i_query])
 
-### SAVE RESULTS ###
-save_results(out_fn, AUC) #, all_models)
-save_results(out_fn, confusions, fn_end="confusions") #, all_models)
-save_results(out_fn, preds, fn_end="preds")
-# save_results(out_fn, accuracy, fn_end="acc")
-# save_patterns(args, out_fn, all_models)
-# save_best_pattern(out_fn, AUC, all_models) ## Save best model's pattern
-### PLOT PERFORMANCE ###
-plot_perf(args, out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, \
-          test_tmin=train_tmin, test_tmax=train_tmax, version=version)
-if AUC_query is not None: # save the results for all the splits
-    for i_query, query in enumerate(args.split_queries):
-        if np.all(np.isnan(AUC_query[:,:,i_query])): continue # do not save if we only have nans (happens when the split query doesn't work for this subject, eg flash for the first subjects)
-        query = '_'.join(query.split()) # replace spaces by underscores
-        query = shorten_filename(query) # shorten string by removing unnecessary stuff
-        save_results(out_fn+f'_for_{query}', AUC_query[:,:,i_query])
-        plot_perf(args, out_fn+f'_for_{query}', AUC_query[:,:,i_query], args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
-        # save_preds(args, out_fn+f'_for_{query}', mean_preds_query[:,:,i_query])
-
-print(f'Done with saving training plots and data. Elasped time since the script began: {(time.time()-start_time)/60:.2f}min')
+print(f'Done with training. Elasped time since the script began: {(time.time()-start_time)/60:.2f}min')
+# print(f'Done with saving training plots and data. Elasped time since the script began: {(time.time()-start_time)/60:.2f}min')
 
 
 ###########################
@@ -188,8 +188,8 @@ for i_test, (cond, query, test_fn, test_out_fn) in enumerate(zip(args.test_cond,
 
     ### SAVE RESULTS ###
     save_results(test_out_fn, AUC)
-    save_results(out_fn, confusions, fn_end="confusions") #, all_models)
-    save_results(out_fn, preds, fn_end="preds")
+    save_results(test_out_fn, confusions, fn_end="confusions") #, all_models)
+    save_results(test_out_fn, preds, fn_end="preds")
     # save_results(test_out_fn, accuracy, fn_end="acc")
     ### PLOT PERFORMANCE ###
     plot_perf(args, test_out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, \

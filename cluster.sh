@@ -15,7 +15,7 @@ if [ -z "$1" ]; then
 	exit
 fi
 
-max_running_jobs=100 # max nb of jobs running at the same time
+max_running_jobs=200 # max nb of jobs running at the same time
 
 # load commands from file
 IFS=$'\r\n' GLOBIGNORE='*' command eval  'job_array=($(cat $1))'
@@ -43,7 +43,7 @@ do
 cat <<EOT >> $file_sbatch
 #!/bin/bash
 #SBATCH --job-name=$i
-#SBATCH --time=02:00:00
+#SBATCH --time=03:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=16G
 #SBATCH --partition=shared-cpu 
@@ -58,6 +58,6 @@ EOT
 
 sbatch $file_sbatch
 
-sleep 1 # time to let the job start, with margin
+sleep .1 # time to let the job start, with margin
 
 done
