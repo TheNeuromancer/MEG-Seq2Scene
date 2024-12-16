@@ -134,19 +134,19 @@ echo "python 04_decoding_ovr.py -w \
 --test-cond 'two_objects' \
 --test-query \"Relation\" --windows '3, 5' "
 
-		# train on scenes 1st obj
-	echo "python 04_decoding_ovr.py -w \
--s $sub --train-cond 'two_objects' --label All1stObj \
---train-query \"Shape1+Colour1\" --windows '$c1t,$c1t' \
---test-cond 'two_objects' \
---test-query \"Shape1+Colour1\" --windows '3, 5' "
+# 		# train on scenes 1st obj
+# 	echo "python 04_decoding_ovr.py -w \
+# -s $sub --train-cond 'two_objects' --label All1stObj \
+# --train-query \"Shape1+Colour1\" --windows '$c1t,$c1t' \
+# --test-cond 'two_objects' \
+# --test-query \"Shape1+Colour1\" --windows '3, 5' "
 
-		# train on scenes 2nd obj
-	echo "python 04_decoding_ovr.py -w \
--s $sub --train-cond 'two_objects' --label All2ndObj \
---train-query \"Shape2+Colour2\" --windows '$c2t,$c2t' \
---test-cond 'two_objects' \
---test-query \"Shape2+Colour2\" --windows '3, 5' "
+# 		# train on scenes 2nd obj
+# 	echo "python 04_decoding_ovr.py -w \
+# -s $sub --train-cond 'two_objects' --label All2ndObj \
+# --train-query \"Shape2+Colour2\" --windows '$c2t,$c2t' \
+# --test-cond 'two_objects' \
+# --test-query \"Shape2+Colour2\" --windows '3, 5' "
 
 done
 done # this ends the subejct loop 

@@ -97,7 +97,7 @@ else:
     epochs = load_data(args, train_fn)[0]
 windows = [tuple([float(x) for x in win.split(",")]) for win in args.windows]
 if windows: 
-    print(f"Using training time window:: {windows[0]}s")
+    print(f"Using training time window: {windows[0]}s")
     epochs = epochs.crop(*windows[0])
 train_tmin, train_tmax = epochs.tmin, epochs.tmax
 
@@ -108,8 +108,8 @@ n_times = len(epochs.times)
 if args.dummy: # speed everything up for a dummy run
     clf = LinearRegression(n_jobs=-1)
     setattr(args, 'n_folds', 2)
-elif args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
-    clf = LogisticRegression(C=1, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, max_iter=10000)
+# elif args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
+#     clf = LogisticRegression(C=1, solver='liblinear', class_weight='balanced', multi_class='auto', max_iter=10000) # , n_jobs=-1->no effect when solver is linlinear
 else:
     clf_cv = StratifiedShuffleSplit(args.n_folds, random_state=42) # help avoid warnings when there are very few trials in one class
     clf = LogisticRegressionCV(Cs=args.n_folds, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
@@ -178,7 +178,7 @@ for i_test, (cond, query, test_fn, test_out_fn) in enumerate(zip(args.test_cond,
     ### LOAD EPOCHS ###
     epochs = load_data(args, test_fn)[0]
     if windows: 
-        print(f"Using test time window:: {windows[0]}s")
+        print(f"Using test time window: {windows[i_test+1]}s")
         epochs = epochs.crop(*windows[i_test+1]) # first window is for training
     test_tmin, test_tmax = epochs.tmin, epochs.tmax
 

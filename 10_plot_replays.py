@@ -110,6 +110,7 @@ dummy_labbin = LabelBinarizer()
 ## All possible training time (depends on the property that is decoded).
 train_times = [".17", ".2", ".3", ".4", ".5", ".6", ".8"] + ["0.77", "0.8", "0.9", "1.0", "1.1", "1.2", "1.4"] + ["1.37", "1.4", "1.5", "1.6", "1.7", "1.8", "2.0"]
 train_times = train_times + ["1.97", "2.0", "2.1", "2.2", "2.3", "2.4", "2.6"] + ["2.57", "2.6", "2.7", "2.8", "2.9", "3.0", "3.2"]
+# train_times = ["1.37", "1.5", "1.6", "1.7", "1.8"]
 ## Generalization window for objects and scenes
 gen_windows = [(3, 5)] # (1.5, 2.2), 
 
@@ -294,57 +295,6 @@ for label in all_labels:
 
 from ipdb import set_trace; set_trace()
 df = pd.concat(all_df)
-
-
-## all basic decoders diagonals on the same plot
-tmin, tmax = tmin_tmax_dict["scenes"]
-times = np.arange(tmin, tmax+1e-10, 1./args.sfreq)
-word_onsets, image_onset = get_onsets("scenes", version=version) # , resplock=resplock
-
-# for label, pattern in pattern_all_labels.items():
-#     fig = mne.viz.plot_topomap(pattern[mag_idx], mag_info, contours=0)
-#     plt.savefig(f'{out_dir}/{label}_pattern_mag.png')
-#     plt.close('all')
-#     fig = mne.viz.plot_topomap(pattern[grad_idx], grad_info, contours=0)
-#     plt.savefig(f'{out_dir}/{label}_pattern_grad.png')
-#     plt.close('all')
-# # from ipdb import set_trace; set_trace()   
-
-print(diag_preds_all_labels.keys())
-
-# only basics
-labels = ['S1_scenes_None_', 'C1_scenes_None_', 'R_scenes_None_', 'S2_scenes_None_', 'C2_scenes_None_']
-joyplot_with_stats(data_dict=diag_preds_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_basic.png', word_onsets=word_onsets, image_onset=image_onset)
-labels = ['Flash_scenes_None_', 'Matching_scenes_None_', 'Button_scenes_None_', 'Perf_scenes_None_'] # 'SameObj_scenes_None_', 
-joyplot_with_stats(data_dict=diag_preds_all_labels, labels=labels, times=times, y_inc=.1, out_fn=f'{out_dir}/scenes_joyplot_basic2.png', word_onsets=word_onsets, image_onset=image_onset)
-
-# # Shape gen
-# labels = ['S1_scenes_None_', 'S2_scenes_None_', 'S1_scenes_scenes_', 'S2_scenes_scenes_']
-# joyplot_with_stats(data_dict=diag_preds_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_shape_gen.png', word_onsets=word_onsets, image_onset=image_onset)
-
-# extended
-labels = ['S1_scenes_None_', 'C1_scenes_None_', 'R_scenes_None_', 'S2_scenes_None_', 'C2_scenes_None_', 'Flash_scenes_None_', 'Matching_scenes_None_', 'Button_scenes_None_', 'Perf_scenes_None_']
-joyplot_with_stats(data_dict=diag_preds_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_extended.png', word_onsets=word_onsets, image_onset=image_onset)
-
-
-
-labels = ['PropMismatch_scenes_None_', 'BindMismatch_scenes_None_', 'RelMismatch_scenes_None_']
-joyplot_with_stats(data_dict=diag_preds_all_labels, labels=labels, tmin=4.5, times=times, out_fn=f'{out_dir}/scenes_joyplot_mismatches.png', word_onsets=word_onsets, image_onset=image_onset)
-
-
-
-# object properties
-tmin, tmax = tmin_tmax_dict["obj"]
-times = np.arange(tmin, tmax+1e-10, 1./args.sfreq)
-word_onsets, image_onset = get_onsets("obj", version=version)
-labels = ['S_obj_None_', 'C_obj_None_'] #, 'CMismatch_obj_None_', 'SMismatch_obj_None_'] # ] #, 'AllObj_obj_None_',
-joyplot_with_stats(data_dict=diag_preds_all_labels, labels=labels, tmax=4, times=times, out_fn=f'{out_dir}/scenes_joyplot_obj_props.png', word_onsets=word_onsets, image_onset=image_onset)
-labels = ['SMismatch_obj_None_', 'CMismatch_obj_None_']
-joyplot_with_stats(data_dict=diag_preds_all_labels, labels=labels, tmin=2, tmax=4, times=times, out_fn=f'{out_dir}/scenes_joyplot_obj_mismatches.png', word_onsets=word_onsets, image_onset=image_onset)
-
-# object properties gen to scenes
-labels = ['S_0_obj_scenes_', 'S_1_obj_scenes_', 'C_0_obj_scenes_', 'C_1_obj_scenes_']
-joyplot_with_stats(data_dict=diag_preds_all_labels, labels=labels, times=times, out_fn=f'{out_dir}/scenes_joyplot_obj_gen.png', word_onsets=word_onsets, image_onset=image_onset)
-
+df.to_csv(f"{out_dir}/all_preds_data.csv", index=False)
 
 print(f"ALL FINISHED, elpased time: {(time.time()-start_time)/60:.2f}min")

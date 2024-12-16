@@ -912,19 +912,20 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
             accuracy = None
             all_confusions = np.zeros((n_times_test, n_classes, n_classes))
             all_preds = np.zeros((n_times_test, len(y), n_classes))
-            for t in trange(n_times_train):
+            for t in trange(n_times_test):
                 t_data = X_test[:, :, t]
+                t_model = 0 if n_times_train == 1 else t # in case of single tp 
                 all_folds_preds = []
                 for i_fold in range(n_folds):
-                    pipeline = all_models[t][i_fold]
+                    pipeline = all_models[t_model][i_fold]
                     preds = predict(pipeline, t_data, multiclass=True)
                     y_pred = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
                     all_folds_preds.append(y_pred)
                 mean_fold_pred = np.nanmean(all_folds_preds, 0)
-                if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
-                AUC[t] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
                 all_confusions[t] += confusion_matrix(y_test, mean_fold_pred.argmax(1), normalize='all')
                 all_preds[t] = mean_fold_pred
+                if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
+                AUC[t] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
                 # accuracy[t] = accuracy_score(y, mean_fold_pred.argmax(1)) # dim error when n_classes = 2
         else:
             raise NotImplementedError("Diagonal generalization is ill-defined for different n_times_train and n_times_test")
@@ -965,10 +966,20 @@ def decode_ovr_single_tp(args, clf, epochs, class_queries):
         pipeline = make_pipeline(RobustScaler(), clf)
 
     pipeline.fit(X, y)
-    patterns = []
-    for i in range(n_classes):
-        patterns.append(filters2patterns(pipeline[-1].estimators_[i].coef_, X, y))
-    return [pipeline], patterns
+    
+    patterns = [] # final shape: n_classes * n_sensors
+    if n_classes > 2:
+        for i in range(n_classes):
+            patterns.append(filters2patterns(pipeline[-1].estimators_[i].coef_, X, y))
+    else: # 2 classes, not a true OVR then there is a single pattern
+        patterns.append(filters2patterns(pipeline[-1].estimators_[0].coef_, X, y))
+    patterns = np.array(patterns).squeeze()
+
+    # put the pipeline object in an array without unpacking them
+    all_models_array = np.empty((1, 1), dtype=object)
+    all_models_array[:] = [[pipeline]] # n_times=1, n_folds=1
+
+    return all_models_array, patterns
 
 
 def filters2patterns(filters, X, y):
@@ -982,7 +993,6 @@ def filters2patterns(filters, X, y):
         y = y - y.mean(0, keepdims=True)
         inv_Y = np.linalg.pinv(np.cov(y.T))
     return np.cov(X.T).dot(filters.T.dot(inv_Y)).T
-
 
 
 def decode_single_ch_ovr(args, clf, epochs, class_queries):

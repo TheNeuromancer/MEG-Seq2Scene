@@ -164,7 +164,7 @@ Saving preds works. we save only the diagonal (within-time) predictions, but for
 v4: trying single time point training and gen to specific window. 
 v5: same with no timegen (no need for replays)
 
-TODO:
+DONE 
 single decoder (no kfold)
 find why the plotting script does not find all the timepoints
 save patterns with:
@@ -175,5 +175,9 @@ save patterns with:
             y = y - y.mean(0, keepdims=True)
             inv_Y = np.linalg.pinv(np.cov(y.T))
         self.patterns_ = np.cov(X.T).dot(self.filters_.T.dot(inv_Y)).T
+
+TODO:
 Do the null trial thing. 
 find optimal C (or do a crossval?)
+
+v6: problems solved, LRCV, just no null trials. Saving patterns and preds correctly 
