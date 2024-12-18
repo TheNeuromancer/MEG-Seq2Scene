@@ -11,7 +11,7 @@ do
 ## addition function
 add() { n="$@"; bc <<< "${n// /+}"; }
 
-for t in .17 .2 .3 .4 .5 .6 .8
+for t in 0.17 0.2 0.3 0.4 0.5 0.6 0.8
 do
 	c1t=$(add $t .6)
 	rt=$(add $t 1.2)

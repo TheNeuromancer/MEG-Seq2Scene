@@ -60,9 +60,10 @@ print('\noutput files will be in: ' + out_dir)
 create_folder(out_dir, args.overwrite)
 
 # list all preds.npy files in the directory
-all_fns = natsorted(glob(in_dir + f'/*patterns.npy'))
+all_fns = natsorted(glob(in_dir + f'/*patterns_diag.npy'))
 if not all_fns:
     raise RuntimeError(f"Did not find any patterns files in {in_dir}/*patterns.npy ... Did you pass the right config?")
+print(all_fns)
 
 # keep the first 8 subjects for the 1st version, all the remaining for v2
 if args.subject == "v1":
@@ -83,8 +84,8 @@ elif int(args.subject[0:2]) > 8:
 else:
     qwe
 
-mag_idx, grad_idx = [pickle.load(open(f"{args.root_path}/Data/{s}_indices.p", "rb")) for s in ['mag', 'grad']]
-mag_info, grad_info = [pickle.load(open(f"{args.root_path}/Data/{s}_info.p", "rb")) for s in ['mag', 'grad']]
+mag_idx, grad_idx, all_idx = [pickle.load(open(f"{args.root_path}/Data/{s}_indices.p", "rb")) for s in ['mag', 'grad', 'all']]
+mag_info, grad_info, all_info = [pickle.load(open(f"{args.root_path}/Data/{s}_info.p", "rb")) for s in ['mag', 'grad', 'all']]
 
 ## All possible training time (depends on the property that is decoded).
 train_times = [".17", ".2", ".3", ".4", ".5", ".6", ".8"] + ["0.77", "0.8", "0.9", "1.0", "1.1", "1.2", "1.4"] + ["1.37", "1.4", "1.5", "1.6", "1.7", "1.8", "2.0"]
@@ -108,23 +109,25 @@ for label in all_labels:
             for fn in all_fns:
                 if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
                 if f"cond-{train_cond}-" not in fn: continue
-                if "tested_on" in fn: continue # ensure we don't have generalization results (shouldn't be usefull after the preceeding line)
+                if "tested_on" in fn: continue # ensure we don't have generalization results (shouldn't be usefull after the following line)
+                if train_time not in fn:
+                    continue
                 if f"#{train_time},{train_time}#{train_time},{train_time}#" not in fn:
                     continue
 
                 if args.verbose: print('loading file ', fn)
 
-            # load corresponding pattern and confusion matrix (for direct training only)
+                # load corresponding pattern and confusion matrix (for direct training only)
                 # pattern_fn = f"{op.dirname(fn)}/{'_'.join(op.basename(fn).split('_')[0:2])}_best_pattern_t*.npy"
-                pattern_fn = f"{op.dirname(fn)}/{op.basename(fn).replace('_preds.npy', '')}_best_pattern_t*.npy"
-                pattern_fn = glob(pattern_fn)
-                if len(pattern_fn) == 0:
-                    if args.verbose: print(f"!!!No pattern found!!! passing for now but look it up")
-                elif len(pattern_fn) > 1:
-                    if args.verbose: print(f"!!!Multiple patterns found!!! passing for now but look it up")
-                else:
-                    pattern = np.load(pattern_fn[0]).squeeze()
-                    all_patterns.append(pattern)
+                # pattern_fn = f"{op.dirname(fn)}/{op.basename(fn).replace('_preds.npy', '')}_best_pattern_t*.npy"
+                # pattern_fn = glob(pattern_fn)
+                # if len(pattern_fn) == 0:
+                #     if args.verbose: print(f"!!!No pattern found!!! passing for now but look it up")
+                # elif len(pattern_fn) > 1:
+                #     if args.verbose: print(f"!!!Multiple patterns found!!! passing for now but look it up")
+                # else:
+                pattern = np.load(fn).squeeze()
+                all_patterns.append(pattern)
 
                 # confusion_fn = f"{op.dirname(fn)}/{op.basename(fn).replace('_preds.npy', '')}_confusions.npy"
                 # confusion_fn = glob(confusion_fn)
@@ -144,6 +147,7 @@ for label in all_labels:
             else:
                 pattern = np.median(all_patterns, 0)
                 if pattern.ndim == 2: # OVR, one additional dimension
+                    from ipdb import set_trace; set_trace()
                     pattern = np.median(pattern, 0)
                     all_patterns = np.concatenate(all_patterns) # first dim = subjs*classes
                 # pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot

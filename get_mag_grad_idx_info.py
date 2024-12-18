@@ -2,6 +2,7 @@ import mne
 import pickle
 
 raw = mne.io.Raw("~/scratch/s2s/Data/orig/19/run4_1obj.fif", preload=True, verbose='error', allow_maxshield=True)
+raw = raw.pick_types(meg=True) # remove misc channels
 
 mag_int = 3022 # mag has this number in the info
 grad_into = 3012
