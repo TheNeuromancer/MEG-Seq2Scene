@@ -5,7 +5,7 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "6"
+    version: str = "7"
     root_path: str = "/home/users/d/desborde/scratch/s2s"
     epochs_dir: str = "Epochs_100hz_nofilter"
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
@@ -27,6 +27,7 @@ class Config:
     n_folds: int = 5 # number of splits
     crossval: str = "kfold" # cross-validation scheme. "kfold" or "sufflesplit"
     reduc_dim: float = 0 # dimensionality reduction
+    penalty: str = "l1" # penalty for the logistic regression
     ## Decoding window parameters
     n_folds_win: int = 10 # number of shuffle splits for the window decoding analysis 
     crossval_win: str = "kfold" # cross-validation scheme for the window decoding analysis 

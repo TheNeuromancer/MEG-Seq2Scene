@@ -181,3 +181,4 @@ Do the null trial thing.
 find optimal C (or do a crossval?)
 
 v6: problems solved, LRCV, just no null trials. Saving patterns and preds correctly 
+v7: correct naming for outputs and also changing to l1 regularization

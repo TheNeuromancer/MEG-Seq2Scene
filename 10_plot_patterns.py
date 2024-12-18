@@ -60,7 +60,7 @@ print('\noutput files will be in: ' + out_dir)
 create_folder(out_dir, args.overwrite)
 
 # list all preds.npy files in the directory
-all_fns = natsorted(glob(in_dir + f'/*patterns_diag.npy'))
+all_fns = natsorted(glob(in_dir + f'/*patterns.npy'))
 if not all_fns:
     raise RuntimeError(f"Did not find any patterns files in {in_dir}/*patterns.npy ... Did you pass the right config?")
 print(all_fns)
@@ -87,6 +87,22 @@ else:
 mag_idx, grad_idx, all_idx = [pickle.load(open(f"{args.root_path}/Data/{s}_indices.p", "rb")) for s in ['mag', 'grad', 'all']]
 mag_info, grad_info, all_info = [pickle.load(open(f"{args.root_path}/Data/{s}_info.p", "rb")) for s in ['mag', 'grad', 'all']]
 
+
+def plot_patterns(pattern, out_fn, mag_info, mag_idx, grad_info, grad_idx):
+    fig, ax = plt.subplots()
+    mne.viz.plot_topomap(pattern[mag_idx], mag_info, axes=ax, contours=0)
+    plt.savefig(f'{out_fn}_pattern_mag.png')
+    plt.close()
+    fig, ax = plt.subplots()
+    mne.viz.plot_topomap(pattern[grad_idx], grad_info, axes=ax, contours=0)
+    plt.savefig(f'{out_fn}_pattern_grad.png')
+    plt.close()
+
+    # vmin, vcenter, vmax = np.min(pattern), 0, np.max(pattern)
+    # plot_single_ch_perf(pattern[mag_idx], mag_info, f"{out_fn}_pattern_mag_.png", cmap_name='bwr', vmin=vmin, vcenter=vcenter, vmax=vmax, score_label='Weight', title=None, ticksize=14)
+    # plot_single_ch_perf(pattern[grad_idx], grad_info, f"{out_fn}_pattern_grad_.png", cmap_name='bwr', vmin=vmin, vcenter=vcenter, vmax=vmax, score_label='Weight', title=None, ticksize=14)
+
+
 ## All possible training time (depends on the property that is decoded).
 train_times = [".17", ".2", ".3", ".4", ".5", ".6", ".8"] + ["0.77", "0.8", "0.9", "1.0", "1.1", "1.2", "1.4"] + ["1.37", "1.4", "1.5", "1.6", "1.7", "1.8", "2.0"]
 train_times = train_times + ["1.97", "2.0", "2.1", "2.2", "2.3", "2.4", "2.6"] + ["2.57", "2.6", "2.7", "2.8", "2.9", "3.0", "3.2"]
@@ -105,7 +121,8 @@ for label in all_labels:
         gen_cond = None
         for train_time in train_times:
             if args.verbose: print(train_time)
-            all_patterns, all_confusions = [], []
+            all_patterns = []
+            future_df = {}
             for fn in all_fns:
                 if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
                 if f"cond-{train_cond}-" not in fn: continue
@@ -126,92 +143,35 @@ for label in all_labels:
                 # elif len(pattern_fn) > 1:
                 #     if args.verbose: print(f"!!!Multiple patterns found!!! passing for now but look it up")
                 # else:
-                pattern = np.load(fn).squeeze()
+                pattern = np.load(fn) # .squeeze()
                 all_patterns.append(pattern)
+                
+                future_df['pattern'] = [pattern]
+                future_df['subject'] = [op.basename(op.dirname(fn))[0:2]]
+                future_df['train_cond'] = [train_cond]
+                future_df['train_time'] = [train_time]
+                future_df['label'] = [label]
+                all_df.append(pd.DataFrame(future_df))
 
-                # confusion_fn = f"{op.dirname(fn)}/{op.basename(fn).replace('_preds.npy', '')}_confusions.npy"
-                # confusion_fn = glob(confusion_fn)
-                # if len(confusion_fn) == 0:
-                #     if args.verbose: print(f"!!!No confusion found!!! passing for now but look it up")
-                # elif len(confusion_fn) > 1:
-                #     if args.verbose: print(f"!!!Multiple confusions found!!! passing for now but look it up")
-                # else:
-                #     confusion = np.load(confusion_fn[0]).squeeze()
-                #     all_confusions.append(confusion)
 
             n_subs = len(all_patterns)
+            if not n_subs: 
+                if args.verbose: print(f"Not a single pattern found for {label} trained on {train_cond} at {train_time} ...") 
+                continue
+            else:
+                median_pattern = np.median(all_patterns, 0) # median over subjects
             out_fn = f"{out_dir}/{label}_trained_on_{train_cond}_at_{train_time}_{n_subs}ave"
 
-            if not n_subs: 
-                print(f"Not a single pattern found ...") 
+            if median_pattern.ndim == 2: # OVR, one additional dimension n_classes  * n_sensors
+                for patt in median_pattern:
+                    plot_patterns(patt, out_fn, mag_info, mag_idx, grad_info, grad_idx)
             else:
-                pattern = np.median(all_patterns, 0)
-                if pattern.ndim == 2: # OVR, one additional dimension
-                    from ipdb import set_trace; set_trace()
-                    pattern = np.median(pattern, 0)
-                    all_patterns = np.concatenate(all_patterns) # first dim = subjs*classes
-                # pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot
-
-                # if len(all_confusions) == 0: 
-                #     print(f"Not a single confusion found ...") 
-                # else:
-                #     all_confusions = np.array(all_confusions)
-                #     mean_confusion = np.nanmean(all_confusions, 0)
-                #     median_confusion = np.median(all_confusions, 0)
-                #     # if confusion.ndim == 2: # OVR, one additional dimension
-                #     #     confusion = np.median(confusion, 0)
-                #     #     all_confusions = np.concatenate(all_confusions) # first dim = subjs*classes
-                #     # confusion_all_labels[f"{label}_{train_cond}"] = mean_confusion # store values for all labels for multi plot
-
-                  # ## plotting confusion matrices
-                  #   # fig, axes = plt.subplots(len(all_confusions), figsize=(6, len(all_confusions)/2))
-                  #   # for i_p, patt in enumerate(all_confusions):
-                  #   #     try:
-                  #   #         mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
-                  #   #     except:
-                  #   #         set_trace()
-                  #   # plt.savefig(f'{out_fn}_{label}_{train_cond}_confusionS_mag.png')
-                  #   ## ave confusion
-                  #   # mne.viz.plot_topomap(np.squeeze(np.mean(all_confusions, 0))[mag_idx], mag_info, axes=ax)
-                  #   # from ipdb import set_trace; set_trace()
-                  #   labels = shapes if "S" in label else colors if "C" in label else ['w1', 'w2', 'w3']
-                  #   fig, ax = plt.subplots()
-                  #   plt.imshow(mean_confusion, cmap='viridis', origin='lower', vmin=0.1, vmax=.15)
-                  #   ax.set(xticks=[0,1,2], xticklabels=labels, yticks=[0,1,2], yticklabels=labels)
-                  #   plt.colorbar()
-                  #   plt.savefig(f'{out_fn}_mean_confusion_{train_time}s.png')
-                  #   plt.close()
-                  #   fig, ax = plt.subplots()
-                  #   plt.imshow(median_confusion, cmap='viridis', origin='lower', vmin=0.1, vmax=.15)
-                  #   ax.set(xticks=[0,1,2], xticklabels=labels, yticks=[0,1,2], yticklabels=labels)
-                  #   plt.colorbar()
-                  #   plt.savefig(f'{out_fn}_median_confusion_{train_time}s.png')
-                  #   plt.close()
-
-
-            # store values for all labels for multi plot
-
-            ## plotting all patterns
-            if len(all_patterns):
-                # fig, axes = plt.subplots(len(all_patterns), figsize=(6, len(all_patterns)/2))
-                # for i_p, patt in enumerate(all_patterns):
-                #     try:
-                #         mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
-                #     except:
-                #         set_trace()
-                # plt.savefig(f'{out_fn}_{label}_{train_cond}_patternS_mag.png')
-                ## ave pattern
-                fig, ax = plt.subplots()
-                mne.viz.plot_topomap(np.squeeze(np.mean(all_patterns, 0))[mag_idx], mag_info, axes=ax)
-                plt.savefig(f'{out_fn}_pattern_mag.png')
-                fig, ax = plt.subplots()
-                mne.viz.plot_topomap(np.squeeze(np.mean(all_patterns, 0))[grad_idx], grad_info, axes=ax)
-                plt.savefig(f'{out_fn}_pattern_grad.png')
-                plt.close()
+                plot_patterns(median_pattern, out_fn, mag_info, mag_idx, grad_info, grad_idx)
 
             if args.verbose: print(f"Finished {label} trained on {train_cond} at {train_time}\n")
             plt.close('all')
 
+                # pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot
 
     # print(f"saving all data to {preds_fn} and {diags_fn}")
     # pickle.dump(preds_all_labels, open(preds_fn, "wb"))
@@ -221,6 +181,6 @@ for label in all_labels:
 
 from ipdb import set_trace; set_trace()
 df = pd.concat(all_df)
-df.to_csv(f"{out_dir}/all_preds_data.csv", index=False)
+df.to_csv(f"{out_dir}/all_patterns.csv", index=False)
 
 print(f"ALL FINISHED, elpased time: {(time.time()-start_time)/60:.2f}min")
