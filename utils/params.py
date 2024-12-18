@@ -29,3 +29,5 @@ colors = ["vert", "bleu", "rouge"]
 shapes = ["triangle", "cercle", "carre"]
 
 t_confusion = [0.2, .25, .3, .35, 0.4, .45, .55, 0.6, .7, 0.8]
+
+feat2feats = {"Shape": ['carre', 'cercle', 'triangle', 'ca', 'cl', 'tr'], "Colour": ['rouge', 'bleu', 'vert', 'vr', 'bl', 'rg']}

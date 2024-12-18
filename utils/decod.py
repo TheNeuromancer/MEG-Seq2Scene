@@ -922,6 +922,9 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                     y_pred = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
                     all_folds_preds.append(y_pred)
                 mean_fold_pred = np.nanmean(all_folds_preds, 0)
+                if np.sum(np.isnan(mean_fold_pred)) > 0:
+                    print(f"nan in preds (averaged over folds, or from the single clf if single tp decoding). Replaceing nans with equal probabilities, but it's weird.")
+                    mean_fold_pred[np.isnan(mean_fold_pred)] = 1/n_classes
                 all_confusions[t] += confusion_matrix(y_test, mean_fold_pred.argmax(1), normalize='all')
                 all_preds[t] = mean_fold_pred
                 if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method

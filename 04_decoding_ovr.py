@@ -112,7 +112,7 @@ if args.dummy: # speed everything up for a dummy run
 #     clf = LogisticRegression(C=1, solver='liblinear', class_weight='balanced', multi_class='auto', max_iter=10000) # , n_jobs=-1->no effect when solver is linlinear
 else:
     clf_cv = StratifiedShuffleSplit(args.n_folds, random_state=42) # help avoid warnings when there are very few trials in one class
-    clf = LogisticRegressionCV(Cs=args.n_folds, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
+    clf = LogisticRegressionCV(Cs=args.n_folds, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=100000)
     # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=clf_cv, class_weight='balanced')
     # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
     # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-2, 4, 7)})
@@ -123,7 +123,7 @@ clf = OneVsRestClassifier(clf, n_jobs=1)
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
 if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
     all_models, patterns = decode_ovr_single_tp(args, clf, epochs, class_queries)
-    save_results(out_fn, patterns, fn_end="patterns")
+    save_results(out_fn, patterns, fn_end="patterns", time=False)
 else:
     AUC, _, preds, confusions, all_models, AUC_query = decode_ovr(args, clf, epochs, class_queries)
     if args.test_quality: # save explicit score values, then exit

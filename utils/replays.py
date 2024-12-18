@@ -1,3 +1,16 @@
+import mne
+import os.path as op
+import os
+from glob import glob
+import pandas as pd
+import numpy as np
+import pickle
+from scipy.stats import sem, pearsonr, zscore
+from sklearn.preprocessing import scale, MinMaxScaler
+from sklearn.linear_model import LinearRegression
+# from scipy.linalg import toeplitz
+from tqdm import tqdm
+
 
 def transition_matrix(sequence, n_states):
     # Initialize an n_states x n_states transition matrix with zeros
@@ -42,98 +55,12 @@ def sequenceness_Crosscorr(rd, T, lag=1):
     return sf
 
 
-def compute_empirical_transition_matrix(time_series, lag):
-    """
-    Compute the empirical transition matrix for stimulus activations.
-
-    Parameters:
-    - time_series: np.ndarray
-        A 2D array of shape (n_samples, n_stimuli), where each column represents 
-        the reactivation time series for a stimulus.
-    - lag: int
-        The time lag (Δt) for which the transition matrix is computed.
-
-    Returns:
-    - transition_matrix: np.ndarray
-        A 6x6 matrix of regression coefficients describing transitions between stimuli.
-    """
-    n_samples, n_stimuli = time_series.shape
-
-    # Initialize the transition matrix
-    transition_matrix = np.zeros((n_stimuli, n_stimuli))
-
-    # Iterate over each stimulus (as the target)
-    for target_stimulus in range(n_stimuli):
-        # Define the target variable (Y_i)
-        target = time_series[lag:, target_stimulus]  # Target variable starts from lag
-
-        # Define the predictors (lagged time series of all stimuli)
-        predictors = np.zeros((n_samples - lag, n_stimuli))
-        for stimulus in range(n_stimuli):
-            predictors[:, stimulus] = time_series[:n_samples - lag, stimulus]
-
-        # Fit the linear model
-        model = LinearRegression(fit_intercept=True)
-        model.fit(predictors, target)
-
-        # Store the coefficients in the transition matrix
-        transition_matrix[target_stimulus, :] = model.coef_
-
-    return transition_matrix
-
-
-# def compute_empirical_transition_matrix_all_trials(data, lag):
-#     """
-#     Compute empirical transition matrix across multiple trials.
-    
-#     Parameters:
-#     - data: list of np.ndarray
-#         A list where each element is an array of shape (n_times, n_states), representing 
-#         time series data for each trial.
-#     - lag: int
-#         Time lag for the transition matrix.
-    
-#     Returns:
-#     - transition_matrix: np.ndarray
-#         The estimated transition matrix of shape (n_states, n_states).
-#     """
-#     import numpy as np
-#     from sklearn.linear_model import LinearRegression
-
-#     n_states = data[0].shape[1]
-#     n_trials = len(data)
-
-#     # Prepare design matrix and target vector
-#     X = []
-#     Y = []
-
-#     for trial in data:
-#         n_times = trial.shape[0]
-
-#         # Generate lagged predictors and targets for this trial
-#         if n_times > lag:
-#             for t in range(lag, n_times):
-#                 X.append(trial[t - lag])
-#                 Y.append(trial[t])
-
-#     # Convert to arrays
-#     X = np.vstack(X)  # Shape: (total_samples, n_states)
-#     Y = np.vstack(Y)  # Shape: (total_samples, n_states)
-
-#     # Fit a separate linear model for each stimulus
-#     transition_matrix = np.zeros((n_states, n_states))
-
-#     for i in range(n_states):
-#         model = LinearRegression(fit_intercept=True)  # No intercept for transition matrix
-#         model.fit(X, Y[:, i])  # Predict stimulus i from lagged predictors
-#         transition_matrix[:, i] = model.coef_
-
-#     return transition_matrix
-
-
-def compute_empirical_transition_matrix_all_trials(data, lag=1):
+def compute_TRM_all_trials_vectorized(data, lag):
     """
     Compute empirical transition matrix for multiple trials at a given time lag.
+    Parallelized implementation (single linear regression for all states with the matrix formulation)
+    Much faster than the loopy version and numerically very close (but not identical).
+    Faster but less sensitive than the trial-by-trial version.
 
     Parameters:
     - data: list of np.ndarray
@@ -171,6 +98,122 @@ def compute_empirical_transition_matrix_all_trials(data, lag=1):
     b = np.linalg.pinv(X_trimmed.T @ X_trimmed) @ (X_trimmed.T @ X_dt)
 
     return b
+
+
+def compute_TRM_single_trial(data, lag):
+    """
+    Compute empirical transition matrix for a single trial at a given time lag.
+    Uses the vectorized implementation for a single trial.
+    A Bit slower but more sensitive than the all trials version.
+    Best so far. USE THIS ONE.
+
+    Parameters:
+    - data: np.ndarray
+        Trial matrix of shape (n_samples, n_states).
+    - lag: int
+        Time lag for the transition matrix.
+    Returns:
+    - b: np.ndarray
+        Empirical transition matrix of shape (n_states, n_states).
+    """
+    n_samples, n_states = data.shape
+
+    # Exclude invalid rows at the start and end of the trial
+    valid_indices = np.arange(lag, n_samples - lag)
+
+    # Create valid X and shifted X_dt
+    X_trimmed = data[valid_indices, :]
+    X_dt = data[valid_indices + lag, :]
+
+    # Compute the empirical transition matrix
+    b = np.linalg.pinv(X_trimmed.T @ X_trimmed) @ (X_trimmed.T @ X_dt)
+
+    return b
+
+
+# def compute_empirical_transition_matrix_matlab_style(X, maxLag):
+#     """
+#     Compute empirical transition matrix, matching MATLAB implementation.
+
+#     Parameters:
+#     - X: np.ndarray
+#         State time courses of shape (n_samples, n_states).
+#     - maxLag: int
+#         Maximum lag to consider.
+
+#     Returns:
+#     - betas: np.ndarray
+#         Empirical transition matrix, shape (n_states * maxLag, n_states).
+#     """
+#     n_samples, n_states = X.shape
+#     nbins = maxLag + 1
+
+#     # Construct the design matrix
+#     dm = np.zeros((n_samples, maxLag * n_states))
+#     for kk in range(n_states):
+#         temp = np.zeros((n_samples, nbins))
+#         for i in range(1, nbins):
+#             if i < n_samples:
+#                 temp[i:, i] = X[:-i, kk]
+#         dm[:, kk * maxLag:(kk + 1) * maxLag] = temp[:, 1:]
+
+#     # Initialize betas
+#     betas = np.full((n_states * maxLag, n_states), np.nan)
+
+#     # Regression
+#     for ilag in range(1, maxLag + 1):
+#         zinds = np.arange(ilag - 1, n_states * maxLag, maxLag)
+#         predictors = np.hstack([dm[:, zinds], np.ones((n_samples, 1))])
+        
+#         # Solve regression for each state
+#         for state in range(n_states):
+#             y = X[:, state]
+#             coefs = np.linalg.pinv(predictors) @ y
+#             betas[zinds, state] = coefs[:-1]  # Exclude intercept
+
+#     return betas
+
+
+# def second_level_analysis_matlab_style(betas, TF, TR, n_states, maxLag):
+#     """
+#     Perform second-level sequence analysis.
+
+#     Parameters:
+#     - betas: np.ndarray
+#         First-level regression results, shape (n_states * maxLag, n_states).
+#     - TR: np.ndarray
+#         Transition matrix for the main sequence, shape (n_states, n_states).
+#     - TR: np.ndarray
+#         Transition matrix for the alternative sequence, shape (n_states, n_states).
+#     - n_states: int
+#         Number of states.
+#     - maxLag: int
+#         Maximum lag.
+
+#     Returns:
+#     - results: dict
+#         Dictionary containing z-scored regression coefficients for each component.
+#     """
+#     # Reshape betas to (maxLag, n_states^2)
+#     betasnbins64 = betas.reshape(maxLag, n_states**2).T
+
+#     TF_flat = TF.flatten() # Flatten matrices
+#     TR_flat = TR.flatten()
+#     identity_flat = np.eye(n_states).flatten()
+#     constant_flat = np.ones((n_states, n_states)).flatten()
+
+#     # Design matrix for regression
+#     design_matrix = np.column_stack([TF_flat, TR_flat, identity_flat, constant_flat])
+
+#     bbb = np.linalg.pinv(design_matrix) @ betasnbins64 # Perform regression
+
+#     sf = zscore(bbb[0, :], axis=None) # Z-score normalization
+#     sb = zscore(bbb[1, :], axis=None)
+#     ss = zscore(bbb[2, :], axis=None)  # Autocorrelation
+#     sc = zscore(bbb[3, :], axis=None)  # Constant    
+
+    # return sf, sb, ss, sc
+
 
 def second_level_analysis(etm, templates):
     """
@@ -273,7 +316,7 @@ def compute_null_distribution(timecourses, templates, lag=1, n_permutations=1000
             permuted_timecourses[:, :, trial_idx] = timecourses[permuted_order, :, trial_idx]
 
         # Compute the empirical transition matrix for the permuted data
-        empirical_transition_matrix = compute_empirical_transition_matrix_all_trials(permuted_timecourses, lag)
+        empirical_transition_matrix = compute_TRM_all_trials(permuted_timecourses, lag)
 
         Z = second_level_analysis(empirical_transition_matrix, templates)
         null_distribution_f[perm_idx] = Z[0]

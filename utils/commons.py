@@ -229,6 +229,19 @@ def get_onsets(cond, version="v1"):
     return word_onsets, image_onset
 
 
+def create_folder(fn, overwrite):
+    if op.exists(fn): # warn and stop if args.overwrite is set to False
+        print('output file already exists...')
+        if overwrite:
+            print('overwrite is set to True ... overwriting')
+        else:
+            print('overwrite is set to False ... exiting')
+            exit()
+    else:
+        print('Constructing output dirtectory: ', fn)
+        os.makedirs(fn)
+
+
 def Xdawn(epochs4xdawn, epochs2transform, factor, n_comp=10):
     md = epochs4xdawn.metadata
     y = np.sum([md[subfac] for subfac in factor.split("+")], 0)
