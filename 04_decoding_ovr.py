@@ -83,10 +83,12 @@ train_fn, test_fns, out_fn, test_out_fns = get_paths(args, out_dir_name)
 if args.windows:
     args.windows = [w.replace(" ", "") for w in args.windows] # remove spaces
     wins = [f"#{'#'.join([args.windows[0], w])}#" for w in args.windows] # string to add to the out fns
+    for i, win in enumerate(wins): # fix the string, we need zeros before and after commas if only one digit
+            wins[i] = wins[i].replace(",.", ",0.")
+            wins[i] = wins[i].replace("#.", "#0.")
+            wins[i] = wins[i].replace(".,", ".0,")
     out_fn += wins[0]
     for i in range(len(test_out_fns)): test_out_fns[i] += wins[i+1]
-
-# if not args.overwrite:
 
 print('\nStarting training')
 ### LOAD EPOCHS ###
@@ -108,11 +110,11 @@ n_times = len(epochs.times)
 if args.dummy: # speed everything up for a dummy run
     clf = LinearRegression(n_jobs=-1)
     setattr(args, 'n_folds', 2)
-# elif args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
-#     clf = LogisticRegression(C=1, solver='liblinear', class_weight='balanced', multi_class='auto', max_iter=10000) # , n_jobs=-1->no effect when solver is linlinear
+# else: # args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
+#     clf = LogisticRegression(C=.1, solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000) # , n_jobs=-1->no effect when solver is linlinear
 else:
     clf_cv = StratifiedShuffleSplit(args.n_folds, random_state=42) # help avoid warnings when there are very few trials in one class
-    clf = LogisticRegressionCV(Cs=args.n_folds, penalty=args.penalty, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=100000)
+    clf = LogisticRegressionCV(Cs=args.n_folds, penalty=args.penalty, solver='saga', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
     # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=clf_cv, class_weight='balanced')
     # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
     # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-2, 4, 7)})

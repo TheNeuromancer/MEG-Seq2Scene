@@ -158,11 +158,7 @@ else:
                     for freq_band in freq_bands:
                         if args.verbose: print(freq_band)
                         # if train_cond == gen_cond: continue # skip when we both have one object, it is not generalization
-                        all_patterns = []
-                        all_confusions = []
-                        all_AUC = []
-                        all_subs = []
-                        all_items = []
+                        all_patterns, all_confusions, all_AUC, all_subs, all_items = [], [], [], [], []
                         for fn in all_fns:
                             if freq_band not in fn:
                                 continue # if we do not have freq bands it will keep all files

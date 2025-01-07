@@ -89,8 +89,8 @@ dummy_labbin = LabelBinarizer()
 # mag_info, grad_info = [pickle.load(open(f"{args.root_path}/Data/{s}_info.p", "rb")) for s in ['mag', 'grad']]
 
 ## All possible training time (depends on the property that is decoded).
-train_times = [".17", ".2", ".3", ".4", ".5", ".6", ".8"] + ["0.77", "0.8", "0.9", "1.0", "1.1", "1.2", "1.4"] + ["1.37", "1.4", "1.5", "1.6", "1.7", "1.8", "2.0"]
-train_times = train_times + ["1.97", "2.0", "2.1", "2.2", "2.3", "2.4", "2.6"] + ["2.57", "2.6", "2.7", "2.8", "2.9", "3.0", "3.2"]
+train_times = ["0.17", "0.2", "0.3", "0.4", "0.5", "0.6", "0.8"] + ["0.77", "0.9", "1.0", "1.1", "1.2", "1.4"] + ["1.37", "1.5", "1.6", "1.7", "1.8", "2.0"]
+train_times = train_times + ["1.97", "2.1", "2.2", "2.3", "2.4", "2.6"] + ["2.57", "2.7", "2.8", "2.9", "3.0", "3.2"]
 ## Generalization window for objects and scenes
 gen_windows = [(3, 5)] # (1.5, 2.2), 
 
@@ -194,7 +194,7 @@ for label in all_labels:
                         if n_subs > 30: 
                             set_trace()
                         gen_str = f"_tested_on_{gen_cond}" if gen_cond is not None else ""
-                        out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}{split_query_str}_{n_subs}ave"
+                        out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}_{n_subs}ave"
 
                         if not len(all_preds): 
                             print(f"did find any pred for {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}, continuing")
@@ -250,7 +250,7 @@ for label in all_labels:
 
                         # store values for all labels for multi plot
                         all_df.append(pd.DataFrame(future_df))
-                        preds_all_labels[f"{label}_{train_cond}_{gen_cond}_{split_query_str}"] = all_preds
+                        preds_all_labels[f"{label}_{train_cond}_{gen_cond}_"] = all_preds
 
                         # ## plotting all patterns
                         # if len(all_patterns):

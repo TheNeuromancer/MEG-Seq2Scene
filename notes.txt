@@ -181,4 +181,7 @@ Do the null trial thing.
 find optimal C (or do a crossval?)
 
 v6: problems solved, LRCV, just no null trials. Saving patterns and preds correctly 
-v7: correct naming for outputs and also changing to l1 regularization
+v7: correct naming for outputs and also changing to l1 regularization -> many patterns are actally all zeroes. Why does this gets selected as the best regularization ??
+v8: fixed regularization (l1) C = 0.1. Still using liblinear --- fucked up for some reason. Loooots of values are zeros. 
+v9: solver=saga, l1C=.1 --- good? 
+v10: solver=saga, l1C=crossvalidated. --- pretty much the same as v9 (with no crossval). 

@@ -11,9 +11,10 @@ do
 ## addition function
 add() { n="$@"; bc <<< "${n// /+}"; }
 
-for t in 0.17 0.2 0.3 0.4 0.5 0.6 0.8
+# for t in 0.17 0.2 0.3 0.4 0.5 0.6 0.8
+for t in 0.2 0.3 0.4 0.6
 do
-	c1t=$(add $t .6)
+	c1t=$(add $t 0.6)
 	rt=$(add $t 1.2)
 	s2t=$(add $t 1.8)
 	c2t=$(add $t 2.4)
@@ -77,17 +78,17 @@ echo "python 04_decoding_ovr.py -w -s $sub \
 --test-cond 'two_objects' \
 --test-query \"Colour2\" --windows '3, 5' "
 
-echo "python 04_decoding_ovr.py -w -s $sub \
---train-cond 'one_object' --label Object \
---train-query \"Shape1+Colour1\" --windows '$c1t,$c1t' \
---test-cond 'two_objects' \
---test-query \"Shape1+Colour1\" --windows '3, 5' \
---test-cond 'two_objects' \
---test-query \"Shape2+Colour2\" --windows '3, 5' \
---test-cond 'two_objects' \
---test-query \"Right_obj\" --windows '3, 5' \
---test-cond 'two_objects' \
---test-query \"Left_obj\" --windows '3, 5' "
+# echo "python 04_decoding_ovr.py -w -s $sub \
+# --train-cond 'one_object' --label Object \
+# --train-query \"Shape1+Colour1\" --windows '$c1t,$c1t' \
+# --test-cond 'two_objects' \
+# --test-query \"Shape1+Colour1\" --windows '3, 5' \
+# --test-cond 'two_objects' \
+# --test-query \"Shape2+Colour2\" --windows '3, 5' \
+# --test-cond 'two_objects' \
+# --test-query \"Right_obj\" --windows '3, 5' \
+# --test-cond 'two_objects' \
+# --test-query \"Left_obj\" --windows '3, 5' "
 
 
 	# train on two objects
@@ -149,8 +150,8 @@ echo "python 04_decoding_ovr.py -w \
 # --test-query \"Shape2+Colour2\" --windows '3, 5' "
 
 done
-done # this ends the subejct loop 
-exit 0
+# done # this ends the subejct loop 
+# exit 0
 
 
 # # Train on the localizer on both image and words -- may be usefull later for replays
@@ -182,6 +183,19 @@ exit 0
 # --train-query 'Loc_image' \
 # --test-cond 'localizer' \
 # --test-query 'Loc_word' "
+
+## Train on the category (colors vs shapes) instead of tokens.
+	echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+	--train-cond 'localizer' --label Img2WordCat \
+--train-query 'Loc_Cat_image' \
+--test-cond 'localizer' \
+--test-query 'Loc_Cat_word' "
+
+echo "python 04_decoding_ovr.py -w --timegen -s $sub \
+	--train-cond 'localizer' --label Word2ImgCat \
+--train-query 'Loc_Cat_word' \
+--test-cond 'localizer' \
+--test-query 'Loc_Cat_image' "
 
 echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 --train-cond 'localizer' --label Img2WordC \
@@ -352,21 +366,21 @@ echo "python 04_decoding_ovr.py -w --timegen -s $sub \
 # --split-queries \"Matching=='match'\" \
 # --split-queries \"Matching=='nonmatch'\" \
 
-## OBJECTS
-		# train on all other trials, gen to first, then to 2nd object
-	echo "python 04_decoding_ovr.py -w \
---timegen -s $sub --train-cond 'one_object' --label AllObject \
---train-query \"Shape1+Colour1\" \
---test-cond 'two_objects' \
---test-query \"Shape1+Colour1\" \
---test-cond 'two_objects' \
---test-query \"Shape2+Colour2\" \
---test-cond 'two_objects' \
---test-query \"Right_obj\" \
---test-cond 'two_objects' \
---test-query \"Left_obj\" "
-# # --split-queries \"Matching=='match'\" \
-# # --split-queries \"Matching=='nonmatch'\" \
+# ## OBJECTS
+# 		# train on all other trials, gen to first, then to 2nd object
+# 	echo "python 04_decoding_ovr.py -w \
+# --timegen -s $sub --train-cond 'one_object' --label AllObject \
+# --train-query \"Shape1+Colour1\" \
+# --test-cond 'two_objects' \
+# --test-query \"Shape1+Colour1\" \
+# --test-cond 'two_objects' \
+# --test-query \"Shape2+Colour2\" \
+# --test-cond 'two_objects' \
+# --test-query \"Right_obj\" \
+# --test-cond 'two_objects' \
+# --test-query \"Left_obj\" "
+# # # --split-queries \"Matching=='match'\" \
+# # # --split-queries \"Matching=='nonmatch'\" \
 
 # 		# train on scenes 1st obj
 # 	echo "python 04_decoding_ovr.py -w \

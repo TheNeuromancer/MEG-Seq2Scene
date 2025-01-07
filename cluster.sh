@@ -43,10 +43,10 @@ do
 cat <<EOT >> $file_sbatch
 #!/bin/bash
 #SBATCH --job-name=$i
-#SBATCH --time=03:00:00
+#SBATCH --time=96:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=16G
-#SBATCH --partition=shared-cpu 
+#SBATCH --partition=public-cpu 
 #SBATCH --output=$out_file
 #SBATCH --error=$err_file
 source ~/anaconda3/etc/profile.d/conda.sh

@@ -238,14 +238,18 @@ def get_class_queries(query):
         class_queries = [f"Loc_word=='{c}'" for c in colors]
     elif query == "Loc_word":
         class_queries = [f"Loc_word=='{c}'" for c in colors] + [f"Loc_word=='{s}'" for s in shapes]
+    elif query == "Loc_image":
+        class_queries = [f"Loc_word=='img_{c}'" for c in colors] + [f"Loc_word=='img_{s}'" for s in shapes]
+    elif query == "Loc_Cat_word":
+        class_queries = [f"Loc_word in {colors}", f"Loc_word in {shapes}"]
+    elif query == "Loc_Cat_image":
+        class_queries = [f"Loc_word in {img_colors}", f"Loc_word in {img_shapes}"]
     elif query == "Loc_crossColour":
         class_queries = [f"Loc_word=='{c}' or Loc_word=='img_{c}'" for c in colors]
     elif query == "Loc_crossShape":
         class_queries = [f"Loc_word=='{s}' or  Loc_word=='img_{s}'" for s in shapes]
     elif query == "Loc_all":
         class_queries = [f"Loc_word=='{c}' or Loc_word=='img_{c}'" for c in colors] + [f"Loc_word=='{s}' or  Loc_word=='img_{s}'" for s in shapes]
-    elif query == "Loc_image":
-        class_queries = [f"Loc_word=='img_{c}'" for c in colors] + [f"Loc_word=='img_{s}'" for s in shapes]
     elif query == "Loc_image_shape":
         class_queries = [f"Loc_word=='img_{s}'" for s in shapes]
     elif query == "Loc_image_colour":
@@ -960,9 +964,6 @@ def decode_ovr_single_tp(args, clf, epochs, class_queries):
         print(f"Using extensive trial micro-averaging. Expecting {int(np.sum([c*(c-1)/2 for c in counts]))} trials instead of {counts.sum()}")
         if args.max_trials: print(f"Also keeping a maximum of {args.max_trials} after micro-averaging")
 
-    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
-    onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
-    
     if args.reduc_dim:
         pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
     else:
