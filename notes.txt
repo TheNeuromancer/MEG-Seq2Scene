@@ -180,5 +180,6 @@ v11: saga, C=.1, adding 50% of null trials. I added it is a somewhat weird way b
 Warning, does not work with equalize_events (would need some more work). It's fine because the magicians do not equalize trials (not even balance class weights actually ... but we do). 
 -> good, kind of null correlation between subjects for scenes, very high positive correlation for localizer. 
 v12: now null_prop=0.25. 
+v13: now saving each trial's information, needed for reactivation analysis. null_prop=.5
 
 TODOs: add flexibility on the null trials timing. 
