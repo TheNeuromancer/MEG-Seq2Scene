@@ -141,8 +141,9 @@ clf = OneVsRestClassifier(clf, n_jobs=1)
 ### DECODE ###
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
 if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
-    all_models, patterns = decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null)
-    save_results(out_fn, patterns, fn_end="patterns", time=False)
+    all_models, patterns, filters, mds = decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null)
+    save_results(out_fn, patterns, fn_end="patterns", time=False, mds=mds)
+    save_results(out_fn, filters, fn_end="filters", time=False)
 else:
     AUC, _, preds, confusions, all_models, AUC_query = decode_ovr(args, clf, epochs, class_queries)
     if args.test_quality: # save explicit score values, then exit
@@ -203,12 +204,12 @@ for i_test, (cond, query, test_fn, test_out_fn) in enumerate(zip(args.test_cond,
 
     class_queries = get_class_queries(query)
 
-    AUC, _, preds, confusions, AUC_query = test_decode_ovr(args, epochs, class_queries, all_models)
+    AUC, _, preds, confusions, AUC_query, mds = test_decode_ovr(args, epochs, class_queries, all_models)
 
     ### SAVE RESULTS ###
     save_results(test_out_fn, AUC)
     save_results(test_out_fn, confusions, fn_end="confusions") #, all_models)
-    save_results(test_out_fn, preds, fn_end="preds")
+    save_results(test_out_fn, preds, fn_end="preds", mds=mds)
     # save_results(test_out_fn, accuracy, fn_end="acc")
     ### PLOT PERFORMANCE ###
     plot_perf(args, test_out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, \

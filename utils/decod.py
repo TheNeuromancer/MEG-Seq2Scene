@@ -550,7 +550,7 @@ def decode_window(args, clf, epochs, class_queries, trials_per_sub=None):
     """ train single decoder for the whole time of the epochs
         class_queries: list of strings, pandas queries to get each class
     """
-    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    X, y, groups, test_split_query_indices, _ = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     n_trials = len(X)
     if not args.riemann: # pyriemann.Covariances takes same shape as epochs.get_data()
         X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
@@ -626,7 +626,7 @@ def test_decode_window(args, epochs, class_queries, trained_models, trials_per_s
         class_queries: list of strings, pandas queries to get each class
         trained_models: list of sklearn estimators, one for each class
     """
-    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    X, y, groups, test_split_query_indices, _ = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     n_trials = len(X)
     if not args.riemann:
         X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
@@ -677,7 +677,7 @@ def test_decode_sliding_window(args, epochs, class_queries, trained_models, nb_c
         class_queries: list of strings, pandas queries to get each class
         trained_models: list of sklearn estimators, one for each class
     """
-    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    X, y, groups, test_split_query_indices, _ = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     n_times = X.shape[2]
     X = win_ave_smooth(X, nb_cat, mean=False)[0]
     classes, counts = np.unique(y, return_counts=True)
@@ -724,7 +724,7 @@ def decode_ovr(args, clf, epochs, class_queries):
     n_times = len(epochs.times)
     if args.equalize_events:
         epochs = equalize_events_single_epo(epochs, class_queries)
-    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    X, y, groups, test_split_query_indices, _ = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
@@ -850,7 +850,7 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
     n_times_test = len(epochs.times)
     n_times_train, n_folds = all_models.shape
 
-    X, y, _, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    X, y, _, test_split_query_indices, mds = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     if n_classes < 2:
@@ -939,7 +939,7 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
     print(f'mean test AUC: {AUC.mean():.3f}')
     print(f'max test AUC: {AUC.max():.3f}')
 
-    return AUC, accuracy, all_preds, all_confusions, AUC_test_query_split
+    return AUC, accuracy, all_preds, all_confusions, AUC_test_query_split, mds
 
 
 def decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null):
@@ -952,14 +952,14 @@ def decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null):
     assert n_times == 1
     if args.equalize_events:
         epochs = equalize_events_single_epo(epochs, class_queries)
-    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    X, y, groups, test_split_query_indices, mds = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     X = X.squeeze()
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
     if args.null_prop: 
         n_null = int(len(X) * 2 * args.null_prop)
-        print(f"Adding fixation period negative trials, as much as other trials, ie: {n_null}")
+        print(f"Adding fixation period negative trials, {2*args.null_prop*100}% compared to normal trials, ie: {n_null}")
         dat_null = dat_null[np.random.choice(len(dat_null), n_null, replace=False)]
         X = np.concatenate([X, dat_null])
         y = np.concatenate([y, n_classes * np.ones(n_null)]) # assign a new class for null trials
@@ -985,19 +985,21 @@ def decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null):
         pipeline[-1].estimators_ = [clf for i, clf in enumerate(pipeline[-1].estimators_) if i != null_idx]
         pipeline[-1].classes_ = np.delete(pipeline[-1].classes_, null_idx)
     
-    patterns = [] # final shape: n_classes * n_sensors
+    patterns, filters = [], [] # final shape: n_classes * n_sensors
     if n_classes > 2:
         for i in range(n_classes):
-            patterns.append(filters2patterns(pipeline[-1].estimators_[i].coef_, X, y))
+            filters.append(pipeline[-1].estimators_[i].coef_)
+            patterns.append(filters2patterns(filters[-1], X, y))
     else: # 2 classes, not a true OVR then there is a single pattern
-        patterns.append(filters2patterns(pipeline[-1].estimators_[0].coef_, X, y))
-    patterns = np.array(patterns).squeeze()
+        filters.append([pipeline[-1].estimators_[0].coef_])
+        patterns.append(filters2patterns(filters[-1], X, y))
+    patterns, filters = np.array(patterns).squeeze(), np.array(filters).squeeze()
 
     # put the pipeline object in an array without unpacking them
     all_models_array = np.empty((1, 1), dtype=object)
     all_models_array[:] = [[pipeline]] # n_times=1, n_folds=1
 
-    return all_models_array, patterns
+    return all_models_array, patterns, filters, mds
 
 
 def filters2patterns(filters, X, y):
@@ -1155,7 +1157,6 @@ def regression_decode(args, epochs, class_queries, clf):
                             R_test_query_split[t, tgen, i_query] += pearsonr(pred, y[test_query])[0]
                             R_test_query_counts[t, tgen, i_query] += 1 # keep track of the number of AUC computed (should = n_folds)
         if test_split_query_indices: R_test_query_split = R_test_query_split / R_test_query_counts # replace division by n_folds because for many cases we don't have correct test indices in each fold.
-                    # from ipdb import set_trace; set_trace()
     print(f'mean trainning R: {R.mean():.3f}')
     print(f'max trainning R: {R.max():.3f}')
     # put the pipeline object in an array without unpacking them
@@ -1246,15 +1247,17 @@ def regression_decode(args, epochs, class_queries, clf):
 # ///////////////////////////////////////////////////////// #
 
 
-def save_results(out_fn, results, time=True, all_models=None, fn_end="AUC"):
+def save_results(out_fn, results, time=True, all_models=None, mds=None, fn_end="AUC"):
     """ Generic results saving to .npy func """
-    print('Saving results')
+    print(f'Saving {fn_end} results')
     if results.ndim > 1 or not time:
         np.save(f"{out_fn}_{fn_end}.npy", results)
     else:
         np.save(f"{out_fn}_{fn_end}_diag.npy", results)
     if all_models:
         pickle.dump(all_models, open(out_fn + '_all_models.p', 'wb'))
+    if mds is not None:
+        mds.to_csv(out_fn + '_metadata.csv')
     return
 
 def save_best_pattern(out_fn, AUC, all_models):
@@ -1782,8 +1785,6 @@ def joyplot_with_stats(data_dict, times, out_fn, tmin=-.5, tmax=8, labels=['S1',
         axes[i].text(-0.02, .55, back2fullname(k.split("_")[0]), ha='center', va='center', transform=axes[i].transAxes, fontsize=title_fsz)
         # back2fullname(k.split("_")[0])
         # axes[i].set_title(back2fullname(k.split("_")[0]), loc='left')
-        
-        # from ipdb import set_trace; set_trace()
 
         # cosmetics
         axes[i].set_xlim(tmin, tmax)
@@ -1995,7 +1996,7 @@ def get_X_y_from_queries(epochs, class_queries, split_queries):
         if not len(md.query(class_query)):
             print(f"!! did not find any trial for query {class_query} !!")
         X.extend(epochs[class_query].get_data())
-        y.extend([i for qwe in range(len(md.query(class_query)))])
+        y.extend([i for _ in range(len(md.query(class_query)))])
         mds_for_split.append(md.query(class_query))
         # rely on the indices in the metadata to get groups. Only useful to split scene trials 
         groups.extend(md.query(class_query).index.values)
@@ -2005,7 +2006,7 @@ def get_X_y_from_queries(epochs, class_queries, split_queries):
         test_split_query_indices.append(md_for_split.query(split_query).index.values)
     X, y = np.array(X), np.array(y)
     if not split_queries: groups = None # otherwise we get an annoying warning
-    return X, y, groups, test_split_query_indices
+    return X, y, groups, test_split_query_indices, md_for_split
 
 
 def get_X_y_for_correlation(args, epochs, subsample_nonmatched):

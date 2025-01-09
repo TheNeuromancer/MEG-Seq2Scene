@@ -36,7 +36,6 @@ parser.add_argument('-c', '--config', default='config', help='path to config fil
 parser.add_argument('-s', '--subject', default='all',help='subject name')
 parser.add_argument('-o', '--out-dir', default='agg', help='output directory')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
-# parser.add_argument('--ovr', action='store_true',  default=False, help='Whether to get the one versus rest directory or classic decoding')
 parser.add_argument('-v', '--verbose', action='store_true',  default=False, help='Print more stuff')
 parser.add_argument('--smooth_plot', default=0, type=int, help='Smoothing preds before plotting')
 args = parser.parse_args()
