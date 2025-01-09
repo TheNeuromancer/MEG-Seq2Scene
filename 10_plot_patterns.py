@@ -38,7 +38,8 @@ parser.add_argument('-o', '--out-dir', default='agg', help='output directory')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
 # parser.add_argument('--ovr', action='store_true',  default=False, help='Whether to get the one versus rest directory or classic decoding')
 parser.add_argument('-v', '--verbose', action='store_true',  default=False, help='Print more stuff')
-parser.add_argument('--smooth_plot', default=0, type=int, help='Smoothing preds before plotting')
+parser.add_argument('-a', '--already_saved', action='store_true',  default=False, help='if the output file was already created, just load it instead of recomputing everything. Use with caution, if you changed a parameter then you need to run the pipeline again.')
+# parser.add_argument('--smooth_plot', default=0, type=int, help='Smoothing preds before plotting')
 args = parser.parse_args()
 
 config = importlib.import_module(f"configs.{args.config}", "Config").Config() # import config parameters
@@ -146,9 +147,10 @@ def get_correlation_across_subjects(all_patterns):
     return correlation_matrix    
 
 
-def plot_correlation(correlations, out_fn, labels):
+def plot_correlation(correlations, out_fn, labels, vmin=None, vmax=None):
     fig, ax = plt.subplots()
-    vmin, vmax = np.min(correlations), np.max(correlations)
+    if vmin is None: vmin = np.min(correlations)
+    if vmax is None: vmax = np.max(correlations)
     im = ax.imshow(correlations, cmap='viridis', vmin=vmin, vmax=vmax)
     ax.set_xticks(np.arange(len(correlations)))
     ax.set_yticks(np.arange(len(correlations)))
@@ -176,81 +178,86 @@ train_times = train_times + ["1.97", "2.1", "2.2", "2.3", "2.4", "2.6"] + ["2.57
 patterns_fn = f"{op.dirname(op.dirname(out_dir))}/all_patterns.p"
 all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
 # array(['C', 'C1', 'C2', 'ImgC', 'ImgS', 'Obj', 'S', 'S1', 'S2', 'WordC', 'WordS'], dtype='<U5')
-all_df = []
-report = mne.Report()
-for label in all_labels:
-    if args.verbose: print(f"Doing {label}")
-    if "Obj" in label:
-        print("Skipping Objects for now")
-        continue
-    for train_cond in ["localizer", "obj", "scenes"]:
-        gen_cond = None
-        for train_time in train_times:
-            if args.verbose: print(train_time)
-            all_patterns = []
-            future_df = {}
-            for fn in all_fns: # maybe change this loop? Loop only once for every file and use string comprehension to get the file parameters. 
-                if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
-                if f"cond-{train_cond}-" not in fn: continue
-                if "tested_on" in fn: continue # ensure we don't have generalization results (shouldn't be usefull after the following line)
-                if train_time not in fn:
+if not args.already_saved:
+    all_df = []
+    # report = mne.Report()
+    for label in all_labels:
+        if args.verbose: print(f"Doing {label}")
+        if "Obj" in label:
+            print("Skipping Objects for now")
+            continue
+        for train_cond in ["localizer", "obj", "scenes"]:
+            gen_cond = None
+            for train_time in train_times:
+                if args.verbose: print(train_time)
+                all_patterns = []
+                future_df = {}
+                for fn in all_fns: # maybe change this loop? Loop only once for every file and use string comprehension to get the file parameters. 
+                    if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
+                    if f"cond-{train_cond}-" not in fn: continue
+                    if "tested_on" in fn: continue # ensure we don't have generalization results (shouldn't be usefull after the following line)
+                    if train_time not in fn:
+                        continue
+                    if f"#{train_time},{train_time}#{train_time},{train_time}#" not in fn:
+                        continue
+
+                    if args.verbose: print('loading file ', fn)
+                    pattern = np.load(fn)
+                    all_patterns.append(pattern)
+                    
+                    future_df['pattern'] = [pattern]
+                    future_df['subject'] = [op.basename(op.dirname(fn))[0:2]]
+                    future_df['train_cond'] = [train_cond]
+                    future_df['train_time'] = [train_time]
+                    future_df['label'] = [label]
+                    all_df.append(pd.DataFrame(future_df))
+
+
+                n_subs = len(all_patterns)
+                if not n_subs: 
+                    if args.verbose: print(f"Not a single pattern found for {label} trained on {train_cond} at {train_time} ...") 
                     continue
-                if f"#{train_time},{train_time}#{train_time},{train_time}#" not in fn:
-                    continue
+                else:
+                    median_pattern = np.median(all_patterns, 0) # median over subjects
+                    all_patterns = np.array(all_patterns) # shape: (n_subjects, n_classes, n_sensors)
+                out_fn = f"{out_dir}/{label}_trained_on_{train_cond}_at_{train_time}_{n_subs}ave"
 
-                if args.verbose: print('loading file ', fn)
-                pattern = np.load(fn)
-                all_patterns.append(pattern)
-                
-                future_df['pattern'] = [pattern]
-                future_df['subject'] = [op.basename(op.dirname(fn))[0:2]]
-                future_df['train_cond'] = [train_cond]
-                future_df['train_time'] = [train_time]
-                future_df['label'] = [label]
-                all_df.append(pd.DataFrame(future_df))
+                if median_pattern.ndim == 2: # OVR, one additional dimension n_classes  * n_sensors
+                    labels = get_labels(label)
+                    n_classes = len(labels)
+                    for ch_type in ['all']: # 'mag', 'grad', 
+                        # average correlation plot between the patterns averaged over subjects (not so interesting, diag is ones)
+                        correlations = np.corrcoef(median_pattern[:,indices[ch_type]])
+                        plot_correlation(correlations, f"{out_fn}_averaged_{ch_type}", labels, vmin=-1, vmax=1)
+                        ## correlation over subjects
+                        corr_mat = get_correlation_across_subjects(all_patterns[:,:,indices[ch_type]])
+                        plot_correlation(corr_mat, f"{out_fn}_over_subjects_{ch_type}", labels)
 
+                    # report.add_figs_to_section(f'{label} trained on {train_cond} at {train_time}', [f'{out_fn}_correlations.png'], section=f'{label} trained on {train_cond} at {train_time}')
 
-            n_subs = len(all_patterns)
-            if not n_subs: 
-                if args.verbose: print(f"Not a single pattern found for {label} trained on {train_cond} at {train_time} ...") 
-                continue
-            else:
-                median_pattern = np.median(all_patterns, 0) # median over subjects
-                all_patterns = np.array(all_patterns) # shape: (n_subjects, n_classes, n_sensors)
-            out_fn = f"{out_dir}/{label}_trained_on_{train_cond}_at_{train_time}_{n_subs}ave"
+                    for patt in median_pattern:
+                        plot_patterns(patt, out_fn, mag_info, mag_idx, grad_info, grad_idx)
 
-            if median_pattern.ndim == 2: # OVR, one additional dimension n_classes  * n_sensors
-                labels = get_labels(label)
-                n_classes = len(labels)
-                for ch_type in ['all']: # 'mag', 'grad', 
-                    # average correlation plot between the patterns averaged over subjects (not so interesting, diag is ones)
-                    correlations = np.corrcoef(median_pattern[:,indices[ch_type]])
-                    plot_correlation(correlations, f"{out_fn}_averaged_{ch_type}", labels)
-                    ## correlation over subjects
-                    corr_mat = get_correlation_across_subjects(all_patterns[:,:,indices[ch_type]])
-                    plot_correlation(corr_mat, f"{out_fn}_over_subjects_{ch_type}", labels)
+                else:
+                    plot_patterns(median_pattern, out_fn, mag_info, mag_idx, grad_info, grad_idx)
 
-                # report.add_figs_to_section(f'{label} trained on {train_cond} at {train_time}', [f'{out_fn}_correlations.png'], section=f'{label} trained on {train_cond} at {train_time}')
+                if args.verbose: print(f"Finished {label} trained on {train_cond} at {train_time}\n")
+                plt.close('all')
 
-                for patt in median_pattern:
-                    plot_patterns(patt, out_fn, mag_info, mag_idx, grad_info, grad_idx)
+                    # pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot
 
-            else:
-                plot_patterns(median_pattern, out_fn, mag_info, mag_idx, grad_info, grad_idx)
+        # print(f"saving all data to {preds_fn} and {diags_fn}")
+        # pickle.dump(preds_all_labels, open(preds_fn, "wb"))
+        # diag_preds_all_labels = {k: np.array([np.diag(x) for x in v]) for k, v in preds_all_labels.items()}
+        # pickle.dump(diag_preds_all_labels, open(diags_fn, "wb"))
+        # # pickle.dump(pattern_all_labels, open(patterns_fn, "wb"))
 
-            if args.verbose: print(f"Finished {label} trained on {train_cond} at {train_time}\n")
-            plt.close('all')
+    df = pd.concat(all_df)
+    df.to_csv(f"{out_dir}/all_patterns.csv") #, index=False)
+    from ipdb import set_trace; set_trace()
 
-                # pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot
-
-    # print(f"saving all data to {preds_fn} and {diags_fn}")
-    # pickle.dump(preds_all_labels, open(preds_fn, "wb"))
-    # diag_preds_all_labels = {k: np.array([np.diag(x) for x in v]) for k, v in preds_all_labels.items()}
-    # pickle.dump(diag_preds_all_labels, open(diags_fn, "wb"))
-    # # pickle.dump(pattern_all_labels, open(patterns_fn, "wb"))
-
-df = pd.concat(all_df)
-df.to_csv(f"{out_dir}/all_patterns.csv", index=False)
+else: # if already saved, just load the data
+    df = pd.read_csv(f"{out_dir}/all_patterns.csv")
 
 ## get the corelation between the patterns for multiple conditions (colors and shapes)
 # for train_cond in ["localizer", "obj", "scenes"]:
@@ -285,8 +292,8 @@ for t in ["0.2", "0.3", "0.4", "0.6"]:
     grouped_patterns = []
     grouped_patterns.append(np.stack(df.query(f"label=='WordC' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
     grouped_patterns.append(np.stack(df.query(f"label=='WordS' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
-    grouped_patterns.append(np.stack(df.query(f"label=='WordC' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
-    grouped_patterns.append(np.stack(df.query(f"label=='WordS' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
+    grouped_patterns.append(np.stack(df.query(f"label=='ImgC' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
+    grouped_patterns.append(np.stack(df.query(f"label=='ImgS' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
     concat_patterns = np.concatenate(grouped_patterns, 1) # n_subs * total n_classes (3+3+3+3) * n_sensors
     corr_mat = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
     labels = shapes + colors + shapes + colors

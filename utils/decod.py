@@ -942,10 +942,11 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
     return AUC, accuracy, all_preds, all_confusions, AUC_test_query_split
 
 
-def decode_ovr_single_tp(args, clf, epochs, class_queries):
-    """ X: n_trials, n_sensors, n_times = 1
+def decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null):
+    """ X: n_trials, n_sensors, n_times=1
         y: n_trials
         class_queries: list of strings, pandas queries to get each class
+        dat_null: array of null data to add to the training as negative classes
     """
     n_times = len(epochs.times)
     assert n_times == 1
@@ -956,6 +957,13 @@ def decode_ovr_single_tp(args, clf, epochs, class_queries):
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
+    if args.null_prop: 
+        n_null = int(len(X) * 2 * args.null_prop)
+        print(f"Adding fixation period negative trials, as much as other trials, ie: {n_null}")
+        dat_null = dat_null[np.random.choice(len(dat_null), n_null, replace=False)]
+        X = np.concatenate([X, dat_null])
+        y = np.concatenate([y, n_classes * np.ones(n_null)]) # assign a new class for null trials
+
     for split_indices, split_query in zip(test_split_query_indices, args.split_queries):
         print(f"Split query {split_query}, {len(split_indices)} trials")
     if n_classes < 2:
@@ -970,6 +978,12 @@ def decode_ovr_single_tp(args, clf, epochs, class_queries):
         pipeline = make_pipeline(RobustScaler(), clf)
 
     pipeline.fit(X, y)
+
+    if args.null_prop > 0: # remove the null trial classifier from the OVR object
+        null_idx = np.where(pipeline[-1].classes_ == n_classes)[0][0] # Identify the null class index
+        # Remove the null class classifier and update the classes
+        pipeline[-1].estimators_ = [clf for i, clf in enumerate(pipeline[-1].estimators_) if i != null_idx]
+        pipeline[-1].classes_ = np.delete(pipeline[-1].classes_, null_idx)
     
     patterns = [] # final shape: n_classes * n_sensors
     if n_classes > 2:

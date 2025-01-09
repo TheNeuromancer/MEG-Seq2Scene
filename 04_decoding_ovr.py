@@ -38,6 +38,8 @@ parser.add_argument('--split-queries', action='append', default=[], help='Metada
 parser.add_argument('--equalize_split_events', action='store_true', default=None, help='subsample majority event classes IN EACH SPLIT QUERY to get same number of trials as the minority class')
 parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
 parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
+# parser.add_argument('--add_null', action='store_true',  default=False, help='Whether to add fixation period "null" trials')
+parser.add_argument('--null_prop', type=float,  default=0, help='Proportion of fixation period "null" trials')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
@@ -68,6 +70,10 @@ version = "v1" if int(args.subject[0:2]) < 8 else "v2"
 
 if len(args.test_cond) != len(args.test_query):
     raise RuntimeError("Test conditions and test-queries should have the same length")
+if args.null_prop > 0 and args.equalize_events:
+    raise RuntimeError("Cannot add null trials AND equalize events.")
+if args.null_prop > 0 and not (len(args.windows) == 0 or args.windows[0][0] != args.windows[0][1]):
+    raise RuntimeError("Cannot add null trials for multiple timepoints decoding. Only for a single decoder. Then you would have to add these trials inside the decoding loop.")
 
 np.random.seed(args.seed)
 start_time = time.time()
@@ -93,15 +99,26 @@ if args.windows:
 print('\nStarting training')
 ### LOAD EPOCHS ###
 if args.response_lock:
-    epochs = load_data(args, train_fn, crop_final=False)[0]
-    epochs = to_response_lock_epochs(epochs, args.train_cond)
+    epochs_orig = load_data(args, train_fn, crop_final=False)[0]
+    epochs = to_response_lock_epochs(epochs_orig, args.train_cond)
 else:
-    epochs = load_data(args, train_fn)[0]
+    epochs_orig = load_data(args, train_fn)[0]
+    epochs = epochs_orig # hack but works
 windows = [tuple([float(x) for x in win.split(",")]) for win in args.windows]
 if windows: 
     print(f"Using training time window: {windows[0]}s")
-    epochs = epochs.crop(*windows[0])
+    epochs = epochs_orig.crop(*windows[0])
 train_tmin, train_tmax = epochs.tmin, epochs.tmax
+print(train_tmin, train_tmax)
+
+### GET DATA FROM THE FIXATION PERIOD
+if args.null_prop > 0: 
+    epochs_null = epochs_orig.crop(epochs.times[0], epochs.times[0]) # very first time point. TODO: add some flexibility, maybe random for each trial?
+    dat_null = epochs_null.get_data(picks='meg').squeeze() # get as much as possibly needed
+    out_fn += f"_null{args.null_prop}"
+else:
+    dat_null = None
+del epochs_orig
 
 ## GET QUERIES
 class_queries = get_class_queries(args.train_query)
@@ -110,11 +127,11 @@ n_times = len(epochs.times)
 if args.dummy: # speed everything up for a dummy run
     clf = LinearRegression(n_jobs=-1)
     setattr(args, 'n_folds', 2)
-# else: # args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
-#     clf = LogisticRegression(C=.1, solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000) # , n_jobs=-1->no effect when solver is linlinear
-else:
-    clf_cv = StratifiedShuffleSplit(args.n_folds, random_state=42) # help avoid warnings when there are very few trials in one class
-    clf = LogisticRegressionCV(Cs=args.n_folds, penalty=args.penalty, solver='saga', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
+else: # args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
+    clf = LogisticRegression(C=.1, solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000) # , n_jobs=-1->no effect when solver is linlinear
+# else:
+#     clf_cv = StratifiedShuffleSplit(args.n_folds, random_state=42) # help avoid warnings when there are very few trials in one class
+#     clf = LogisticRegressionCV(Cs=args.n_folds, penalty=args.penalty, solver='saga', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
     # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=clf_cv, class_weight='balanced')
     # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
     # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-2, 4, 7)})
@@ -124,7 +141,7 @@ clf = OneVsRestClassifier(clf, n_jobs=1)
 ### DECODE ###
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
 if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
-    all_models, patterns = decode_ovr_single_tp(args, clf, epochs, class_queries)
+    all_models, patterns = decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null)
     save_results(out_fn, patterns, fn_end="patterns", time=False)
 else:
     AUC, _, preds, confusions, all_models, AUC_query = decode_ovr(args, clf, epochs, class_queries)

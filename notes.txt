@@ -165,23 +165,20 @@ v4: trying single time point training and gen to specific window.
 v5: same with no timegen (no need for replays)
 
 DONE 
-single decoder (no kfold)
 find why the plotting script does not find all the timepoints
-save patterns with:
-        # Computes patterns using Haufe's trick: A = Cov_X . W . Precision_Y
-        inv_Y = 1.0
-        X = X - X.mean(0, keepdims=True)
-        if y.ndim == 2 and y.shape[1] != 1:
-            y = y - y.mean(0, keepdims=True)
-            inv_Y = np.linalg.pinv(np.cov(y.T))
-        self.patterns_ = np.cov(X.T).dot(self.filters_.T.dot(inv_Y)).T
 
-TODO:
-Do the null trial thing. 
-find optimal C (or do a crossval?)
+Img2WordCat = decoding images of colors vs images of shapes: super high performance! Gen is below chance.
+Word2ImgCat Perf is similar to training on intra class decoding (eg: red vs other colors), and the gen is very strongly below chance ... what is happening? 
+
 
 v6: problems solved, LRCV, just no null trials. Saving patterns and preds correctly 
 v7: correct naming for outputs and also changing to l1 regularization -> many patterns are actally all zeroes. Why does this gets selected as the best regularization ??
 v8: fixed regularization (l1) C = 0.1. Still using liblinear --- fucked up for some reason. Loooots of values are zeros. 
 v9: solver=saga, l1C=.1 --- good? 
 v10: solver=saga, l1C=crossvalidated. --- pretty much the same as v9 (with no crossval). 
+v11: saga, C=.1, adding 50% of null trials. I added it is a somewhat weird way but that should be equivalent to what they did. They are set as a new class in the OVR, which is then discarded. Thus, all null trials are used as negative class for the training of each real class. 
+Warning, does not work with equalize_events (would need some more work). It's fine because the magicians do not equalize trials (not even balance class weights actually ... but we do). 
+-> good, kind of null correlation between subjects for scenes, very high positive correlation for localizer. 
+v12: now null_prop=0.25. 
+
+TODOs: add flexibility on the null trials timing. 

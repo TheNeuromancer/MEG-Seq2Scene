@@ -200,72 +200,9 @@ for label in all_labels:
                             print(f"did find any pred for {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}, continuing")
                             continue
 
-                        # # pattern and confusions
-                        # if not split_query and (gen_cond is None):
-                        #     if len(all_patterns) == 0: 
-                        #         print(f"Not a single pattern found ...") 
-                        #     else:
-                        #         pattern = np.median(all_patterns, 0)
-                        #         if pattern.ndim == 2: # OVR, one additional dimension
-                        #             pattern = np.median(pattern, 0)
-                        #             all_patterns = np.concatenate(all_patterns) # first dim = subjs*classes
-                        #         # pattern_all_labels[f"{label}_{train_cond}"] = pattern # store values for all labels for multi plot
-
-                        #     if len(all_confusions) == 0: 
-                        #         print(f"Not a single confusion found ...") 
-                        #     else:
-                        #         all_confusions = np.array(all_confusions)
-                        #         mean_confusion = np.nanmean(all_confusions, 0)
-                        #         median_confusion = np.median(all_confusions, 0)
-                        #         # if confusion.ndim == 2: # OVR, one additional dimension
-                        #         #     confusion = np.median(confusion, 0)
-                        #         #     all_confusions = np.concatenate(all_confusions) # first dim = subjs*classes
-                        #         # confusion_all_labels[f"{label}_{train_cond}"] = mean_confusion # store values for all labels for multi plot
-
-                        #       ## plotting confusion matrices
-                        #         # fig, axes = plt.subplots(len(all_confusions), figsize=(6, len(all_confusions)/2))
-                        #         # for i_p, patt in enumerate(all_confusions):
-                        #         #     try:
-                        #         #         mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
-                        #         #     except:
-                        #         #         set_trace()
-                        #         # plt.savefig(f'{out_fn}_{label}_{train_cond}_confusionS_mag.png')
-                        #         ## ave confusion
-                        #         # mne.viz.plot_topomap(np.squeeze(np.mean(all_confusions, 0))[mag_idx], mag_info, axes=ax)
-                        #         # from ipdb import set_trace; set_trace()
-                        #         labels = shapes if "S" in label else colors if "C" in label else ['w1', 'w2', 'w3']
-                        #         fig, ax = plt.subplots()
-                        #         plt.imshow(mean_confusion, cmap='viridis', origin='lower', vmin=0.1, vmax=.15)
-                        #         ax.set(xticks=[0,1,2], xticklabels=labels, yticks=[0,1,2], yticklabels=labels)
-                        #         plt.colorbar()
-                        #         plt.savefig(f'{out_fn}_mean_confusion_{train_time}s.png')
-                        #         plt.close()
-                        #         fig, ax = plt.subplots()
-                        #         plt.imshow(median_confusion, cmap='viridis', origin='lower', vmin=0.1, vmax=.15)
-                        #         ax.set(xticks=[0,1,2], xticklabels=labels, yticks=[0,1,2], yticklabels=labels)
-                        #         plt.colorbar()
-                        #         plt.savefig(f'{out_fn}_median_confusion_{train_time}s.png')
-                        #         plt.close()
-
-
                         # store values for all labels for multi plot
                         all_df.append(pd.DataFrame(future_df))
                         preds_all_labels[f"{label}_{train_cond}_{gen_cond}_"] = all_preds
-
-                        # ## plotting all patterns
-                        # if len(all_patterns):
-                        #     # fig, axes = plt.subplots(len(all_patterns), figsize=(6, len(all_patterns)/2))
-                        #     # for i_p, patt in enumerate(all_patterns):
-                        #     #     try:
-                        #     #         mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
-                        #     #     except:
-                        #     #         set_trace()
-                        #     # plt.savefig(f'{out_fn}_{label}_{train_cond}_patternS_mag.png')
-                        #     ## ave pattern
-                        #     fig, ax = plt.subplots()
-                        #     mne.viz.plot_topomap(np.squeeze(np.mean(all_patterns, 0))[mag_idx], mag_info, axes=ax)
-                        #     plt.savefig(f'{out_fn}_{label}_{train_cond}_ave_pattern_mag.png')
-                        #     plt.close()
 
                         if args.verbose: print(f"Finished {label} trained on {train_cond} with generalization {gen_cond}  for  split query {split_query}\n")
                         plt.close('all')
