@@ -991,7 +991,7 @@ def decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null):
             filters.append(pipeline[-1].estimators_[i].coef_)
             patterns.append(filters2patterns(filters[-1], X, y))
     else: # 2 classes, not a true OVR then there is a single pattern
-        filters.append([pipeline[-1].estimators_[0].coef_])
+        filters.append(pipeline[-1].estimators_[0].coef_)
         patterns.append(filters2patterns(filters[-1], X, y))
     patterns, filters = np.array(patterns).squeeze(), np.array(filters).squeeze()
 
