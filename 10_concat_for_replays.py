@@ -271,9 +271,9 @@ def plot_average_preds(present, absent, kind):
     # Perform t-tests for each category
     preds_shape_present, preds_color_present, preds_rel_present = present
     preds_shape_absent, preds_color_absent, preds_rel_absent = absent
-    shape_ttest = ttest_ind(preds_shape_present.mean(axis=1), preds_shape_absent.mean(axis=1))
-    color_ttest = ttest_ind(preds_color_present.mean(axis=1), preds_color_absent.mean(axis=1))
-    relation_ttest = ttest_ind(preds_rel_present.mean(axis=1), preds_rel_absent.mean(axis=1))
+    shape_ttest = ttest_ind(np.mean(preds_shape_present, axis=1), np.mean(preds_shape_absent, axis=1))
+    color_ttest = ttest_ind(np.mean(preds_color_present, axis=1), np.mean(preds_color_absent, axis=1))
+    relation_ttest = ttest_ind(np.mean(preds_rel_present, axis=1), np.mean(preds_rel_absent, axis=1))
     p_values = [shape_ttest.pvalue, color_ttest.pvalue, relation_ttest.pvalue]
 
     alpha = 0.05
