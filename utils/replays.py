@@ -11,6 +11,8 @@ from sklearn.linear_model import LinearRegression
 # from scipy.linalg import toeplitz
 from tqdm import tqdm
 
+from .params import *
+
 # not used because we define our own transition matrices. 
 # def transition_matrix(sequence, n_states):
 #     # Initialize an n_states x n_states transition matrix with zeros
@@ -22,6 +24,17 @@ from tqdm import tqdm
 #     # go from states to state indices
 #     # indices = np.argsort(episode)
 #     # T[from_state, to_state] += 1
+
+
+def get_TF_2words(shape, color):
+    """ get the forward transition matrix
+    for 2-word blocks. 
+    Positions in the matrix are shape, then colors """
+    T = np.zeros((6, 6))
+    T[shapes.index(shape), colors.index(color)] = 1
+    return T
+    # single transition ... is that ok for sequenceness? 
+
 
 def sequenceness_Crosscorr(rd, T, lag=1):
     """

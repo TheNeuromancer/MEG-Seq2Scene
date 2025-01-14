@@ -183,5 +183,8 @@ v12: now null_prop=0.25.
 
 v13: now saving each trial's information, needed for reactivation analysis. null_prop=.5
 v14: same with null_prop=.25
+v15: C=1/0.006
+
+SEEMS LIKE IT FUCKING WORKS! TONS OF REPLAYS AT 100 MS, NOWHERE ELSE, NO BACKWARD, NO RANDOM ... WTF????? NOPE, ITS RANDOM.
 
 TODOs: add flexibility on the null trials timing. 

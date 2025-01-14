@@ -6,7 +6,7 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "15"
+    version: str = "13"
     # root_path: str = "/home/users/d/desborde/scratch/s2s"
     root_path: str = "/home/desborde/Documents/s2s/" if os.path.exists("/home/desborde/Documents/s2s/") \
                     else "/home/users/d/desborde/scratch/s2s/" # path for labpc, then yggdrasil cluster 

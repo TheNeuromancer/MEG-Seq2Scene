@@ -27,6 +27,7 @@ bad_subs_dim = ['29', '26', '25', '23', '20', '16', '15', '10', '04', '02']
 
 colors = ["vert", "bleu", "rouge"]
 shapes = ["triangle", "cercle", "carre"]
+relations = ["à gauche d'", "à droite d'"]
 
 img_colors = ["img_vert", "img_bleu", "img_rouge"]
 img_shapes = ["img_triangle", "img_cercle", "img_carre"]

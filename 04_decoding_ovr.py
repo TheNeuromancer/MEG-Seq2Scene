@@ -128,7 +128,7 @@ if args.dummy: # speed everything up for a dummy run
     clf = LinearRegression(n_jobs=-1)
     setattr(args, 'n_folds', 2)
 else: # args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
-    clf = LogisticRegression(C=.1, solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000) # , n_jobs=-1->no effect when solver is linlinear
+    clf = LogisticRegression(C=1/0.006, solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000) # , n_jobs=-1->no effect when solver is linlinear
 # else:
 #     clf_cv = StratifiedShuffleSplit(args.n_folds, random_state=42) # help avoid warnings when there are very few trials in one class
 #     clf = LogisticRegressionCV(Cs=args.n_folds, penalty=args.penalty, solver='saga', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
