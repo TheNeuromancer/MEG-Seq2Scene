@@ -318,7 +318,6 @@ for iSub, sub in tqdm(enumerate(subs)):
             if iLag == 0:
                 preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
                 # present 
-                from ipdb import set_trace; set_trace()
                 preds_shape_present.append(preds_shape[:, shapes.index(s1)].mean())
                 preds_shape_present.append(preds_shape[:, shapes.index(s2)].mean())
                 preds_rel_present.append(preds_rel.index(shapes.index(rel)).mean())
