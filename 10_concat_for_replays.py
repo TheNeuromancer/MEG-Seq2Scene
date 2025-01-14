@@ -95,7 +95,7 @@ train_times = ['0.8', '2.6', '0.2', '1.4', '2.0']
 ## Generalization window for objects and scenes
 gen_windows = [(3, 5), (1.5, 2.2)]
 
-if args.dont_recompute:
+if args.dont_recompute is False:
     preds_fn = f"{op.dirname(op.dirname(out_dir))}/all_preds.p"
     metadata_fn = f"{op.dirname(op.dirname(out_dir))}/all_metadata.p"
     all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
@@ -316,10 +316,11 @@ for iSub, sub in tqdm(enumerate(subs)):
 
             # save preds for barplot of average predictions
             if iLag == 0:
+                preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
                 # present 
                 from ipdb import set_trace; set_trace()
-                preds_shape_present.append(preds_shape.index(shapes.index(s1)).mean())
-                preds_shape_present.append(preds_shape.index(shapes.index(s2)).mean())
+                preds_shape_present.append(preds_shape[:, shapes.index(s1)].mean())
+                preds_shape_present.append(preds_shape[:, shapes.index(s2)].mean())
                 preds_rel_present.append(preds_rel.index(shapes.index(rel)).mean())
                 preds_color_present.append(preds_color.index(colors.index(c1)).mean())
                 preds_color_present.append(preds_color.index(colors.index(c2)).mean())
