@@ -279,6 +279,7 @@ df_5words = df.query("label in ['ImgS_1', 'ImgS_2', 'R_0', 'ImgC_1', 'ImgC_2']")
 sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
 sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for checking purpose
 preds_shape_present, preds_color_present, preds_rel_present = [], [], []
+preds_shape_absent, preds_color_absent, preds_rel_absent = [], [], []
 for iSub, sub in tqdm(enumerate(subs)):
     df_sub = df_5words.query(f"sub=='{sub}'")
     trial_ids = df_sub.trial_id.unique()
