@@ -604,7 +604,7 @@ for iSub, sub in tqdm(enumerate(subs)):
             rand_inds = np.random.permutation(8)
             Trand = TF[rand_inds]
             templates = [TF, TR, Trand, T_auto, T_const]
-            from ipdb import set_trace; set_trace()
+            if iTrial==0: print(f"TODO: Check the trained on scenes / tested in scenes. You nw have 2 different decoders for the shape and for the colour.")
             preds_shape = df_trial.query("label=='S1_0'")['preds'].values[0]
             preds_color = df_trial.query("label=='C1_0'")['preds'].values[0]
             preds_rel = df_trial.query("label=='R_0'")['preds'].values[0]
