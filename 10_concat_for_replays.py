@@ -320,7 +320,7 @@ for iSub, sub in tqdm(enumerate(subs)):
                 # present 
                 preds_shape_present.append(preds_shape[:, shapes.index(s1)].mean())
                 preds_shape_present.append(preds_shape[:, shapes.index(s2)].mean())
-                preds_rel_present.append(preds_rel[:, shapes.index(rel)].mean())
+                preds_rel_present.append(preds_rel[:, relations.index(rel)].mean())
                 preds_color_present.append(preds_color[:, colors.index(c1)].mean())
                 preds_color_present.append(preds_color[:, colors.index(c2)].mean())
                 # absent
