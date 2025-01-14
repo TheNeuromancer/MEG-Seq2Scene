@@ -385,6 +385,8 @@ T_const = np.ones((n_states, n_states))  # Uniform transitions
 df_5words = df.query("label in ['WordS_1', 'WordS_2', 'R_0', 'WordC_1', 'WordC_2']") # only the 5-words blocks
 sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
 sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for checking purpose
+preds_shape_present, preds_color_present, preds_rel_present = [], [], []
+preds_shape_absent, preds_color_absent, preds_rel_absent = [], [], []
 for iSub, sub in tqdm(enumerate(subs)):
     df_sub = df_5words.query(f"sub=='{sub}'")
     trial_ids = df_sub.trial_id.unique()
@@ -480,6 +482,8 @@ T_const = np.ones((n_states, n_states))  # Uniform transitions
 df_5words = df.query("label in ['S_0', 'S_1', 'R_0', 'C_0', 'C_1']") # only the 5-words blocks
 sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
 sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for checking purpose
+preds_shape_present, preds_color_present, preds_rel_present = [], [], []
+preds_shape_absent, preds_color_absent, preds_rel_absent = [], [], []
 for iSub, sub in tqdm(enumerate(subs)):
     df_sub = df_5words.query(f"sub=='{sub}'")
     trial_ids = df_sub.trial_id.unique()
@@ -575,6 +579,8 @@ T_const = np.ones((n_states, n_states))  # Uniform transitions
 df_5words = df.query("label in ['S1_0', 'S2_1', 'R_0', 'C1_0', 'C2_1']") # only the 5-words blocks
 sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
 sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for checking purpose
+preds_shape_present, preds_color_present, preds_rel_present = [], [], []
+preds_shape_absent, preds_color_absent, preds_rel_absent = [], [], []
 for iSub, sub in tqdm(enumerate(subs)):
     df_sub = df_5words.query(f"sub=='{sub}'")
     trial_ids = df_sub.trial_id.unique()
