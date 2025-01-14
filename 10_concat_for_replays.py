@@ -598,7 +598,7 @@ for iSub, sub in tqdm(enumerate(subs)):
             rand_inds = np.random.permutation(8)
             Trand = TF[rand_inds]
             templates = [TF, TR, Trand, T_auto, T_const]
-            # trial_preds = preds[:, i_trial, :]
+            from ipdb import set_trace; set_trace()
             preds_shape = df_trial.query("label=='S1_1'")['preds'].values[0] # WordS_1 and WordS_2 are equal because they are based on the same decoder
             preds_color = df_trial.query("label=='C1_2'")['preds'].values[0]
             preds_rel = df_trial.query("label=='R_0'")['preds'].values[0]
