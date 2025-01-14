@@ -503,9 +503,8 @@ for iSub, sub in tqdm(enumerate(subs)):
             rand_inds = np.random.permutation(8)
             Trand = TF[rand_inds]
             templates = [TF, TR, Trand, T_auto, T_const]
-            from ipdb import set_trace; set_trace()
-            preds_shape = df_trial.query("label=='S1_1'")['preds'].values[0]
-            preds_color = df_trial.query("label=='C1_2'")['preds'].values[0]
+            preds_shape = df_trial.query("label=='S_0'")['preds'].values[0]
+            preds_color = df_trial.query("label=='C_0'")['preds'].values[0]
             preds_rel = df_trial.query("label=='R_0'")['preds'].values[0]
 
             # save preds for barplot of average predictions
