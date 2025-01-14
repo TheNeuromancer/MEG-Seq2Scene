@@ -315,7 +315,6 @@ for iSub, sub in tqdm(enumerate(subs)):
             preds_rel = df_trial.query("label=='R_0'")['preds'].values[0]
 
             # save preds for barplot of average predictions
-            from ipdb import set_trace; set_trace()
             if iLag == 0:
                 preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
                 # present 
