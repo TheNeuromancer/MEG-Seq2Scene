@@ -243,11 +243,11 @@ def plot_average_preds(present, absent, kind):
     kind: str to add to the out_fn, where the decoders were trained on (ImgLoc, scenes, ...)
     """
     present_ave = [np.mean(preds, 0) for preds in present]
-    # present_sem = [sem(preds, 0, nan_policy='omit') for preds in present]
-    present_sem = [np.std(preds, 0) for preds in present]
+    present_sem = [sem(preds, 0, nan_policy='omit') * 29 for preds in present]
+    # present_sem = [np.std(preds, 0) for preds in present]
     absent_ave = [np.mean(preds, 0) for preds in absent]
-    # absent_sem = [sem(preds, 0, nan_policy='omit') for preds in absent]
-    absent_sem = [np.std(preds, 0) for preds in absent]
+    absent_sem = [sem(preds, 0, nan_policy='omit') * 29 for preds in absent]
+    # absent_sem = [np.std(preds, 0) for preds in absent]
     
     # Bar plot
     labels = ['Shape', 'Color', 'Relation']
@@ -259,13 +259,13 @@ def plot_average_preds(present, absent, kind):
 
     # Add labels, title, and legend
     ax.set_ylabel('Average Predictions')
-    ax.set_title('Average Predictions by Presence')
+    # ax.set_title('Average Predictions by Presence')
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.legend()
     # Add value labels
-    ax.bar_label(rects1, fmt='%.2f', padding=3)
-    ax.bar_label(rects2, fmt='%.2f', padding=3)
+    # ax.bar_label(rects1, fmt='%.2f', padding=3)
+    # ax.bar_label(rects2, fmt='%.2f', padding=3)
     # Save the plot
     plt.tight_layout()
     plt.savefig(f"{out_dir}/average_preds_{kind}.png", dpi=400)
