@@ -35,6 +35,7 @@ parser.add_argument('-c', '--config', default='config', help='path to config fil
 parser.add_argument('-s', '--subject', default='all',help='subject name')
 parser.add_argument('-o', '--out-dir', default='agg', help='output directory')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
+parser.add_argument('-d', '--dont_recompute', action='store_true',  default=False, help='Whether to skip the aggregation phase, only works if we already saved the preds')
 parser.add_argument('-v', '--verbose', action='store_true',  default=False, help='Print more stuff')
 parser.add_argument('--smooth_plot', default=0, type=int, help='Smoothing preds before plotting')
 args = parser.parse_args()
@@ -94,107 +95,111 @@ train_times = ['0.8', '2.6', '0.2', '1.4', '2.0']
 ## Generalization window for objects and scenes
 gen_windows = [(3, 5), (1.5, 2.2)]
 
-preds_fn = f"{op.dirname(op.dirname(out_dir))}/all_preds.p"
-metadata_fn = f"{op.dirname(op.dirname(out_dir))}/all_metadata.p"
-all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
-# preds_all_labels, pattern_all_labels, confusion_all_labels = {}, {}, {}
-all_df = []
-for label in all_labels:
-    if args.verbose: print(f"Doing {label}")
-    if "Obj" in label:
-        print("Skipping Objects for now")
-        continue
-    for train_cond in ["localizer", "obj", "scenes"]:
-        for split_query in [False]: # no split query in replay decoding so far (but migh wanna include it later)
-        # for split_query in ["match", "nonmatch", "flash", "noflash", "match_or_Error_type=l0", "match_or_Error_type=l1", \
-        #                     "match_or_Error_type=l2", "Complexity=0", "Complexity=1", "Complexity=2", \
-        #                     "Change.str.containsshape", "Change.str.containscolour", False]:
-            for gen_cond in ["obj", "scenes"]: # "localizer", 
-                for train_time in train_times:
-                    for gen_window in gen_windows:
-                        if args.verbose: print(train_time)
-                        all_patterns, all_confusions, all_preds, all_subs, all_items = [], [], [], [], []
-                        mds_this_cond = []
-                        for fn in all_fns:
-                            if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
-                            if f"cond-{train_cond}-" not in fn: continue
-                            # print(fn)
-                            # if not split_query: # if not split_query or nonmatch markers, keep all non-splitqueries
-                            #     split_query_str = ""
-                            #     if "_for_" in fn: continue
-                            # else:
-                            #     if f"for_{split_query}" not in fn: continue
-                            #     split_query_str = f"_for_{split_query}"
-                            if gen_cond is not None:
-                                if f"#{train_time},{train_time}#{gen_window[0]},{gen_window[1]}#" not in fn: 
-                                    continue
-                                if f"tested_on_{gen_cond}" not in fn: continue # only generalization results
-                            else: # gen_cond is None 
-                                if "tested_on" in fn: continue # ensure we don't have generalization results (shouldn't be usefull after the preceeding line)
-                                print(train_time, fn)
-                                if f"#{train_time},{train_time}#{train_time},{train_time}#" not in fn:
-                                    continue
-                            # do not load the full mnius splits
-                            if "full_minus_split" in fn: continue
+if args.dont_recompute:
+    preds_fn = f"{op.dirname(op.dirname(out_dir))}/all_preds.p"
+    metadata_fn = f"{op.dirname(op.dirname(out_dir))}/all_metadata.p"
+    all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
+    # preds_all_labels, pattern_all_labels, confusion_all_labels = {}, {}, {}
+    all_df = []
+    for label in all_labels:
+        if args.verbose: print(f"Doing {label}")
+        if "Obj" in label:
+            print("Skipping Objects for now")
+            continue
+        for train_cond in ["localizer", "obj", "scenes"]:
+            for split_query in [False]: # no split query in replay decoding so far (but migh wanna include it later)
+            # for split_query in ["match", "nonmatch", "flash", "noflash", "match_or_Error_type=l0", "match_or_Error_type=l1", \
+            #                     "match_or_Error_type=l2", "Complexity=0", "Complexity=1", "Complexity=2", \
+            #                     "Change.str.containsshape", "Change.str.containscolour", False]:
+                for gen_cond in ["obj", "scenes"]: # "localizer", 
+                    for train_time in train_times:
+                        for gen_window in gen_windows:
+                            if args.verbose: print(train_time)
+                            all_patterns, all_confusions, all_preds, all_subs, all_items = [], [], [], [], []
+                            mds_this_cond = []
+                            for fn in all_fns:
+                                if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
+                                if f"cond-{train_cond}-" not in fn: continue
+                                # print(fn)
+                                # if not split_query: # if not split_query or nonmatch markers, keep all non-splitqueries
+                                #     split_query_str = ""
+                                #     if "_for_" in fn: continue
+                                # else:
+                                #     if f"for_{split_query}" not in fn: continue
+                                #     split_query_str = f"_for_{split_query}"
+                                if gen_cond is not None:
+                                    if f"#{train_time},{train_time}#{gen_window[0]},{gen_window[1]}#" not in fn: 
+                                        continue
+                                    if f"tested_on_{gen_cond}" not in fn: continue # only generalization results
+                                else: # gen_cond is None 
+                                    if "tested_on" in fn: continue # ensure we don't have generalization results (shouldn't be usefull after the preceeding line)
+                                    print(train_time, fn)
+                                    if f"#{train_time},{train_time}#{train_time},{train_time}#" not in fn:
+                                        continue
+                                # do not load the full mnius splits
+                                if "full_minus_split" in fn: continue
 
-                            if args.verbose: print('loading file ', fn)
-                            preds = np.load(fn) # times * trials * classes 
-                            preds = preds.squeeze() # trials * classes (single time point for replay decoding)
-                            all_preds.append(preds) # len(n_subs) of array of inhomogeneous shape n_trials * n_classes
-                            # all_subs.append(op.basename(op.dirname(fn))[0:2])
-                            # all_items.append(op.basename(fn))
+                                if args.verbose: print('loading file ', fn)
+                                preds = np.load(fn) # times * trials * classes 
+                                preds = preds.squeeze() # trials * classes (single time point for replay decoding)
+                                all_preds.append(preds) # len(n_subs) of array of inhomogeneous shape n_trials * n_classes
+                                # all_subs.append(op.basename(op.dirname(fn))[0:2])
+                                # all_items.append(op.basename(fn))
 
-                            metadata_fn = fn.replace('preds.npy', 'metadata.csv')
-                            md = pd.read_csv(metadata_fn) # times * trials * classes 
-                            n_times, n_trials, n_classes = preds.shape
+                                metadata_fn = fn.replace('preds.npy', 'metadata.csv')
+                                md = pd.read_csv(metadata_fn) # times * trials * classes 
+                                n_times, n_trials, n_classes = preds.shape
 
-                            md["train_time"] = [train_time] * n_trials
-                            md["gen_window"] = [gen_window] * n_trials
-                            md["train_cond"] = [train_cond] * n_trials
-                            md["gen_cond"] = [gen_cond] * n_trials
-                            md["split_query"] = [split_query] * n_trials
-                            md["label"] = [label] * n_trials
-                            md["preds"] = preds.transpose(1,0,2).tolist()
-                            sub = op.basename(op.dirname(fn))[0:2]
-                            md["sub"] = [sub] * n_trials
-                            # md["trial"] = [f"{sub}_{i}" for i in range(n_trials)] # not unique for eqch trial
+                                md["train_time"] = [train_time] * n_trials
+                                md["gen_window"] = [gen_window] * n_trials
+                                md["train_cond"] = [train_cond] * n_trials
+                                md["gen_cond"] = [gen_cond] * n_trials
+                                md["split_query"] = [split_query] * n_trials
+                                md["label"] = [label] * n_trials
+                                md["preds"] = preds.transpose(1,0,2).tolist()
+                                sub = op.basename(op.dirname(fn))[0:2]
+                                md["sub"] = [sub] * n_trials
+                                # md["trial"] = [f"{sub}_{i}" for i in range(n_trials)] # not unique for eqch trial
 
-                            # mds_this_cond.append(md)
-                            all_df.append(md)
-
-
-                        if not all_preds: 
-                            if args.verbose: print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} for  split query {split_query}, train time {train_time}, gen window {gen_window}, continuing")
-                            continue
-                        if args.verbose: print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}")
-                        n_subs = len(all_preds)
-                        if n_subs < 2: 
-                            print(f"Single subject found, moving on to next conditon")
-                            continue
-                        if n_subs > 30: 
-                            set_trace()
-                        gen_str = f"_tested_on_{gen_cond}" if gen_cond is not None else ""
-                        out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}_{n_subs}ave"
-
-                        if not len(all_preds): 
-                            print(f"did find any pred for {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}, continuing")
-                            continue
-
-                        # store values for all labels for multi plot
-                        # all_df.append(pd.DataFrame(future_df))
-                        # preds_all_labels[f"{label}_{train_cond}_{gen_cond}_"] = all_preds
-
-                        if args.verbose: print(f"Finished {label} trained on {train_cond} with generalization {gen_cond}  for  split query {split_query}\n")
-                        plt.close('all')
+                                # mds_this_cond.append(md)
+                                all_df.append(md)
 
 
-df = pd.concat(all_df)
-df.drop(columns=["Unnamed: 0", "Loc_word", "Word_position", "Mapping", "Matching", "Error_type", "Violated_position", "split_query", "Mismatch_side"], inplace=True)
-df.reset_index(inplace=True)
-df['trial_id'] = df ["sub"] + df["run_nb"].apply(str) + df["RT"].apply(str) + df["Difficulty"] + df["Shape1"] + df["Colour1"] + df["Shape2"] + df["Colour2"]
-# + df["Img_position"]
- # + df["Fontsize"].apply(str) + df["Change"]
-df.to_csv(f"{out_dir}/all_preds_data.csv", index=False)
+                            if not all_preds: 
+                                if args.verbose: print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} for  split query {split_query}, train time {train_time}, gen window {gen_window}, continuing")
+                                continue
+                            if args.verbose: print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}")
+                            n_subs = len(all_preds)
+                            if n_subs < 2: 
+                                print(f"Single subject found, moving on to next conditon")
+                                continue
+                            if n_subs > 30: 
+                                set_trace()
+                            gen_str = f"_tested_on_{gen_cond}" if gen_cond is not None else ""
+                            out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}_{n_subs}ave"
+
+                            if not len(all_preds): 
+                                print(f"did find any pred for {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}, continuing")
+                                continue
+
+                            # store values for all labels for multi plot
+                            # all_df.append(pd.DataFrame(future_df))
+                            # preds_all_labels[f"{label}_{train_cond}_{gen_cond}_"] = all_preds
+
+                            if args.verbose: print(f"Finished {label} trained on {train_cond} with generalization {gen_cond}  for  split query {split_query}\n")
+                            plt.close('all')
+
+
+    df = pd.concat(all_df)
+    df.drop(columns=["Unnamed: 0", "Loc_word", "Word_position", "Mapping", "Matching", "Error_type", "Violated_position", "split_query", "Mismatch_side"], inplace=True)
+    df.reset_index(inplace=True)
+    df['trial_id'] = df ["sub"] + df["run_nb"].apply(str) + df["RT"].apply(str) + df["Difficulty"] + df["Shape1"] + df["Colour1"] + df["Shape2"] + df["Colour2"]
+    # + df["Img_position"]
+     # + df["Fontsize"].apply(str) + df["Change"]
+    df.to_csv(f"{out_dir}/all_preds_data.csv", index=False)
+
+else:
+    df = pd.read_csv(f"{out_dir}/all_preds_data.csv")
 
 
 from utils.replays import *
@@ -312,6 +317,7 @@ for iSub, sub in tqdm(enumerate(subs)):
             # save preds for barplot of average predictions
             if iLag == 0:
                 # present 
+                from ipdb import set_trace; set_trace()
                 preds_shape_present.append(preds_shape.index(shapes.index(s1)).mean())
                 preds_shape_present.append(preds_shape.index(shapes.index(s2)).mean())
                 preds_rel_present.append(preds_rel.index(shapes.index(rel)).mean())
