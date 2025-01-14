@@ -286,6 +286,7 @@ for iSub, sub in tqdm(enumerate(subs)):
     n_trials = len(trial_ids)
 
     for iLag in range(maxLag): # for each lag
+        if lag > 0: continue
         sf_all_trials, sb_all_trials, srand_all_trials = [], [], []
 
         for iTrial in range(n_trials):
