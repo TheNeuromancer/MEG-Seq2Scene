@@ -244,10 +244,10 @@ def plot_average_preds(present, absent, kind):
     """
     present_ave = [np.mean(preds, 0) for preds in present]
     # present_sem = [sem(preds, 0, nan_policy='omit') for preds in present]
-    present_sem = [np.stp(preds, 0) for preds in present]
+    present_sem = [np.std(preds, 0) for preds in present]
     absent_ave = [np.mean(preds, 0) for preds in absent]
     # absent_sem = [sem(preds, 0, nan_policy='omit') for preds in absent]
-    absent_sem = [np.stp(preds, 0) for preds in absent]
+    absent_sem = [np.std(preds, 0) for preds in absent]
     
     # Bar plot
     labels = ['Shape', 'Color', 'Relation']
@@ -663,6 +663,7 @@ for iSub, sub in tqdm(enumerate(subs)):
 present = [preds_shape_present, preds_color_present, preds_rel_present]
 absent = [preds_shape_absent, preds_color_absent, preds_rel_absent]
 plot_average_preds(present, absent, "scenes_trained_on_scenes")
+from ipdb import set_trace; set_trace()
 
 
 ### 2-words blocks ###
