@@ -16,7 +16,7 @@ import importlib
 from glob import glob
 from natsort import natsorted
 from mne.stats import permutation_cluster_1samp_test
-from scipy.stats import sem
+from scipy.stats import sem, ttest_ind
 from sklearn.preprocessing import LabelEncoder, LabelBinarizer, MinMaxScaler
 import warnings
 # warnings.filterwarnings('ignore', '.*Provided stat_fun.*', )
@@ -238,8 +238,8 @@ def get_TF_5words(s1, c1, rel, s2, c2):
 
 def plot_average_preds(present, absent, kind):
     """ bar plot of average predictions during the delay
-    presents: list of np.array of shape (n_subs, n_classes)
-    absents: list of np.array of shape (n_subs, n_classes)
+    presents: list of np.array of len(n_trials), grouped for all subjects 
+    absents: list of np.array of len(n_trials), grouped for all subjects
     kind: str to add to the out_fn, where the decoders were trained on (ImgLoc, scenes, ...)
     """
     present_ave = [np.mean(preds, 0) for preds in present]
@@ -266,9 +266,33 @@ def plot_average_preds(present, absent, kind):
     # Add value labels
     # ax.bar_label(rects1, fmt='%.2f', padding=3)
     # ax.bar_label(rects2, fmt='%.2f', padding=3)
+
+
+    # Perform t-tests for each category
+    preds_shape_present, preds_color_present, preds_rel_present = present
+    preds_shape_absent, preds_color_absent, preds_rel_absent = absent
+    shape_ttest = ttest_ind(preds_shape_present.mean(axis=1), preds_shape_absent.mean(axis=1))
+    color_ttest = ttest_ind(preds_color_present.mean(axis=1), preds_color_absent.mean(axis=1))
+    relation_ttest = ttest_ind(preds_rel_present.mean(axis=1), preds_rel_absent.mean(axis=1))
+    p_values = [shape_ttest.pvalue, color_ttest.pvalue, relation_ttest.pvalue]
+
+    alpha = 0.05
+    print("\nSignificance Testing Results:")
+    print(f"Shape: {'Significant' if shape_ttest.pvalue < alpha else 'Not Significant'} (p = {shape_ttest.pvalue:.4f})")
+    print(f"Color: {'Significant' if color_ttest.pvalue < alpha else 'Not Significant'} (p = {color_ttest.pvalue:.4f})")
+    print(f"Relation: {'Significant' if relation_ttest.pvalue < alpha else 'Not Significant'} (p = {relation_ttest.pvalue:.4f})")
+
+    # Add significance stars
+    for i, p_val in enumerate(p_values):
+        if p_val < alpha:
+            y_max = max(present_ave[i] + present_sem[i], absent_ave[i] + absent_sem[i])
+            ax.text(i, y_max + 0.05, '*', ha='center', va='bottom', fontsize=16, color='k')
+
     # Save the plot
     plt.tight_layout()
-    plt.savefig(f"{out_dir}/average_preds_{kind}.png", dpi=400)
+    plt.savefig(f"{out_dir}/average_preds_{kind}_tested.png", dpi=400)
+
+
     plt.close()
 
 
