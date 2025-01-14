@@ -327,7 +327,7 @@ for iSub, sub in tqdm(enumerate(subs)):
                 # absent
                 shapes_absent = [s for s in shapes if s not in [s1, s2]]
                 colors_absent = [c for c in colors if c not in [c1, c2]]
-                relation_absent = [r for r in relations if r != rel]
+                relation_absent = [r for r in relations if r != rel][0]
                 for absent_shape in shapes_absent:
                     preds_shape_absent.append(preds_shape[:, shapes.index(absent_shape)].mean())
                 for absent_color in colors_absent:
