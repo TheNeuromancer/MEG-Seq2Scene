@@ -320,18 +320,18 @@ for iSub, sub in tqdm(enumerate(subs)):
                 # present 
                 preds_shape_present.append(preds_shape[:, shapes.index(s1)].mean())
                 preds_shape_present.append(preds_shape[:, shapes.index(s2)].mean())
-                preds_rel_present.append(preds_rel.index(shapes.index(rel)).mean())
-                preds_color_present.append(preds_color.index(colors.index(c1)).mean())
-                preds_color_present.append(preds_color.index(colors.index(c2)).mean())
+                preds_rel_present.append(preds_rel[:, shapes.index(rel)].mean())
+                preds_color_present.append(preds_color[:, colors.index(c1)].mean())
+                preds_color_present.append(preds_color[:, colors.index(c2)].mean())
                 # absent
                 shapes_absent = [s for s in shapes if s not in [s1, s2]]
                 colors_absent = [s for s in shapes if s not in [s1, s2]]
                 relation_absent = [r for r in relations if r != rel]
                 for absent_shape in shapes_absent:
-                    preds_shape_absent.append(preds_shape.index(shapes.index(absent_shape)).mean())
+                    preds_shape_absent.append(preds_shape[:, shapes.index(absent_shape)].mean())
                 for absent_color in colors_absent:
-                    preds_color_absent.append(preds_color.index(colors.index(absent_color)).mean())
-                preds_rel_absent.append(preds_rel.index(relations.index(relation_absent)).mean())
+                    preds_color_absent.append(preds_color[:, colors.index(absent_color)].mean())
+                preds_rel_absent.append(preds_rel[:, relations.index(relation_absent)].mean())
 
 #             trial_preds = np.concatenate([preds_shape, preds_color, preds_rel], axis=1)
 #             trm = compute_TRM_single_trial(trial_preds, iLag)
