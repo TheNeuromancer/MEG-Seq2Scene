@@ -236,18 +236,34 @@ def get_TF_5words(s1, c1, rel, s2, c2):
     T[s2_idx, c2_idx+color_offset] = 1
     return T
 
+def calculate_mean_and_sem_over_splits(data, num_splits=30):
+    """
+    Splits the data into `num_splits` equal-length segments, calculates the mean and SEM for each split,
+    and then calculates the overall mean and SEM across splits.
+    """
+    split_data = np.array_split(data, num_splits, axis=0)  # Split data into `num_splits` parts
+    split_means = [np.mean(split, axis=0) for split in split_data]  # Mean of each split
+    split_means = np.array(split_means)
+    overall_mean = np.mean(split_means, axis=0)  # Overall mean across splits
+    overall_sem = np.std(split_means, axis=0) / np.sqrt(num_splits)  # SEM across splits
+    return overall_mean, overall_sem
+
+
 def plot_average_preds(present, absent, kind):
     """ bar plot of average predictions during the delay
     presents: list of np.array of len(n_trials), grouped for all subjects 
     absents: list of np.array of len(n_trials), grouped for all subjects
     kind: str to add to the out_fn, where the decoders were trained on (ImgLoc, scenes, ...)
     """
-    present_ave = [np.mean(preds, 0) for preds in present]
-    present_sem = [sem(preds, 0, nan_policy='omit') * 29 for preds in present]
+    present_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in present]
+    present_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in present]  # Split data into `num_splits` parts
+    # present_sem = [sem(preds, 0, nan_policy='omit') for preds in present]
     # present_sem = [np.std(preds, 0) for preds in present]
-    absent_ave = [np.mean(preds, 0) for preds in absent]
-    absent_sem = [sem(preds, 0, nan_policy='omit') * 29 for preds in absent]
+    # absent_ave = [np.mean(preds, 0) for preds in absent]
+    # absent_sem = [sem(preds, 0, nan_policy='omit') for preds in absent]
     # absent_sem = [np.std(preds, 0) for preds in absent]
+    absent_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in absent]
+    absent_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in absent]  # Split data into `num_splits` parts
     
     # Bar plot
     labels = ['Shape', 'Color', 'Relation']
@@ -271,7 +287,6 @@ def plot_average_preds(present, absent, kind):
     # Perform t-tests for each category
     preds_shape_present, preds_color_present, preds_rel_present = present
     preds_shape_absent, preds_color_absent, preds_rel_absent = absent
-    from ipdb import set_trace; set_trace()
     shape_ttest = ttest_ind(preds_shape_present, preds_shape_absent)
     color_ttest = ttest_ind(preds_color_present, preds_color_absent)
     relation_ttest = ttest_ind(preds_rel_present, preds_rel_absent)
