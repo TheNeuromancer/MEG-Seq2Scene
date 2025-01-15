@@ -236,9 +236,9 @@ def get_TF_5words(s1, c1, rel, s2, c2):
     T[s2_idx, c2_idx+color_offset] = 1
     return T
 
-def calculate_mean_and_sem_over_splits(data, num_splits=30):
+def splits(data, num_splits=30):
     """
-    Splits the data into `num_splits` equal-length segments, calculates the mean and SEM for each split,
+    Splits the data into `num_splits` equal-length segments,
     and then calculates the overall mean and SEM across splits.
     """
     split_data = np.array_split(data, num_splits, axis=0)  # Split data into `num_splits` parts
@@ -255,15 +255,18 @@ def plot_average_preds(present, absent, kind):
     absents: list of np.array of len(n_trials), grouped for all subjects
     kind: str to add to the out_fn, where the decoders were trained on (ImgLoc, scenes, ...)
     """
-    present_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in present]
-    present_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in present]  # Split data into `num_splits` parts
+    from ipdb import set_trace; set_trace()
+    present_ave, present_sem = splits(present)
+    # present_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in present]
+    # present_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in present]  # Split data into `num_splits` parts
     # present_sem = [sem(preds, 0, nan_policy='omit') for preds in present]
     # present_sem = [np.std(preds, 0) for preds in present]
     # absent_ave = [np.mean(preds, 0) for preds in absent]
     # absent_sem = [sem(preds, 0, nan_policy='omit') for preds in absent]
     # absent_sem = [np.std(preds, 0) for preds in absent]
-    absent_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in absent]
-    absent_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in absent]  # Split data into `num_splits` parts
+    # absent_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in absent]
+    # absent_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in absent]  # Split data into `num_splits` parts
+    absent_ave, absent_sem = splits(absent)
     
     # Bar plot
     labels = ['Shape', 'Color', 'Relation']
