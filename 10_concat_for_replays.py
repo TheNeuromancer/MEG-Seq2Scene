@@ -255,8 +255,13 @@ def plot_average_preds(present, absent, kind):
     absents: list of np.array of len(n_trials), grouped for all subjects
     kind: str to add to the out_fn, where the decoders were trained on (ImgLoc, scenes, ...)
     """
-    from ipdb import set_trace; set_trace()
-    present_ave, present_sem = splits(present)
+    # from ipdb import set_trace; set_trace()
+    present_ave, present_sem = [], []
+    for i in range(len(present)):
+        qwe, asd = splits(present[i])
+        present_ave.append(qwe)
+        present_sem.append(asd)
+    # present_ave, present_sem = splits(present)
     # present_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in present]
     # present_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in present]  # Split data into `num_splits` parts
     # present_sem = [sem(preds, 0, nan_policy='omit') for preds in present]
@@ -266,7 +271,12 @@ def plot_average_preds(present, absent, kind):
     # absent_sem = [np.std(preds, 0) for preds in absent]
     # absent_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in absent]
     # absent_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in absent]  # Split data into `num_splits` parts
-    absent_ave, absent_sem = splits(absent)
+    # absent_ave, absent_sem = splits(absent)
+    absent_ave, absent_sem = [], []
+    for i in range(len(absent)):
+        qwe, asd = splits(absent[i])
+        absent_ave.append(qwe)
+        absent_sem.append(asd)
     
     # Bar plot
     labels = ['Shape', 'Color', 'Relation']
