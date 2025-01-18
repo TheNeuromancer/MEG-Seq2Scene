@@ -200,6 +200,7 @@ if args.dont_recompute is False:
     df.to_csv(f"{out_dir}/all_preds_data.csv", index=False)
 
     from ipdb import set_trace; set_trace()
+    qwe = np.concatenate(all_preds_data)
     all_preds_data = np.array(all_preds_data)
     np.save(all_preds_data, f"{out_dir}/all_preds_data.npy")
 
