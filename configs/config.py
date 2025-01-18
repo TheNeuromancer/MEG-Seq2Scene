@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import platform
 import os
 
 @dataclass
@@ -9,7 +10,8 @@ class Config:
     version: str = "15"
     # root_path: str = "/home/users/d/desborde/scratch/s2s"
     root_path: str = "/home/desborde/Documents/s2s/" if os.path.exists("/home/desborde/Documents/s2s/") \
-                    else "/home/users/d/desborde/scratch/s2s/" # path for labpc, then yggdrasil cluster 
+                    else "/Users/polo/Documents/MEG-Seq2Scene/" if platform.system() == "Darwin" \
+                    else "/home/users/d/desborde/scratch/s2s/" # path for labpc, then macbook, then yggdrasil cluster 
     epochs_dir: str = "Epochs_100hz_nofilter"
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
                            '08_ch180036', '09_jl190711', '10_ma200371', '11_rb210035', '12_mb160165', '13_lg170436', '14_eb180237', \

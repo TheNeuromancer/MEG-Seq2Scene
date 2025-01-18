@@ -58,30 +58,6 @@ out_dir = f"{args.root_path}/Results/{decoding_dir}/{args.epochs_dir}/{args.subj
 print('\noutput files will be in: ' + out_dir)
 create_folder(out_dir, args.overwrite)
 
-# list all preds.npy files in the directory
-all_fns = natsorted(glob(in_dir + f'/*preds.npy'))
-if not all_fns:
-    raise RuntimeError(f"Did not find any preds files in {in_dir}/*preds.npy ... Did you pass the right config?")
-
-# keep the first 8 subjects for the 1st version, all the remaining for v2
-if args.subject == "v1":
-    all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) < 9]
-    version = "v1"
-elif args.subject == "v2":
-    all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) > 8]
-    version = "v2"
-elif args.subject == "all":
-    version = "v2"
-elif args.subject == "goods":
-    all_fns = [fn for fn in all_fns if not op.basename(op.dirname(fn))[0:2] in bad_subjects]
-    version = "v2"
-elif int(args.subject[0:2]) < 9:
-    version = "v1"
-elif int(args.subject[0:2]) > 8:
-    version = "v2"
-else:
-    qwe
-
 dummy_class_enc = LabelEncoder()
 dummy_labbin = LabelBinarizer()
 # mag_idx, grad_idx = [pickle.load(open(f"{args.root_path}/Data/{s}_indices.p", "rb")) for s in ['mag', 'grad']]
@@ -96,10 +72,35 @@ train_times = ['0.8', '2.6', '0.2', '1.4', '2.0']
 gen_windows = [(3, 5), (1.5, 2.2)]
 
 if args.dont_recompute is False:
+    # list all preds.npy files in the directory
+    all_fns = natsorted(glob(in_dir + f'/*preds.npy'))
+    if not all_fns:
+        raise RuntimeError(f"Did not find any preds files in {in_dir}/*preds.npy ... Did you pass the right config?")
+
+    # keep the first 8 subjects for the 1st version, all the remaining for v2
+    if args.subject == "v1":
+        all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) < 9]
+        version = "v1"
+    elif args.subject == "v2":
+        all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) > 8]
+        version = "v2"
+    elif args.subject == "all":
+        version = "v2"
+    elif args.subject == "goods":
+        all_fns = [fn for fn in all_fns if not op.basename(op.dirname(fn))[0:2] in bad_subjects]
+        version = "v2"
+    elif int(args.subject[0:2]) < 9:
+        version = "v1"
+    elif int(args.subject[0:2]) > 8:
+        version = "v2"
+    else:
+        qwe
+
     preds_fn = f"{op.dirname(op.dirname(out_dir))}/all_preds.p"
     metadata_fn = f"{op.dirname(op.dirname(out_dir))}/all_metadata.p"
     all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
     # preds_all_labels, pattern_all_labels, confusion_all_labels = {}, {}, {}
+    all_preds_data = []
     all_df = []
     for label in all_labels:
         if args.verbose: print(f"Doing {label}")
@@ -156,10 +157,10 @@ if args.dont_recompute is False:
                                 md["gen_cond"] = [gen_cond] * n_trials
                                 md["split_query"] = [split_query] * n_trials
                                 md["label"] = [label] * n_trials
-                                md["preds"] = preds.transpose(1,0,2).tolist()
                                 sub = op.basename(op.dirname(fn))[0:2]
                                 md["sub"] = [sub] * n_trials
-                                # md["trial"] = [f"{sub}_{i}" for i in range(n_trials)] # not unique for eqch trial
+                                # md["preds"] = preds.transpose(1,0,2).tolist()
+                                all_preds_data.append(preds.transpose(1,0,2))
 
                                 # mds_this_cond.append(md)
                                 all_df.append(md)
@@ -198,8 +199,13 @@ if args.dont_recompute is False:
      # + df["Fontsize"].apply(str) + df["Change"]
     df.to_csv(f"{out_dir}/all_preds_data.csv", index=False)
 
+    from ipdb import set_trace; set_trace()
+    all_preds_data = np.array(all_preds_data)
+    np.save(all_preds_data, f"{out_dir}/all_preds_data.npy")
+
 else:
     df = pd.read_csv(f"{out_dir}/all_preds_data.csv")
+    all_preds_data = np.load(f"{out_dir}/all_preds_data.npy")
 
 
 from utils.replays import *
