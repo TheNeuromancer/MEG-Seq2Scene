@@ -160,7 +160,7 @@ if args.dont_recompute is False:
                                 sub = op.basename(op.dirname(fn))[0:2]
                                 md["sub"] = [sub] * n_trials
                                 # md["preds"] = preds.transpose(1,0,2).tolist()
-                                all_preds_data.append(preds.transpose(1,0,2))
+                                all_preds_data.expend(preds.transpose(1,0,2))
 
                                 # mds_this_cond.append(md)
                                 all_df.append(md)

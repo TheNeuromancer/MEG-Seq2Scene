@@ -165,7 +165,7 @@ else:
     ### SAVE RESULTS ###
     save_results(out_fn, AUC) #, all_models)
     save_results(out_fn, confusions, fn_end="confusions") #, all_models)
-    save_results(out_fn, preds, fn_end="preds")
+    # save_results(out_fn, preds, fn_end="preds")
     # save_results(out_fn, accuracy, fn_end="acc")
     # save_patterns(args, out_fn, all_models) # 
     # save_best_pattern(out_fn, AUC, all_models) ## Save best model's pattern
@@ -209,7 +209,8 @@ for i_test, (cond, query, test_fn, test_out_fn) in enumerate(zip(args.test_cond,
     ### SAVE RESULTS ###
     save_results(test_out_fn, AUC)
     save_results(test_out_fn, confusions, fn_end="confusions") #, all_models)
-    save_results(test_out_fn, preds, fn_end="preds", mds=mds)
+    if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
+        save_results(test_out_fn, preds, fn_end="preds", mds=mds)
     # save_results(test_out_fn, accuracy, fn_end="acc")
     ### PLOT PERFORMANCE ###
     plot_perf(args, test_out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, \
