@@ -69,7 +69,7 @@ train_times = ['0.8', '2.6', '0.2', '1.4', '2.0']
 # train_times = ["0.17", "0.2", "0.3", "0.4", "0.5", "0.6", "0.8"] + ["0.77", "0.9", "1.0", "1.1", "1.2", "1.4"] + ["1.37", "1.5", "1.6", "1.7", "1.8", "2.0"]
 # train_times = train_times + ["1.97", "2.1", "2.2", "2.3", "2.4", "2.6"] + ["2.57", "2.7", "2.8", "2.9", "3.0", "3.2"]
 ## Generalization window for objects and scenes
-gen_windows = [(3, 5), (1.5, 2.2)]
+gen_windows = [(3, 5)] #, (1.5, 2.2)]
 
 if args.dont_recompute is False:
     # list all preds.npy files in the directory
