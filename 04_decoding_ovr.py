@@ -211,7 +211,7 @@ for i_test, (cond, query, test_fn, test_out_fn) in enumerate(zip(args.test_cond,
     save_results(test_out_fn, confusions, fn_end="confusions") #, all_models)
     if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
         # add a trial id to the md to help identification later on.
-        mds['trial_id'] = mds['run_nb'].astype(str) + "_" + mds.index
+        mds['trial_id'] = mds['run_nb'].astype(str) + "_" + mds.index.astype(str)
         save_results(test_out_fn, preds, fn_end="preds", mds=mds)
     # save_results(test_out_fn, accuracy, fn_end="acc")
     ### PLOT PERFORMANCE ###
