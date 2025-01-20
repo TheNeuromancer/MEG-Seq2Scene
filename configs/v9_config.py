@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+import platform
+import os
 
 @dataclass
 class Config:
