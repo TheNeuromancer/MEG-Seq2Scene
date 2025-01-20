@@ -184,8 +184,12 @@ v12: now null_prop=0.25.
 v13: now saving each trial's information, needed for reactivation analysis. null_prop=.5
 v14: same with null_prop=.25
 v15: C=1/0.006
-
 Replay strength seems random. 
 
-TODOs: add flexibility on the null trials timing. Somewhat done.
+TODOs:
 Check the trained on scenes / tested in scenes. You nw have 2 different decoders for the shape and for the colour. How to combine them properly?
+
+Started to correctly save data for replay and to functionize the code at the end of concat_for_replays, to put it in a new script. 
+
+Train decoder on ALL triangles? Whatever the block it is in? 
+Script for replay strength as a function of regularization?
