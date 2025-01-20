@@ -194,3 +194,4 @@ Started to correctly save data for replay and to functionize the code at the end
 Train decoder on ALL triangles? Whatever the block it is in? 
 Script for replay strength as a function of regularization?
 are the predicted probabilites predictive of the subject performances?
+Save a stamp for each trial during training, eg block-trial nbs? To facilitate replay analyses.

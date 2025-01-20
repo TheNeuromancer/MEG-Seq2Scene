@@ -13,27 +13,115 @@ from tqdm import tqdm
 
 from .params import *
 
-# not used because we define our own transition matrices. 
-# def transition_matrix(sequence, n_states):
-#     # Initialize an n_states x n_states transition matrix with zeros
-#     T = np.zeros((n_states, n_states), dtype=int)
-#     # Loop over each pair of consecutive states in the sequence
-#     for (from_state, to_state) in zip(sequence[:-1], sequence[1:]):
-#         T[from_state - 1, to_state - 1] += 1  # Adjust indices to be zero-based
-#     return T
-#     # go from states to state indices
-#     # indices = np.argsort(episode)
-#     # T[from_state, to_state] += 1
-
 
 def get_TF_2words(shape, color):
     """ get the forward transition matrix
     for 2-word blocks. 
     Positions in the matrix are shape, then colors """
+    color_offset = 3
     T = np.zeros((6, 6))
-    T[shapes.index(shape), colors.index(color)] = 1
+    T[shapes.index(shape), colors.index(color) + color_offset] = 1
     return T
     # single transition ... is that ok for sequenceness? 
+
+
+def get_TF_5words(s1, c1, rel, s2, c2):
+    """ get the forward transition matrix
+    for 5-word blocks. 
+    Positions in the matrix are shape, color, then relation """
+    T = np.zeros((8, 8))
+    color_offset = 3
+    relation_offset = 6
+    s1_idx, c1_idx, r_idx, s2_idx, c2_idx = shapes.index(s1), colors.index(c1), relations.index(rel), shapes.index(s2), colors.index(c2)
+    T[s1_idx, c1_idx+color_offset] = 1
+    T[c1_idx+color_offset, r_idx+relation_offset] = 1
+    T[r_idx+relation_offset, s2_idx] = 1
+    T[s2_idx, c2_idx+color_offset] = 1
+    return T
+
+
+def splits(data, num_splits=30):
+    """
+    Splits the data into `num_splits` equal-length segments,
+    and then calculates the overall mean and SEM across splits.
+    In place of the proper subject averaging. To be replaced.
+    """
+    split_data = np.array_split(data, num_splits, axis=0)  # Split data into `num_splits` parts
+    split_means = [np.mean(split, axis=0) for split in split_data]  # Mean of each split
+    split_means = np.array(split_means)
+    overall_mean = np.mean(split_means, axis=0)  # Overall mean across splits
+    overall_sem = np.std(split_means, axis=0) / np.sqrt(num_splits)  # SEM across splits
+    return overall_mean, overall_sem
+
+
+def plot_average_preds(present, absent, kind):
+    """ bar plot of average predictions during the delay
+    presents: list of np.array of len(n_trials), grouped for all subjects 
+    absents: list of np.array of len(n_trials), grouped for all subjects
+    kind: str to add to the out_fn, where the decoders were trained on (ImgLoc, scenes, ...)
+    """
+    # from ipdb import set_trace; set_trace()
+    present_ave, present_sem = [], []
+    for i in range(len(present)):
+        mean, stand_err = splits(present[i])
+        present_ave.append(mean)
+        present_sem.append(stand_err)
+    # present_ave, present_sem = splits(present)
+    # present_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in present]
+    # present_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in present]  # Split data into `num_splits` parts
+    # present_sem = [sem(preds, 0, nan_policy='omit') for preds in present]
+    # present_sem = [np.std(preds, 0) for preds in present]
+    # absent_ave = [np.mean(preds, 0) for preds in absent]
+    # absent_sem = [sem(preds, 0, nan_policy='omit') for preds in absent]
+    # absent_sem = [np.std(preds, 0) for preds in absent]
+    # absent_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in absent]
+    # absent_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in absent]  # Split data into `num_splits` parts
+    # absent_ave, absent_sem = splits(absent)
+    absent_ave, absent_sem = [], []
+    for i in range(len(absent)):
+        mean, stand_err = splits(absent[i])
+        absent_ave.append(mean)
+        absent_sem.append(stand_err)
+    
+    # Bar plot
+    labels = ['Shape', 'Color', 'Relation']
+    x = np.arange(len(labels))  # the label locations
+    width = 0.35  # the width of the bars
+    fig, ax = plt.subplots(figsize=(10, 6))
+    rects1 = ax.bar(x - width/2, present_ave, width, yerr=present_sem, label='Present', color='skyblue')
+    rects2 = ax.bar(x + width/2, absent_ave, width, yerr=absent_sem, label='Absent', color='orange')
+
+    # Add labels, title, and legend
+    ax.set_ylabel('Average Predictions')
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.legend()
+
+    # Perform t-tests for each category
+    preds_shape_present, preds_color_present, preds_rel_present = present
+    preds_shape_absent, preds_color_absent, preds_rel_absent = absent
+    shape_ttest = ttest_ind(preds_shape_present, preds_shape_absent)
+    color_ttest = ttest_ind(preds_color_present, preds_color_absent)
+    relation_ttest = ttest_ind(preds_rel_present, preds_rel_absent)
+    p_values = [shape_ttest.pvalue, color_ttest.pvalue, relation_ttest.pvalue]
+
+    alpha = 0.05
+    print("\nSignificance Testing Results:")
+    print(f"Shape: {'Significant' if shape_ttest.pvalue < alpha else 'Not Significant'} (p = {shape_ttest.pvalue:.4f})")
+    print(f"Color: {'Significant' if color_ttest.pvalue < alpha else 'Not Significant'} (p = {color_ttest.pvalue:.4f})")
+    print(f"Relation: {'Significant' if relation_ttest.pvalue < alpha else 'Not Significant'} (p = {relation_ttest.pvalue:.4f})")
+
+    # Add significance stars
+    for i, p_val in enumerate(p_values):
+        if p_val < alpha:
+            y_max = max(present_ave[i] + present_sem[i], absent_ave[i] + absent_sem[i])
+            ax.text(i, y_max + 0.05, '*', ha='center', va='bottom', fontsize=16, color='k')
+
+    # Save the plot
+    plt.tight_layout()
+    plt.savefig(f"{out_dir}/average_preds_{kind}_tested.png", dpi=400)
+
+    plt.close()
 
 
 def sequenceness_Crosscorr(rd, T, lag=1):
