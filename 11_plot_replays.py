@@ -150,6 +150,9 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, test_cond, maxLag
     #     sb[iSub] -= np.nanmean(sb[iSub]) # mean correct
     #     srand[iSub] -= np.nanmean(srand[iSub]) # mean correct
 
+get_preds_and_sequenceness_for_cond(df, all_preds_data, train_cond="scenes", test_cond="scenes", maxLag=50, n_states=8)
+from ipdb import set_trace; set_trace()
+
 # ### 5-words blocks ###
 # n_states = 8
 # T_auto = np.eye(n_states)  # Autotransitions
