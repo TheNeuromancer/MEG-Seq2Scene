@@ -161,7 +161,6 @@ if args.dont_recompute is False:
                                 md["sub"] = [sub] * n_trials
                                 # md["preds"] = preds.transpose(1,0,2).tolist()
                                 all_preds_data.extend(preds.transpose(1,0,2))
-                                from ipdb import set_trace; set_trace()
 
                                 # mds_this_cond.append(md)
                                 all_df.append(md)

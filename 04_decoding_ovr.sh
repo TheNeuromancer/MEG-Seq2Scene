@@ -26,9 +26,7 @@ echo "python 04_decoding_ovr.py -w -s $sub \
 --test-cond 'one_object' \
 --test-query 'Colour1' --windows '1.5, 2.2' \
 --test-cond 'two_objects' \
---test-query 'Colour1' --windows '3, 5' \
---test-cond 'two_objects' \
---test-query 'Colour2' --windows '3, 5' "
+--test-query 'Colour1' --windows '3, 5' "
 
 echo "python 04_decoding_ovr.py -w -s $sub \
 --train-cond 'localizer' --label ImgS \
@@ -36,9 +34,7 @@ echo "python 04_decoding_ovr.py -w -s $sub \
 --test-cond 'one_object' \
 --test-query 'Shape1' --windows '1.5, 2.2' \
 --test-cond 'two_objects' \
---test-query 'Shape1' --windows '3, 5' \
---test-cond 'two_objects' \
---test-query 'Shape2' --windows '3, 5' "
+--test-query 'Shape1' --windows '3, 5' "
 
 echo "python 04_decoding_ovr.py -w -s $sub \
 --train-cond 'localizer' --label WordC \
@@ -46,9 +42,7 @@ echo "python 04_decoding_ovr.py -w -s $sub \
 --test-cond 'one_object' \
 --test-query 'Colour1' --windows '1.5, 2.2' \
 --test-cond 'two_objects' \
---test-query 'Colour1' --windows '3, 5' \
---test-cond 'two_objects' \
---test-query 'Colour2' --windows '3, 5' "
+--test-query 'Colour1' --windows '3, 5' "
 
 echo "python 04_decoding_ovr.py -w -s $sub \
 --train-cond 'localizer' --label WordS \
@@ -56,9 +50,7 @@ echo "python 04_decoding_ovr.py -w -s $sub \
 --test-cond 'one_object' \
 --test-query 'Shape1' --windows '1.5, 2.2' \
 --test-cond 'two_objects' \
---test-query 'Shape1' --windows '3, 5' \
---test-cond 'two_objects' \
---test-query 'Shape2' --windows '3, 5' "
+--test-query 'Shape1' --windows '3, 5' "
 
 	# train on one object
 	echo "python 04_decoding_ovr.py -w \
@@ -66,17 +58,13 @@ echo "python 04_decoding_ovr.py -w -s $sub \
 --train-cond 'one_object' \
 --train-query \"Shape1\" --windows '$t,$t' \
 --test-cond 'two_objects' \
---test-query \"Shape1\" --windows '3, 5' \
---test-cond 'two_objects' \
---test-query \"Shape2\" --windows '3, 5' "
+--test-query \"Shape1\" --windows '3, 5' "
 
 	echo "python 04_decoding_ovr.py -w -s $sub --label Colour  \
 --train-cond 'one_object' \
 --train-query \"Colour1\" --windows '$c1t,$c1t' \
 --test-cond 'two_objects' \
---test-query \"Colour1\" --windows '3, 5' \
---test-cond 'two_objects' \
---test-query \"Colour2\" --windows '3, 5' "
+--test-query \"Colour1\" --windows '3, 5' "
 
 
 	# train on two objects
@@ -85,36 +73,28 @@ echo "python 04_decoding_ovr.py -w -s $sub \
 --train-cond 'two_objects' \
 --train-query \"Shape1\" --windows '$t,$t' \
 --test-cond 'two_objects' \
---test-query \"Shape1\" --windows '3, 5' \
---test-cond 'two_objects' \
---test-query \"Shape2\" --windows '3, 5' "
+--test-query \"Shape1\" --windows '3, 5' "
 
 	echo "python 04_decoding_ovr.py -w \
 -s $sub --label Shape2 \
 --train-cond 'two_objects' \
 --train-query \"Shape2\" --windows '$s2t,$s2t' \
 --test-cond 'two_objects' \
---test-query \"Shape1\" --windows '3, 5' \
---test-cond 'two_objects' \
---test-query \"Shape2\" --windows '3, 5' "
+--test-query \"Shape1\" --windows '3, 5' "
 
 	echo "python 04_decoding_ovr.py -w \
 -s $sub --label Colour1 \
 --train-cond 'two_objects' \
 --train-query \"Colour1\" --windows '$c1t,$c1t' \
 --test-cond 'two_objects' \
---test-query \"Colour1\" --windows '3, 5' \
---test-cond 'two_objects' \
---test-query \"Colour2\" --windows '3, 5' "
+--test-query \"Colour1\" --windows '3, 5' "
 
 	echo "python 04_decoding_ovr.py -w \
 -s $sub --label Colour2 \
 --train-cond 'two_objects' \
 --train-query \"Colour2\" --windows '$c2t,$c2t' \
 --test-cond 'two_objects' \
---test-query \"Colour1\" --windows '3, 5' \
---test-cond 'two_objects' \
---test-query \"Colour2\" --windows '3, 5' "
+--test-query \"Colour1\" --windows '3, 5' "
 
 echo "python 04_decoding_ovr.py -w \
 -s $sub --label Relation \

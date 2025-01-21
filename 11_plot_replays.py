@@ -82,39 +82,62 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
         trial_ids = df_sub.trial_id.unique()
         n_trials = len(trial_ids)
 
-        for iLag in range(maxLag): # for each lag
+        for iLag in range(maxLag): # for each lag ## WHY NOT HAVE THIS OUT OF THE SUBJECT LOOP? HENCE WE DO NOT GET THE PREDS MULTIPLE TIMES FOR EACH LAG.
             sf_all_trials, sb_all_trials, srand_all_trials = [], [], []
             # preds_present_all_trials, preds_absent_all_trials = [], []
-            preds_all = {f"{prez}_{prop}": [] for prez in ['present', 'absent'] for prop in properties}
+
             perfs = []
             for iTrial in range(n_trials):
-                from ipdb import set_trace; set_trace()
                 df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
-                if len(df_trial) != 5: 
-                    print(f"Had to skip trial {iTrial} for lag {iLag*10} ms")
-                    continue
                 s1, c1, rel, s2, c2 = df_trial.iloc[0][Properties].values
+                assert df_trial[Properties].nunique().sum() == 5, f"More than five properties identified for trial {iTrial}: {trial_ids[iTrial]}"
+                
                 TF = get_TF_5words(s1, c1, rel, s2, c2)
                 TR = TF.T
                 rand_inds = np.random.permutation(8)
                 Trand = TF[rand_inds]
                 templates = [TF, TR, Trand, T_auto, T_const]
 
-                preds_shape = df_trial.query(f"label=='{train_cond[0]}'")['preds'].values[0] # now 'S1_0', 'S2_1' are different because based on different decoders.
-                preds_color = df_trial.query(f"label=='{train_cond[1]}'")['preds'].values[0]
-                preds_rel = df_trial.query(f"label=='{train_cond[2]}'")['preds'].values[0]
 
-                def add_present_or_absent_preds_one_trial(preds, props, preds_all):
+                def get_trial_preds_from_data(df_trial, all_preds_data, labels=["S1_0", "C1_0", "R_0", "S2_0", "C2_0"]):
+                    """ get the predictions for a given trial 
+                    df_trial might have more than 5 entries, because decoders may have been tested multiple times
+                    (but should then have the same predictions)
+                    So only take the first generalization (X_0), and test for uniqueness
+                    it is the same in every case because we generalize to the delay period. 
+                    Later 04_decod should not even save it. 
+                    """
+                    preds_shape1_idx = df_trial.query(f"label=='{labels[0]}'").index.values
+                    assert len(preds_shape1_idx) == 1, f"len(preds_shape1_idx)={len(preds_shape1_idx)} for {labels[0]}"
+                    preds_shape1 = all_preds_data[preds_shape1_idx[0]]
+                    preds_color1_idx = df_trial.query(f"label=='{labels[1]}'").index.values
+                    assert len(preds_color1_idx) == 1, f"len(preds_color1_idx)={len(preds_color1_idx)} for {labels[1]}"
+                    preds_color1 = all_preds_data[preds_color1_idx[0]]
+                    preds_rel_idx = df_trial.query(f"label=='{labels[2]}'").index.values
+                    assert len(preds_rel_idx) == 1, f"len(preds_rel_idx)={len(preds_rel_idx)} for {labels[2]}"
+                    preds_rel = all_preds_data[preds_rel_idx[0]]
+                    preds_shape2_idx = df_trial.query(f"label=='{labels[3]}'").index.values
+                    assert len(preds_shape) == 1, f"len(preds_shape2_idx)={len(preds_shape2_idx)} for {labels[3]}"
+                    preds_shape2 = all_preds_data[preds_shape2_idx[0]]
+                    preds_color2_idx = df_trial.query(f"label=='{labels[4]}'").index
+                    assert len(preds_color2_idx) == 1, f"len(preds_color2_idx)={len(preds_color2_idx)} for {labels[4]}"
+                    preds_color2 = all_preds_data[preds_color2_idx[0]]
+
+                    return [preds_shape1, preds_color1, preds_rel, preds_shape2, preds_color2]
+
+
+                def add_present_or_absent_preds_one_trial(preds, props, preds_sub_by_presence):
                     from ipdb import set_trace; set_trace()
-                    for prez, prop in zip(['present', 'absent'], props):
-                        preds_all[f"{prez}_{prop}"].append(preds[:, properties.index(prop)].mean())
-                    return preds_all
+                    for presence, prop in zip(['present', 'absent'], props):
+                        preds_sub_by_presence[f"{presence}_{prop}"].append(preds[:, properties.index(prop)].mean())
+                    return preds_sub_by_presence
 
                 if iLag == 0: # save preds of present vs absent words for barplot of average predictions
 
                     from ipdb import set_trace; set_trace()
-                    preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
-                    preds_all = add_present_or_absent_preds_one_trial([preds_shape, preds_color, preds_rel], [s1, c1, rel, s2, c2], preds_all)
+                    # preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
+                    preds_props = get_trial_preds_from_data(df_trial, all_preds_data)
+                    preds_sub_by_presence = add_present_or_absent_preds_one_trial(preds_props, [s1, c1, rel, s2, c2], preds_sub_by_presence)
 
 
                     preds_shape_present.append(preds_shape[:, shapes.index(s1)].mean())
