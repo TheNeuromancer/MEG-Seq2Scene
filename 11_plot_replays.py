@@ -167,10 +167,10 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
                     for prop in Properties:
                         for presence in ['present', 'absent']:
                             preds = preds_by_presence[f"{prop}_{presence}"]
-                            try:
-                                ave_preds[f"{prop}_{presence}"].append(np.nanmean(preds))
-                            except RuntimeWarning:
-                                from ipdb import set_trace; set_trace()
+                            # try:
+                            ave_preds[f"{prop}_{presence}"].append(np.nanmean(preds))
+                            # except RuntimeWarning:
+                            #     from ipdb import set_trace; set_trace()
                             # sem_preds[f"{prop}_{presence}"].append(sem(preds, nan_policy='omit'))
                         # pvals[f"{prop}"].append(ttest_ind(preds_by_presence[f"{prop}_present"], preds_by_presence[f"{prop}_absent"], nan_policy='omit')[1])
                     return ave_preds #, sem_preds 
@@ -178,7 +178,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
 
 
                 if iLag == 0: # save preds of present vs absent words for barplot of average predictions
-                    warnings.filterwarnings("error")
+                    # warnings.filterwarnings("error")
 
                     # preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
                     preds_props = get_trial_preds_from_data(df_trial, all_preds_data)
@@ -195,6 +195,8 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
     #             srand_all_trials.append(Z[2])
 
             ## For this subject, get the average and sem of the predictions
+            if len(preds_by_presence["Shape1_present"]) == 0:
+                from ipdb import set_trace; set_trace()
             ave_preds_all_subs = get_subj_ave_preds(preds_sub_by_presence, ave_preds_all_subs) 
     #         # mean over trials for this subject, lag and condition
     #         sf[iSub, iLag] = np.nanmean(np.array(sf_all_trials), axis=0)
