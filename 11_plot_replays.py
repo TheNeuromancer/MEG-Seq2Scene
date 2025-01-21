@@ -117,7 +117,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
                     assert len(preds_rel_idx) == 1, f"len(preds_rel_idx)={len(preds_rel_idx)} for {labels[2]}"
                     preds_rel = all_preds_data[preds_rel_idx[0]]
                     preds_shape2_idx = df_trial.query(f"label=='{labels[3]}'").index.values
-                    assert len(preds_shape) == 1, f"len(preds_shape2_idx)={len(preds_shape2_idx)} for {labels[3]}"
+                    assert len(preds_shape2) == 1, f"len(preds_shape2_idx)={len(preds_shape2_idx)} for {labels[3]}"
                     preds_shape2 = all_preds_data[preds_shape2_idx[0]]
                     preds_color2_idx = df_trial.query(f"label=='{labels[4]}'").index
                     assert len(preds_color2_idx) == 1, f"len(preds_color2_idx)={len(preds_color2_idx)} for {labels[4]}"
