@@ -14,11 +14,9 @@ from glob import glob
 from natsort import natsorted
 from mne.stats import permutation_cluster_1samp_test
 from scipy.stats import sem
-# import warnings
+import warnings
 # warnings.filterwarnings('ignore', '.*Provided stat_fun.*', )
 # warnings.filterwarnings('ignore', '.*No clusters found.*', )
-import warnings
-warnings.filterwarnings("error")
 
 from utils.decod import *
 from utils.params import *
@@ -180,6 +178,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
 
 
                 if iLag == 0: # save preds of present vs absent words for barplot of average predictions
+                    warnings.filterwarnings("error")
 
                     # preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
                     preds_props = get_trial_preds_from_data(df_trial, all_preds_data)
