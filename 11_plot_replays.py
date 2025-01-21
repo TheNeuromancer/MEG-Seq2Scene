@@ -85,7 +85,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
         for iLag in range(maxLag): # for each lag ## WHY NOT HAVE THIS OUT OF THE SUBJECT LOOP? HENCE WE DO NOT GET THE PREDS MULTIPLE TIMES FOR EACH LAG.
             sf_all_trials, sb_all_trials, srand_all_trials = [], [], []
             # preds_present_all_trials, preds_absent_all_trials = [], []
-            preds_all_trials = {f"{presence}_{prop}": [] for presence in ['present', 'absent'] for prop in properties} # for this subject and lag
+            preds_sub_by_presence = {f"{presence}_{prop}": [] for presence in ['present', 'absent'] for prop in properties} # for this subject and lag
             perfs = []
             for iTrial in range(n_trials):
                 df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
