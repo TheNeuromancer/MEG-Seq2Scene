@@ -135,11 +135,14 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
                     and whether it was present or absent in the sentence.
                     """ 
                     s1, c1, rel, s2, c2 = props
-                    preds_sub_by_presence["Shape1_present"].append(preds[0][:, shapes.index(s1)].mean())
-                    preds_sub_by_presence["Colour1_present"].append(preds[1][:, colors.index(c1)].mean())
-                    preds_sub_by_presence["Relation_present"].append(preds[2][:, relations.index(rel)].mean())
-                    preds_sub_by_presence["Shape2_present"].append(preds[3][:, shapes.index(s2)].mean())
-                    preds_sub_by_presence["Colour2_present"].append(preds[4][:, colors.index(c2)].mean())
+                    try:
+                        preds_sub_by_presence["Shape1_present"].append(preds[0][:, shapes.index(s1)].mean())
+                        preds_sub_by_presence["Colour1_present"].append(preds[1][:, colors.index(c1)].mean())
+                        preds_sub_by_presence["Relation_present"].append(preds[2][:, relations.index(rel)].mean())
+                        preds_sub_by_presence["Shape2_present"].append(preds[3][:, shapes.index(s2)].mean())
+                        preds_sub_by_presence["Colour2_present"].append(preds[4][:, colors.index(c2)].mean())
+                    except RuntimeWarning:
+                        from ipdb import set_trace; set_trace()
 
                     shapes_absent = [s for s in shapes if s not in [s1, s2]]
                     colors_absent = [c for c in colors if c not in [c1, c2]]
@@ -164,7 +167,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
                         for presence in ['present', 'absent']:
                             preds = preds_by_presence[f"{prop}_{presence}"]
                             try:
-                                ave_preds[f"{prop}_{presence}"].append(np.mean(preds))
+                                ave_preds[f"{prop}_{presence}"].append(np.nanmean(preds))
                             except RuntimeWarning:
                                 from ipdb import set_trace; set_trace()
                             # sem_preds[f"{prop}_{presence}"].append(sem(preds, nan_policy='omit'))
