@@ -156,9 +156,9 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
 
 
                 def subj_stats_on_preds(preds_by_presence, ave_preds, sem_preds): #, pvals):
-                """ Updates the across subjects dict with the values
-                for this subject
-                """
+                    """ Updates the across subjects dict with the values
+                    for this subject
+                    """
                     for prop in Properties:
                         for presence in ['present', 'absent']:
                             preds = preds_by_presence[f"{prop}_{presence}"] # np.array(
