@@ -66,7 +66,7 @@ maxLag = 50
 # n_subs = len(subs)
 
 
-def get_preds_and_sequenceness_for_cond(df, preds, train_cond, test_cond, maxLag=50, n_states=8):
+def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=50, n_states=8):
     T_auto = np.eye(n_states)  # Autotransitions
     T_const = np.ones((n_states, n_states))  # Uniform transitions
     times = np.arange(maxLag)*10
@@ -74,7 +74,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, test_cond, maxLag
     n_subs = len(subs)
 
     from ipdb import set_trace; set_trace()
-    df_cond = df.query(f"train_cond == '{train_cond}' and test_cond == '{test_cond}'")
+    df_cond = df.query(f"train_cond == '{train_cond}' and gen_cond == '{gen_cond}'")
     sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
     sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for comparison purpose
     preds_present, preds_absent = [], []
@@ -150,7 +150,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, test_cond, maxLag
     #     sb[iSub] -= np.nanmean(sb[iSub]) # mean correct
     #     srand[iSub] -= np.nanmean(srand[iSub]) # mean correct
 
-get_preds_and_sequenceness_for_cond(df, all_preds_data, train_cond="scenes", test_cond="scenes", maxLag=50, n_states=8)
+get_preds_and_sequenceness_for_cond(df, all_preds_data, train_cond="scenes", gen_cond="scenes", maxLag=50, n_states=8)
 from ipdb import set_trace; set_trace()
 
 # ### 5-words blocks ###
