@@ -77,6 +77,8 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
     sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
     sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for comparison purpose
     preds_present, preds_absent = [], []
+    ave_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties}
+    sem_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties}
     for iSub, sub in enumerate(subs):
         df_sub = df_cond.query(f"sub=={sub}")
         trial_ids = df_sub.trial_id.unique()
@@ -132,33 +134,46 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
                     #     preds_sub_by_presence[f"{presence}_{prop}"].append(preds[:, properties.index(prop)].mean())
                     s1, c1, rel, s2, c2 = props
                     from ipdb import set_trace; set_trace()
-                    preds_sub_by_presence["Shape1_present"].append(preds_shape[:, shapes.index(s1)].mean())
-                    preds_sub_by_presence["Colour1_present"].append(preds_rel[:, relations.index(rel)].mean())
-                    preds_sub_by_presence["Relation_present"].append(preds_color[:, colors.index(c1)].mean())
-                    preds_sub_by_presence["Shape2_present"].append(preds_shape[:, shapes.index(s2)].mean())
-                    preds_sub_by_presence["Colour2_present"].append(preds_color[:, colors.index(c2)].mean())
+                    preds_sub_by_presence["Shape1_present"].append(preds[0][:, shapes.index(s1)].mean())
+                    preds_sub_by_presence["Colour1_present"].append(preds[1][:, colors.index(c1)].mean())
+                    preds_sub_by_presence["Relation_present"].append(preds[2][:, relations.index(rel)].mean())
+                    preds_sub_by_presence["Shape2_present"].append(preds[3][:, shapes.index(s2)].mean())
+                    preds_sub_by_presence["Colour2_present"].append(preds[4][:, colors.index(c2)].mean())
 
                     shapes_absent = [s for s in shapes if s not in [s1, s2]]
                     colors_absent = [c for c in colors if c not in [c1, c2]]
                     relation_absent = [r for r in relations if r != rel][0]
                     for absent_shape in shapes_absent:
-                        preds_sub_by_presence["Shape1_absent"].append(preds_shape[:, shapes.index(absent_shape)].mean())
+                        preds_sub_by_presence["Shape1_absent"].append(preds[0][:, shapes.index(absent_shape)].mean())
+                        preds_sub_by_presence["Shape2_absent"].append(preds[3][:, shapes.index(absent_shape)].mean())
                     for absent_color in colors_absent:
-                        preds_color_absent.append(preds_color[:, colors.index(absent_color)].mean())
-                    preds_rel_absent.append(preds_rel[:, relations.index(relation_absent)].mean())
+                        preds_sub_by_presence["Colour1_absent"].append(preds[1][:, colors.index(absent_color)].mean())
+                        preds_sub_by_presence["Colour2_absent"].append(preds[4][:, colors.index(absent_color)].mean())
+                    preds_sub_by_presence['Relation_absent'].append(preds[2][:, relations.index(relation_absent)].mean())
 
-                    ## Separate present first, present second, and absent? 
-
-
+                    ## TODO: Separate present first, present second, and absent? 
                     return preds_sub_by_presence
+
+
+                def subj_stats_on_preds(preds_by_presence, ave_preds, sem_preds): #, pvals):
+                """ Updates the across subjects dict with the values
+                for this subject
+                """
+                    for prop in Properties:
+                        for presence in ['present', 'absent']:
+                            preds = preds_by_presence[f"{prop}_{presence}"] # np.array(
+                            ave_preds[f"{prop}_{presence}"].append(preds.mean())
+                            sem_preds[f"{prop}_{presence}"].append(sem(preds, nan_policy='omit'))
+                        # pvals[f"{prop}"].append(ttest_ind(preds_by_presence[f"{prop}_present"], preds_by_presence[f"{prop}_absent"], nan_policy='omit')[1])
+                    return ave_preds, sem_preds #, pvals
+
+
 
                 if iLag == 0: # save preds of present vs absent words for barplot of average predictions
 
-                    from ipdb import set_trace; set_trace()
                     # preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
                     preds_props = get_trial_preds_from_data(df_trial, all_preds_data)
                     preds_sub_by_presence = add_present_or_absent_preds_one_trial(preds_props, [s1, c1, rel, s2, c2], preds_sub_by_presence)
-
 
 
     #             trial_preds = np.concatenate([preds_shape, preds_color, preds_rel], axis=1)
@@ -170,6 +185,9 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
     #             sb_all_trials.append(Z[1])
     #             srand_all_trials.append(Z[2])
 
+            ## For this subject, get the average and sem of the predictions
+            ave_preds_all_subs, sem_preds_all_subs = subj_stats_on_preds(preds_sub_by_presence, \
+                                                        ave_preds_all_subs, sem_preds_all_subs) 
     #         # mean over trials for this subject, lag and condition
     #         sf[iSub, iLag] = np.nanmean(np.array(sf_all_trials), axis=0)
     #         sb[iSub, iLag] = np.nanmean(np.array(sb_all_trials), axis=0)
@@ -179,8 +197,18 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
     #     sb[iSub] -= np.nanmean(sb[iSub]) # mean correct
     #     srand[iSub] -= np.nanmean(srand[iSub]) # mean correct
 
-get_preds_and_sequenceness_for_cond(df, all_preds_data, train_cond="scenes", gen_cond="scenes", maxLag=50, n_states=8)
+    return ave_preds_all_subs, sem_preds_all_subs, sf, sb, sr
+
+preds_sub_by_presence, sf, sb, sr = get_preds_and_sequenceness_for_cond(df, \
+                       all_preds_data, train_cond="scenes", gen_cond="scenes")
 from ipdb import set_trace; set_trace()
+
+
+present = [preds_shape_present, preds_color_present, preds_rel_present]
+absent = [preds_shape_absent, preds_color_absent, preds_rel_absent]
+plot_average_preds(present, absent, "scenes_trained_scenes")
+
+
 
 # ### 5-words blocks ###
 # n_states = 8
