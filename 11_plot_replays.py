@@ -161,8 +161,8 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
                     """
                     for prop in Properties:
                         for presence in ['present', 'absent']:
-                            preds = preds_by_presence[f"{prop}_{presence}"] # np.array(
-                            ave_preds[f"{prop}_{presence}"].append(preds.mean())
+                            preds = preds_by_presence[f"{prop}_{presence}"]
+                            ave_preds[f"{prop}_{presence}"].append(np.mean(preds))
                             sem_preds[f"{prop}_{presence}"].append(sem(preds, nan_policy='omit'))
                         # pvals[f"{prop}"].append(ttest_ind(preds_by_presence[f"{prop}_present"], preds_by_presence[f"{prop}_absent"], nan_policy='omit')[1])
                     return ave_preds, sem_preds #, pvals
