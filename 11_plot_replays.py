@@ -79,7 +79,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
     sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for comparison purpose
     preds_present, preds_absent = [], []
     for iSub, sub in enumerate(subs):
-        df_sub = df_cond.query(f"sub=='{sub}'")
+        df_sub = df_cond.query(f"sub=={sub}")
         trial_ids = df_sub.trial_id.unique()
         n_trials = len(trial_ids)
 
