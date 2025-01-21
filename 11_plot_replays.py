@@ -129,11 +129,12 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
 
 
                 def add_present_or_absent_preds_one_trial(preds, props, preds_sub_by_presence):
-                    # from ipdb import set_trace; set_trace()
-                    # for presence, prop in zip(['present', 'absent'], Properties):
-                    #     preds_sub_by_presence[f"{presence}_{prop}"].append(preds[:, properties.index(prop)].mean())
+                    """ take the predictions for a single trial
+                    and put them in the dict that stores all preds
+                    with this subjects, as a function of the property
+                    and whether it was present or absent in the sentence.
+                    """ 
                     s1, c1, rel, s2, c2 = props
-                    # from ipdb import set_trace; set_trace()
                     preds_sub_by_presence["Shape1_present"].append(preds[0][:, shapes.index(s1)].mean())
                     preds_sub_by_presence["Colour1_present"].append(preds[1][:, colors.index(c1)].mean())
                     preds_sub_by_presence["Relation_present"].append(preds[2][:, relations.index(rel)].mean())
@@ -162,6 +163,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
                     for prop in Properties:
                         for presence in ['present', 'absent']:
                             preds = preds_by_presence[f"{prop}_{presence}"]
+                            from ipdb import set_trace; set_trace()
                             ave_preds[f"{prop}_{presence}"].append(np.mean(preds))
                             sem_preds[f"{prop}_{presence}"].append(sem(preds, nan_policy='omit'))
                         # pvals[f"{prop}"].append(ttest_ind(preds_by_presence[f"{prop}_present"], preds_by_presence[f"{prop}_absent"], nan_policy='omit')[1])
