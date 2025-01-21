@@ -28,8 +28,8 @@ from autoreject import AutoReject
 from mne.stats import permutation_cluster_1samp_test, fdr_correction
 from mne.decoding import UnsupervisedSpatialFilter
 
-from pyriemann.estimation import Covariances, XdawnCovariances
-from pyriemann.tangentspace import TangentSpace
+# from pyriemann.estimation import Covariances, XdawnCovariances
+# from pyriemann.tangentspace import TangentSpace
 
 
 # local import
