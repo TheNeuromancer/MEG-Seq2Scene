@@ -195,9 +195,10 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
     #             srand_all_trials.append(Z[2])
 
             ## For this subject, get the average and sem of the predictions
-            if len(preds_sub_by_presence["Shape1_present"]) == 0:
-                from ipdb import set_trace; set_trace()
-            ave_preds_all_subs = get_subj_ave_preds(preds_sub_by_presence, ave_preds_all_subs) 
+            if iLag == 0:
+                if len(preds_sub_by_presence["Shape1_present"]) == 0:
+                    from ipdb import set_trace; set_trace()
+                ave_preds_all_subs = get_subj_ave_preds(preds_sub_by_presence, ave_preds_all_subs) 
     #         # mean over trials for this subject, lag and condition
     #         sf[iSub, iLag] = np.nanmean(np.array(sf_all_trials), axis=0)
     #         sb[iSub, iLag] = np.nanmean(np.array(sb_all_trials), axis=0)
