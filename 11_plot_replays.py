@@ -73,7 +73,6 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
     subs = df['sub'].unique()
     n_subs = len(subs)
 
-    from ipdb import set_trace; set_trace()
     df_cond = df.query(f"train_cond == '{train_cond}' and gen_cond == '{gen_cond}'")
     sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
     sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for comparison purpose
@@ -89,6 +88,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
             preds_all = {f"{prez}_{prop}": [] for prez in ['present', 'absent'] for prop in properties}
             perfs = []
             for iTrial in range(n_trials):
+                from ipdb import set_trace; set_trace()
                 df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
                 if len(df_trial) != 5: 
                     print(f"Had to skip trial {iTrial} for lag {iLag*10} ms")
