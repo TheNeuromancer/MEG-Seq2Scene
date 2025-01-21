@@ -17,6 +17,8 @@ from scipy.stats import sem
 # import warnings
 # warnings.filterwarnings('ignore', '.*Provided stat_fun.*', )
 # warnings.filterwarnings('ignore', '.*No clusters found.*', )
+import warnings
+warnings.filterwarnings("error")
 
 from utils.decod import *
 from utils.params import *
@@ -141,19 +143,20 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
                         preds_sub_by_presence["Relation_present"].append(preds[2][:, relations.index(rel)].mean())
                         preds_sub_by_presence["Shape2_present"].append(preds[3][:, shapes.index(s2)].mean())
                         preds_sub_by_presence["Colour2_present"].append(preds[4][:, colors.index(c2)].mean())
+
+                        shapes_absent = [s for s in shapes if s not in [s1, s2]]
+                        colors_absent = [c for c in colors if c not in [c1, c2]]
+                        relation_absent = [r for r in relations if r != rel][0]
+                        for absent_shape in shapes_absent:
+                            preds_sub_by_presence["Shape1_absent"].append(preds[0][:, shapes.index(absent_shape)].mean())
+                            preds_sub_by_presence["Shape2_absent"].append(preds[3][:, shapes.index(absent_shape)].mean())
+                        for absent_color in colors_absent:
+                            preds_sub_by_presence["Colour1_absent"].append(preds[1][:, colors.index(absent_color)].mean())
+                            preds_sub_by_presence["Colour2_absent"].append(preds[4][:, colors.index(absent_color)].mean())
+                        preds_sub_by_presence['Relation_absent'].append(preds[2][:, relations.index(relation_absent)].mean())
+
                     except RuntimeWarning:
                         from ipdb import set_trace; set_trace()
-
-                    shapes_absent = [s for s in shapes if s not in [s1, s2]]
-                    colors_absent = [c for c in colors if c not in [c1, c2]]
-                    relation_absent = [r for r in relations if r != rel][0]
-                    for absent_shape in shapes_absent:
-                        preds_sub_by_presence["Shape1_absent"].append(preds[0][:, shapes.index(absent_shape)].mean())
-                        preds_sub_by_presence["Shape2_absent"].append(preds[3][:, shapes.index(absent_shape)].mean())
-                    for absent_color in colors_absent:
-                        preds_sub_by_presence["Colour1_absent"].append(preds[1][:, colors.index(absent_color)].mean())
-                        preds_sub_by_presence["Colour2_absent"].append(preds[4][:, colors.index(absent_color)].mean())
-                    preds_sub_by_presence['Relation_absent'].append(preds[2][:, relations.index(relation_absent)].mean())
 
                     ## TODO: Separate present first, present second, and absent? 
                     return preds_sub_by_presence
