@@ -195,3 +195,4 @@ Train decoder on ALL triangles? Whatever the block it is in?
 Script for replay strength as a function of regularization?
 are the predicted probabilites predictive of the subject performances?
 Save a stamp for each trial during training, eg block-trial nbs? To facilitate replay analyses. DONE, think it should work
+PAC over the course of the sentence? Or at least for 2 vs 5 words.
