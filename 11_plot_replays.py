@@ -73,7 +73,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, test_cond, maxLag
     subs = df['sub'].unique()
     n_subs = len(subs)
 
-    df_cond = df.query(f"train_cond == '{train_cond}'' and test_cond == '{test_cond}'")
+    df_cond = df.query(f"train_cond == '{train_cond}' and test_cond == '{test_cond}'")
     sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
     sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for comparison purpose
     preds_present, preds_absent = [], []
