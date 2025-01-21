@@ -78,7 +78,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
     sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for comparison purpose
     preds_present, preds_absent = [], []
     ave_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties}
-    sem_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties}
+    # sem_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties}
     for iSub, sub in enumerate(subs):
         df_sub = df_cond.query(f"sub=={sub}")
         trial_ids = df_sub.trial_id.unique()
@@ -156,18 +156,17 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
                     return preds_sub_by_presence
 
 
-                def subj_stats_on_preds(preds_by_presence, ave_preds, sem_preds): #, pvals):
+                def get_subj_ave_preds(preds_by_presence, ave_preds):
                     """ Updates the across subjects dict with the values
                     for this subject
                     """
                     for prop in Properties:
                         for presence in ['present', 'absent']:
                             preds = preds_by_presence[f"{prop}_{presence}"]
-                            from ipdb import set_trace; set_trace()
                             ave_preds[f"{prop}_{presence}"].append(np.mean(preds))
-                            sem_preds[f"{prop}_{presence}"].append(sem(preds, nan_policy='omit'))
+                            # sem_preds[f"{prop}_{presence}"].append(sem(preds, nan_policy='omit'))
                         # pvals[f"{prop}"].append(ttest_ind(preds_by_presence[f"{prop}_present"], preds_by_presence[f"{prop}_absent"], nan_policy='omit')[1])
-                    return ave_preds, sem_preds #, pvals
+                    return ave_preds #, sem_preds 
 
 
 
@@ -188,8 +187,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
     #             srand_all_trials.append(Z[2])
 
             ## For this subject, get the average and sem of the predictions
-            ave_preds_all_subs, sem_preds_all_subs = subj_stats_on_preds(preds_sub_by_presence, \
-                                                        ave_preds_all_subs, sem_preds_all_subs) 
+            ave_preds_all_subs = get_subj_ave_preds(preds_sub_by_presence, ave_preds_all_subs) 
     #         # mean over trials for this subject, lag and condition
     #         sf[iSub, iLag] = np.nanmean(np.array(sf_all_trials), axis=0)
     #         sb[iSub, iLag] = np.nanmean(np.array(sb_all_trials), axis=0)
