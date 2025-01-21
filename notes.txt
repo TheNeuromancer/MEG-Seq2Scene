@@ -189,10 +189,10 @@ Replay strength seems random.
 TODOs:
 Check the trained on scenes / tested in scenes. You nw have 2 different decoders for the shape and for the colour. How to combine them properly?
 
-Started to correctly save data for replay and to functionize the code at the end of concat_for_replays, to put it in a new script. 
 
 Train decoder on ALL triangles? Whatever the block it is in? 
 Script for replay strength as a function of regularization?
 are the predicted probabilites predictive of the subject performances?
 Save a stamp for each trial during training, eg block-trial nbs? To facilitate replay analyses. DONE, think it should work
 PAC over the course of the sentence? Or at least for 2 vs 5 words.
+Add the regularization in the out_fn? Then you need to parse it in the results loading script!
