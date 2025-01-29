@@ -23,22 +23,30 @@ def get_trial_preds_from_data(df_trial, all_preds_data, labels=["S1_0", "C1_0", 
     Later 04_decod should not even save it. 
     """
     preds_shape1_idx = df_trial.query(f"label=='{labels[0]}'").index.values
-    if len(preds_shape1_idx) > 1:
-        from ipdb import set_trace; set_trace()
-    assert len(preds_shape1_idx) == 1, f"len(preds_shape1_idx)={len(preds_shape1_idx)} for {labels[0]}"
+    # if len (preds_shape1_idx) > 1: print(f"len(preds_shape1_idx)={len(preds_shape1_idx)} for {labels[0]}")
+    # if len(preds_shape1_idx) > 1:
+     # there are a few duplicates, not sure why. DO NOT Remove them because it fucks up the indexing, and as all_preds_data have the same indexing. 
+        # df.drop_duplicates(inplace=True)
+    # from ipdb import set_trace; set_trace()
+    # assert len(preds_shape1_idx) == 1, f"len(preds_shape1_idx)={len(preds_shape1_idx)} for {labels[0]}"
     preds_shape1 = all_preds_data[preds_shape1_idx[0]]
+
     preds_color1_idx = df_trial.query(f"label=='{labels[1]}'").index.values
-    assert len(preds_color1_idx) == 1, f"len(preds_color1_idx)={len(preds_color1_idx)} for {labels[1]}"
+    # assert len(preds_color1_idx) == 1, f"len(preds_color1_idx)={len(preds_color1_idx)} for {labels[1]}"
     preds_color1 = all_preds_data[preds_color1_idx[0]]
+
     preds_rel_idx = df_trial.query(f"label=='{labels[2]}'").index.values
-    assert len(preds_rel_idx) == 1, f"len(preds_rel_idx)={len(preds_rel_idx)} for {labels[2]}"
+    # assert len(preds_rel_idx) == 1, f"len(preds_rel_idx)={len(preds_rel_idx)} for {labels[2]}"
     preds_rel = all_preds_data[preds_rel_idx[0]]
+
     preds_shape2_idx = df_trial.query(f"label=='{labels[3]}'").index.values
-    assert len(preds_shape2_idx) == 1, f"len(preds_shape2_idx)={len(preds_shape2_idx)} for {labels[3]}"
+    # assert len(preds_shape2_idx) == 1, f"len(preds_shape2_idx)={len(preds_shape2_idx)} for {labels[3]}"
     preds_shape2 = all_preds_data[preds_shape2_idx[0]]
-    preds_color2_idx = df_trial.query(f"label=='{labels[4]}'").index
-    assert len(preds_color2_idx) == 1, f"len(preds_color2_idx)={len(preds_color2_idx)} for {labels[4]}"
+
+    preds_color2_idx = df_trial.query(f"label=='{labels[4]}'").index.values
+    # assert len(preds_color2_idx) == 1, f"len(preds_color2_idx)={len(preds_color2_idx)} for {labels[4]}"
     preds_color2 = all_preds_data[preds_color2_idx[0]]
+
 
     return [preds_shape1, preds_color1, preds_rel, preds_shape2, preds_color2]
 

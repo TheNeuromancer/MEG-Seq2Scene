@@ -58,7 +58,7 @@ dat_fn = f"{res_dir}/all_preds_data.csv"
 all_preds_data = pickle.load(open(f"{res_dir}/all_preds_data.pkl", 'rb'))
 
 
-maxLag = 50
+maxLag = 5
 # times = np.arange(maxLag)*10
 # theoretical_peak = 11 # in the paper the peak lag is at 110ms
 # pval_th = 0.05 / maxLag
@@ -79,7 +79,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
     preds_present, preds_absent = [], []
     ave_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties}
     # sem_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties}
-    for iSub, sub in enumerate(subs):
+    for iSub, sub in tqdm(enumerate(subs)):
         df_sub = df_cond.query(f"sub=={sub}")
         trial_ids = df_sub.trial_id.unique()
         n_trials = len(trial_ids)
@@ -92,6 +92,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
             for iTrial in range(n_trials):
                 df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
                 s1, c1, rel, s2, c2 = df_trial.iloc[0][Properties].values
+                if df_trial[Properties].nunique().sum() != 5: from ipdb import set_trace; set_trace()
                 assert df_trial[Properties].nunique().sum() == 5, f"More than five properties identified for trial {iTrial}: {trial_ids[iTrial]}"
                 
                 TF = get_TF_5words(s1, c1, rel, s2, c2)
@@ -132,9 +133,9 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
     #     sb[iSub] -= np.nanmean(sb[iSub]) # mean correct
     #     srand[iSub] -= np.nanmean(srand[iSub]) # mean correct
 
-    return ave_preds_all_subs, sem_preds_all_subs, sf, sb, sr
+    return ave_preds_all_subs, sf, sb, sr
 
-preds_sub_by_presence, sf, sb, sr = get_preds_and_sequenceness_for_cond(df, \
+ave_preds_all_subs, sf, sb, sr = get_preds_and_sequenceness_for_cond(df, \
                        all_preds_data, train_cond="scenes", gen_cond="scenes")
 from ipdb import set_trace; set_trace()
 

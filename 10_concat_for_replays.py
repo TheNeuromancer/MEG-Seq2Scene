@@ -194,7 +194,8 @@ if args.dont_recompute is False:
     df = pd.concat(all_df)
     df.drop(columns=["Unnamed: 0", "Loc_word", "Word_position", "Mapping", "Matching", "Error_type", "Violated_position", "split_query", "Mismatch_side"], inplace=True)
     df.reset_index(inplace=True)
-    df['trial_id'] = df ["sub"] + df["run_nb"].apply(str) + df["RT"].apply(str) + df["Difficulty"] + df["Shape1"] + df["Colour1"] + df["Shape2"] + df["Colour2"]
+    df.drop(columns="index", inplace=True)
+    df['trial_id'] = df ["sub"] + df["run_nb"].apply(str) + df["RT"].apply(str) + df["Difficulty"] + df["Shape1"] + df["Colour1"] + df["Shape2"] + df["Colour2"] + df["Button"]
     # + df["Img_position"]
      # + df["Fontsize"].apply(str) + df["Change"]
     df.to_csv(f"{out_dir}/all_preds_data.csv", index=False)
@@ -207,6 +208,9 @@ if args.dont_recompute is False:
 else:
     df = pd.read_csv(f"{out_dir}/all_preds_data.csv")
     all_preds_data = pickle.load(open(f"{out_dir}/all_preds_data.pkl", 'rb'))
+
+
+from ipdb import set_trace; set_trace()
 
 
 from utils.replays import *
