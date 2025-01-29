@@ -117,25 +117,25 @@ def get_TF_5words(s1, c1, rel, s2, c2):
     return T
 
 
-def splits(data, num_splits=30):
-    """
-    Splits the data into `num_splits` equal-length segments,
-    and then calculates the overall mean and SEM across splits.
-    In place of the proper subject averaging. To be replaced.
-    """
-    split_data = np.array_split(data, num_splits, axis=0)  # Split data into `num_splits` parts
-    split_means = [np.mean(split, axis=0) for split in split_data]  # Mean of each split
-    split_means = np.array(split_means)
-    overall_mean = np.mean(split_means, axis=0)  # Overall mean across splits
-    overall_sem = np.std(split_means, axis=0) / np.sqrt(num_splits)  # SEM across splits
-    return overall_mean, overall_sem
+# def splits(data, num_splits=30):
+#     """
+#     Splits the data into `num_splits` equal-length segments,
+#     and then calculates the overall mean and SEM across splits.
+#     In place of the proper subject averaging. To be replaced.
+#     """
+#     split_data = np.array_split(data, num_splits, axis=0)  # Split data into `num_splits` parts
+#     split_means = [np.mean(split, axis=0) for split in split_data]  # Mean of each split
+#     split_means = np.array(split_means)
+#     overall_mean = np.mean(split_means, axis=0)  # Overall mean across splits
+#     overall_sem = np.std(split_means, axis=0) / np.sqrt(num_splits)  # SEM across splits
+#     return overall_mean, overall_sem
 
 
-def plot_average_preds(present, absent, kind):
+def plot_average_preds(present, absent, additional_str):
     """ bar plot of average predictions during the delay
     presents: list of np.array of len(n_trials), grouped for all subjects 
     absents: list of np.array of len(n_trials), grouped for all subjects
-    kind: str to add to the out_fn, where the decoders were trained on (ImgLoc, scenes, ...)
+    additional_str: str to add to the out_fn, where the decoders were trained on (ImgLoc, scenes, ...)
     """
     # from ipdb import set_trace; set_trace()
     present_ave, present_sem = [], []
@@ -143,17 +143,6 @@ def plot_average_preds(present, absent, kind):
         mean, stand_err = splits(present[i])
         present_ave.append(mean)
         present_sem.append(stand_err)
-    # present_ave, present_sem = splits(present)
-    # present_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in present]
-    # present_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in present]  # Split data into `num_splits` parts
-    # present_sem = [sem(preds, 0, nan_policy='omit') for preds in present]
-    # present_sem = [np.std(preds, 0) for preds in present]
-    # absent_ave = [np.mean(preds, 0) for preds in absent]
-    # absent_sem = [sem(preds, 0, nan_policy='omit') for preds in absent]
-    # absent_sem = [np.std(preds, 0) for preds in absent]
-    # absent_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in absent]
-    # absent_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in absent]  # Split data into `num_splits` parts
-    # absent_ave, absent_sem = splits(absent)
     absent_ave, absent_sem = [], []
     for i in range(len(absent)):
         mean, stand_err = splits(absent[i])
@@ -196,7 +185,7 @@ def plot_average_preds(present, absent, kind):
 
     # Save the plot
     plt.tight_layout()
-    plt.savefig(f"{out_dir}/average_preds_{kind}_tested.png", dpi=400)
+    plt.savefig(f"{out_dir}/average_preds_{additional_str}_tested.png", dpi=400)
 
     plt.close()
 

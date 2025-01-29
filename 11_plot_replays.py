@@ -75,16 +75,18 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
 
     df_cond = df.query(f"train_cond == '{train_cond}' and gen_cond == '{gen_cond}'")
     sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
-    sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for comparison purpose
+    sb, sr = np.copy(sf), np.copy(sf) # also a random matrix, for comparison purpose
     preds_present, preds_absent = [], []
     ave_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties}
-    # sem_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties}
-    for iSub, sub in tqdm(enumerate(subs)):
-        df_sub = df_cond.query(f"sub=={sub}")
-        trial_ids = df_sub.trial_id.unique()
-        n_trials = len(trial_ids)
 
-        for iLag in range(maxLag): # for each lag ## WHY NOT HAVE THIS OUT OF THE SUBJECT LOOP? HENCE WE DO NOT GET THE PREDS MULTIPLE TIMES FOR EACH LAG.
+    for iLag in range(maxLag): # for each lag
+        if iLag > 0: continue # quick fix for just looking at the predictions, no replay
+
+        for iSub, sub in tqdm(enumerate(subs)):
+            df_sub = df_cond.query(f"sub=={sub}")
+            trial_ids = df_sub.trial_id.unique()
+            n_trials = len(trial_ids)
+
             sf_all_trials, sb_all_trials, srand_all_trials = [], [], []
             # preds_present_all_trials, preds_absent_all_trials = [], []
             preds_sub_by_presence = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties} # for this subject and lag
@@ -119,7 +121,7 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, maxLag=
     #             sb_all_trials.append(Z[1])
     #             srand_all_trials.append(Z[2])
 
-            ## For this subject, get the average and sem of the predictions
+            ## For this subject, get the average of the predictions
             if iLag == 0:
                 if len(preds_sub_by_presence["Shape1_present"]) == 0:
                     from ipdb import set_trace; set_trace()
