@@ -4,15 +4,12 @@ do
 # #low_high low_low high_low high_vlow low_vlow low_vhigh high_vhigh vhigh_vhigh vhigh_high vhigh_low
 # 	do
 
-# -c v34 ?
-
-
 ### SINGLE TIME POINT TRAINING (gen to the delay)
 ## addition function
 add() { n="$@"; bc <<< "${n// /+}"; }
 
 # for t in 0.17 0.2 0.3 0.4 0.5 0.6 0.8
-for t in 0.2 # 0.3 0.4 0.6
+for t in 0.2 0.3 0.4 0.6 0.8
 do
 	c1t=$(add $t 0.6)
 	rt=$(add $t 1.2)
@@ -20,32 +17,32 @@ do
 	c2t=$(add $t 2.4)
 
 	# train on loc
-echo "python 04_decoding_ovr.py -c v9_config -w -s $sub \
---train-cond 'localizer' --label ImgC \
+echo "python 04_decoding_ovr.py -w -s $sub \
+--train-cond 'localizer' --label ImgC$t \
 --train-query 'Loc_image_colour' --windows '$t,$t' \
 --test-cond 'one_object' \
 --test-query 'Colour1' --windows '1.5, 2.2' \
 --test-cond 'two_objects' \
 --test-query 'Colour1' --windows '3, 5' "
 
-echo "python 04_decoding_ovr.py -c v9_config -w -s $sub \
---train-cond 'localizer' --label ImgS \
+echo "python 04_decoding_ovr.py -w -s $sub \
+--train-cond 'localizer' --label ImgS$t \
 --train-query 'Loc_image_shape' --windows '$t,$t' \
 --test-cond 'one_object' \
 --test-query 'Shape1' --windows '1.5, 2.2' \
 --test-cond 'two_objects' \
 --test-query 'Shape1' --windows '3, 5' "
 
-echo "python 04_decoding_ovr.py -c v9_config -w -s $sub \
---train-cond 'localizer' --label WordC \
+echo "python 04_decoding_ovr.py -w -s $sub \
+--train-cond 'localizer' --label WordC$t \
 --train-query 'Loc_colour' --windows '$t,$t' \
 --test-cond 'one_object' \
 --test-query 'Colour1' --windows '1.5, 2.2' \
 --test-cond 'two_objects' \
 --test-query 'Colour1' --windows '3, 5' "
 
-echo "python 04_decoding_ovr.py -c v9_config -w -s $sub \
---train-cond 'localizer' --label WordS \
+echo "python 04_decoding_ovr.py -w -s $sub \
+--train-cond 'localizer' --label WordS$t \
 --train-query 'Loc_shape' --windows '$t,$t' \
 --test-cond 'one_object' \
 --test-query 'Shape1' --windows '1.5, 2.2' \
@@ -53,14 +50,14 @@ echo "python 04_decoding_ovr.py -c v9_config -w -s $sub \
 --test-query 'Shape1' --windows '3, 5' "
 
 	# train on one object
-	echo "python 04_decoding_ovr.py -c v9_config -w \
--s $sub --label Shape \
+	echo "python 04_decoding_ovr.py -w \
+-s $sub --label Shape$t \
 --train-cond 'one_object' \
 --train-query \"Shape1\" --windows '$t,$t' \
 --test-cond 'two_objects' \
 --test-query \"Shape1\" --windows '3, 5' "
 
-	echo "python 04_decoding_ovr.py -c v9_config -w -s $sub --label Colour  \
+	echo "python 04_decoding_ovr.py -w -s $sub --label Colour$t  \
 --train-cond 'one_object' \
 --train-query \"Colour1\" --windows '$c1t,$c1t' \
 --test-cond 'two_objects' \
@@ -68,36 +65,36 @@ echo "python 04_decoding_ovr.py -c v9_config -w -s $sub \
 
 
 	# train on two objects
-	echo "python 04_decoding_ovr.py -c v9_config -w \
--s $sub --label Shape1 \
+	echo "python 04_decoding_ovr.py -w \
+-s $sub --label Shape1$t \
 --train-cond 'two_objects' \
 --train-query \"Shape1\" --windows '$t,$t' \
 --test-cond 'two_objects' \
 --test-query \"Shape1\" --windows '3, 5' "
 
-	echo "python 04_decoding_ovr.py -c v9_config -w \
--s $sub --label Shape2 \
+	echo "python 04_decoding_ovr.py -w \
+-s $sub --label Shape2$t \
 --train-cond 'two_objects' \
 --train-query \"Shape2\" --windows '$s2t,$s2t' \
 --test-cond 'two_objects' \
 --test-query \"Shape1\" --windows '3, 5' "
 
-	echo "python 04_decoding_ovr.py -c v9_config -w \
--s $sub --label Colour1 \
+	echo "python 04_decoding_ovr.py -w \
+-s $sub --label Colour1$t \
 --train-cond 'two_objects' \
 --train-query \"Colour1\" --windows '$c1t,$c1t' \
 --test-cond 'two_objects' \
 --test-query \"Colour1\" --windows '3, 5' "
 
-	echo "python 04_decoding_ovr.py -c v9_config -w \
--s $sub --label Colour2 \
+	echo "python 04_decoding_ovr.py -w \
+-s $sub --label Colour2$t \
 --train-cond 'two_objects' \
 --train-query \"Colour2\" --windows '$c2t,$c2t' \
 --test-cond 'two_objects' \
 --test-query \"Colour1\" --windows '3, 5' "
 
-echo "python 04_decoding_ovr.py -c v9_config -w \
--s $sub --label Relation \
+echo "python 04_decoding_ovr.py -w \
+-s $sub --label Relation$t \
 --train-cond 'two_objects' \
 --train-query \"Relation\" --windows '$rt,$rt' \
 --test-cond 'two_objects' \
@@ -118,8 +115,8 @@ echo "python 04_decoding_ovr.py -c v9_config -w \
 # --test-query \"Shape2+Colour2\" --windows '3, 5' "
 
 done
-# done # this ends the subejct loop 
-# exit 0
+done # this ends the subejct loop 
+exit 0
 
 
 

@@ -5,16 +5,21 @@ from glob import glob
 import pandas as pd
 import numpy as np
 import pickle
-from scipy.stats import sem, pearsonr, zscore
+from scipy.stats import sem, pearsonr, zscore, ttest_ind
 from sklearn.preprocessing import scale, MinMaxScaler
 from sklearn.linear_model import LinearRegression
 # from scipy.linalg import toeplitz
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+import seaborn as sns
+from statannotations.Annotator import Annotator
+import statsmodels.formula.api as smf
+
 
 from .params import *
 
 
-def get_trial_preds_from_data(df_trial, all_preds_data, labels=["S1_0", "C1_0", "R_0", "S2_0", "C2_0"]):
+def get_trial_preds_from_data(df_trial, all_preds_data, labels):
     """ get the predictions for a given trial 
     df_trial might have more than 5 entries, because decoders may have been tested multiple times
     (but should then have the same predictions)
@@ -75,8 +80,34 @@ def add_present_or_absent_preds_one_trial(preds, props, preds_sub_by_presence):
         preds_sub_by_presence["Colour2_absent"].append(preds[4][:, colors.index(absent_color)].mean())
     preds_sub_by_presence['Relation_absent'].append(preds[2][:, relations.index(relation_absent)].mean())
 
-    ## TODO: Separate present first, present second, and absent? 
     return preds_sub_by_presence
+
+
+def get_present_or_absent_preds_one_trial(preds, props):
+    """ take the predictions for a single trial
+    and returns them as list of the 5 Properties
+    Present and Absent
+    """ 
+    s1, c1, rel, s2, c2 = props
+    Shape1_present = preds[0][:, shapes.index(s1)].mean()
+    Colour1_present = preds[1][:, colors.index(c1)].mean()
+    Relation_present = preds[2][:, relations.index(rel)].mean()
+    Shape2_present = preds[3][:, shapes.index(s2)].mean()
+    Colour2_present = preds[4][:, colors.index(c2)].mean()
+
+    shapes_absent = [s for s in shapes if s not in [s1, s2]]
+    colors_absent = [c for c in colors if c not in [c1, c2]]
+    relation_absent = [r for r in relations if r != rel][0]
+    Shape1_absent, Shape2_absent, Colour1_absent, Colour2_absent = [], [], [], []
+    for absent_shape in shapes_absent:
+        Shape1_absent.append(preds[0][:, shapes.index(absent_shape)].mean())
+        Shape2_absent.append(preds[3][:, shapes.index(absent_shape)].mean())
+    for absent_color in colors_absent:
+        Colour1_absent.append(preds[1][:, colors.index(absent_color)].mean())
+        Colour2_absent.append(preds[4][:, colors.index(absent_color)].mean())
+    Relation_absent = preds[2][:, relations.index(relation_absent)].mean()
+
+    return [Shape1_present, Colour1_present, Relation_present, Shape2_present, Colour2_present], [Shape1_absent, Colour1_absent, Relation_absent, Shape2_absent, Colour2_absent]
 
 
 def get_subj_ave_preds(preds_by_presence, ave_preds):
@@ -117,6 +148,32 @@ def get_TF_5words(s1, c1, rel, s2, c2):
     return T
 
 
+def get_significant_reactivations(preds, percentile):
+    """ get the significant reactivations
+    for each property, and for each presence/absence
+    """
+    significant_reactivations = {}
+    for prop in Properties:
+        for presence in ['present', 'absent']:
+            preds_prop = preds[f"{prop}_{presence}"]
+            threshold = np.percentile(preds_prop, percentile)
+            significant_reactivations[f"{prop}_{presence}"] = [pred for pred in preds_prop if pred > threshold]
+    return significant_reactivations
+
+def get_sequential_reactivations(signif_react, maxLag):
+    """ From significant reactivations
+    get the sequence of reactivations 
+    and the delay between them (up to maxLag)
+    """
+    sequences, delays = [], []
+    for react in signif_react: # is this ones and zeros? the id of the significant react? 
+        if not react: continue
+        sequences.append(react)
+        for lag in range(maxLag):
+            if react[lag] > 0:
+                
+    
+
 # def splits(data, num_splits=30):
 #     """
 #     Splits the data into `num_splits` equal-length segments,
@@ -130,64 +187,130 @@ def get_TF_5words(s1, c1, rel, s2, c2):
 #     overall_sem = np.std(split_means, axis=0) / np.sqrt(num_splits)  # SEM across splits
 #     return overall_mean, overall_sem
 
-
-def plot_average_preds(present, absent, additional_str):
-    """ bar plot of average predictions during the delay
-    presents: list of np.array of len(n_trials), grouped for all subjects 
-    absents: list of np.array of len(n_trials), grouped for all subjects
-    additional_str: str to add to the out_fn, where the decoders were trained on (ImgLoc, scenes, ...)
-    """
-    # from ipdb import set_trace; set_trace()
-    present_ave, present_sem = [], []
-    for i in range(len(present)):
-        mean, stand_err = splits(present[i])
-        present_ave.append(mean)
-        present_sem.append(stand_err)
-    absent_ave, absent_sem = [], []
-    for i in range(len(absent)):
-        mean, stand_err = splits(absent[i])
-        absent_ave.append(mean)
-        absent_sem.append(stand_err)
+# def plot_average_preds(all_present, all_absent, out_fn, labels=["S1","C1","R","S2","C2"]):
+#     """ bar plot of average predictions during the delay
+#     all_present: list of np.array of len(n_subs), average for each subject of the predictions 
+#     The length of all_present should match that of all_absent, and it will define the number of bars.
+#     labels: list of str, same length as all_present/absent. Labels for each of the predictions.
+#     additional_str: str to add to the out_fn, where the decoders were trained on (ImgLoc, scenes, ...)
+#     """
+#     all_present_ave, all_present_sem = [], []
+#     for i in range(len(all_present)):
+#         all_present_ave.append(np.nanmean(all_present[i]))
+#         all_present_sem.append(sem(all_present[i], nan_policy='omit'))
+#     all_absent_ave, all_absent_sem = [], []
+#     for i in range(len(all_absent)):
+#         all_absent_ave.append(np.mean(all_absent[i]))
+#         all_absent_sem.append(sem(all_absent[i], nan_policy='omit'))
     
-    # Bar plot
-    labels = ['Shape', 'Color', 'Relation']
-    x = np.arange(len(labels))  # the label locations
-    width = 0.35  # the width of the bars
-    fig, ax = plt.subplots(figsize=(10, 6))
-    rects1 = ax.bar(x - width/2, present_ave, width, yerr=present_sem, label='Present', color='skyblue')
-    rects2 = ax.bar(x + width/2, absent_ave, width, yerr=absent_sem, label='Absent', color='orange')
+#     # Bar plot
+#     # labels = ['Shape', 'Color', 'Relation']
+#     x = np.arange(len(labels))  # the label locations
+#     width = 0.35  # the width of the bars
+#     fig, ax = plt.subplots(figsize=(10, 6))
+#     rects1 = ax.bar(x - width/2, all_present_ave, width, yerr=all_present_sem, label='Present', color='skyblue')
+#     rects2 = ax.bar(x + width/2, all_absent_ave, width, yerr=all_absent_sem, label='Absent', color='orange')
 
-    # Add labels, title, and legend
-    ax.set_ylabel('Average Predictions')
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    ax.legend()
+#     # Add labels, title, and legend
+#     ax.set_ylabel('Average Predictions')
+#     ax.set_xticks(x)
+#     ax.set_xticklabels(labels)
+#     ax.legend()
 
-    # Perform t-tests for each category
-    preds_shape_present, preds_color_present, preds_rel_present = present
-    preds_shape_absent, preds_color_absent, preds_rel_absent = absent
-    shape_ttest = ttest_ind(preds_shape_present, preds_shape_absent)
-    color_ttest = ttest_ind(preds_color_present, preds_color_absent)
-    relation_ttest = ttest_ind(preds_rel_present, preds_rel_absent)
-    p_values = [shape_ttest.pvalue, color_ttest.pvalue, relation_ttest.pvalue]
+#     # Perform t-tests for each category
+#     alpha = 0.05
+#     p_values = []
+#     for present, absent in zip(all_present, all_absent):
+#         ttest = ttest_ind(present, absent)
+#         p_values.append(ttest.pvalue)
 
-    alpha = 0.05
-    print("\nSignificance Testing Results:")
-    print(f"Shape: {'Significant' if shape_ttest.pvalue < alpha else 'Not Significant'} (p = {shape_ttest.pvalue:.4f})")
-    print(f"Color: {'Significant' if color_ttest.pvalue < alpha else 'Not Significant'} (p = {color_ttest.pvalue:.4f})")
-    print(f"Relation: {'Significant' if relation_ttest.pvalue < alpha else 'Not Significant'} (p = {relation_ttest.pvalue:.4f})")
+#     # Add significance stars
+#     for i, p_val in enumerate(p_values):
+#         if p_val < alpha:
+#             y_max = max(all_present_ave[i] + all_present_sem[i], all_absent_ave[i] + all_absent_sem[i])
+#             ax.text(i, y_max + 0.05, '*', ha='center', va='bottom', fontsize=16, color='k')
 
-    # Add significance stars
-    for i, p_val in enumerate(p_values):
-        if p_val < alpha:
-            y_max = max(present_ave[i] + present_sem[i], absent_ave[i] + absent_sem[i])
-            ax.text(i, y_max + 0.05, '*', ha='center', va='bottom', fontsize=16, color='k')
+#     # Save the plot
+#     plt.tight_layout()
+#     plt.savefig(out_fn, dpi=400)
 
-    # Save the plot
+#     plt.close()
+
+
+def plot_average_preds_seaborn(all_present, all_absent, out_fn, labels=["S1", "C1", "R", "S2", "C2"]):
+    """
+    Bar plot of average predictions during the delay using Seaborn and statannotations.
+    """
+    # Prepare data for seaborn
+    data = []
+    for i, label in enumerate(labels):
+        for val in all_present[i]:
+            data.append([label, val, 'Present'])
+        for val in all_absent[i]:
+            data.append([label, val, 'Absent'])
+    
+    df = pd.DataFrame(data, columns=['Category', 'Prediction', 'Condition'])
+    
+    # Create plot
+    plt.figure(figsize=(10, 6))
+    ax = sns.barplot(data=df, x='Category', y='Prediction', hue='Condition', errorbar=('se', 1),
+                     palette={'Present': 'skyblue', 'Absent': 'orange'})
+    
+    # Perform statistical tests and annotate
+    # pairs = [(label, label) for label in labels]
+    pairs = [((label, 'Present'), (label, 'Absent')) for label in labels]
+    # p_values = [ttest_ind(all_present[i], all_absent[i], nan_policy='omit').pvalue for i in range(len(labels))]
+    annotator = Annotator(ax, pairs, data=df, x='Category', y='Prediction', hue='Condition')
+    annotator.configure(test='t-test_ind', text_format='star', loc='outside')
+    # annotator.set_pvalues(p_values)
+    # annotator.annotate()
+    annotator.apply_and_annotate()
+    
+    # Labels and legend
+    plt.ylabel('Average Predictions')
+    plt.legend(title='Condition')
     plt.tight_layout()
-    plt.savefig(f"{out_dir}/average_preds_{additional_str}_tested.png", dpi=400)
-
+    
+    # Save and close
+    plt.savefig(out_fn, dpi=400)
     plt.close()
+
+
+def does_reactivations_predict_behavioral(df, out_fn, y="Performance"):
+    """
+    Regression plot of reactivations vs. behavioral performance.
+    (for present items)
+    """
+        
+    # Mixed-effects model (accounts for repeated measures within subjects)
+    # crossed random effects of subject and property
+    # vc = {"Property": "0 + C(Property)"}  # Define Property as a random effect
+    # model = smf.mixedlm(f"{y} ~ Reactivation", df, groups=df["Subject"], vc_formula=vc).fit()
+    # hierarchical random effect of subject and property
+    # model = smf.mixedlm(f"{y} ~ Reactivation", df, groups=df["Subject"], re_formula="1 + Property").fit()
+
+    # random effect of subjects
+    model = smf.mixedlm(f"{y} ~ Reactivation", df, groups=df["Subject"]).fit()
+    print(model.summary())
+
+    # Scatter plot with subject-level data
+    plt.figure(figsize=(8, 6))
+    sns.scatterplot(data=df, x="Reactivation", y=y, hue="Subject", palette="tab10", alpha=0.6)
+
+    # Add a regression line for the overall effect
+    sns.regplot(data=df, x="Reactivation", y=y, scatter=False, color="black")
+
+    plt.xlabel("Reactivation Strength")
+    plt.ylabel("Behavioral Performance")
+    # plt.title("Mixed-Effects Model: Reactivation vs. Performance")
+    plt.title(f"tvalue: {model.tvalues["Reactivation"]:.3f} - pvalue: {model.pvalues["Reactivation"]:.3f}")
+    ax = plt.gca()
+    ax.get_legend().remove()
+    # plt.legend(title="Subject", bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
+    plt.tight_layout()
+    plt.savefig(out_fn, dpi=400)
+    # plt.show()
+
 
 
 def sequenceness_Crosscorr(rd, T, lag=1):

@@ -194,6 +194,11 @@ Train decoder on ALL triangles? Whatever the block it is in?
 Script for replay strength as a function of regularization?
 are the predicted probabilites predictive of the subject performances?
 PAC over the course of the sentence? Or at least for 2 vs 5 words.
-Add the regularization in the out_fn? Then you need to parse it in the results loading script!
+Add the regularization in the out_fn? Then you need to parse it in the results loading script! - Same problem as for the training timepoint...
 
 test reactivations for later decoders ? 
+v16: still C=1/0.006, but not filtering by performance (we want also incorrect trials for the correlation with behavior), and doing multiple timepoints (.2, .3, .4, .6, .8).
+But no null trials?
+nice but how do I separates the different training time? TODO - hard. 
+
+v17: same with just 0.2 because it is easier. 
