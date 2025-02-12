@@ -27,7 +27,7 @@ cluster_job_files_path='/home/users/d/desborde/Documents/s2s/cluster_job_files/'
 mkdir $cluster_logs_path
 mkdir $cluster_job_files_path
 
-for i in `seq 0 ${#job_array[@]}`;
+for ((i=0; i<${#job_array[@]}; i++));
 do
   file_sbatch=$cluster_job_files_path/file_sbatch_$i.qs
   out_file=$cluster_logs_path/out_$i
