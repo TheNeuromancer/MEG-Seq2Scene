@@ -58,30 +58,6 @@ out_dir = f"{args.root_path}/Results/{decoding_dir}/{args.epochs_dir}/{args.subj
 print('\noutput files will be in: ' + out_dir)
 create_folder(out_dir, args.overwrite)
 
-# list all preds.npy files in the directory
-all_fns = natsorted(glob(in_dir + f'/*preds.npy'))
-if not all_fns:
-    raise RuntimeError(f"Did not find any preds files in {in_dir}/*preds.npy ... Did you pass the right config?")
-
-# keep the first 8 subjects for the 1st version, all the remaining for v2
-if args.subject == "v1":
-    all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) < 9]
-    version = "v1"
-elif args.subject == "v2":
-    all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) > 8]
-    version = "v2"
-elif args.subject == "all":
-    version = "v2"
-elif args.subject == "goods":
-    all_fns = [fn for fn in all_fns if not op.basename(op.dirname(fn))[0:2] in bad_subjects]
-    version = "v2"
-elif int(args.subject[0:2]) < 9:
-    version = "v1"
-elif int(args.subject[0:2]) > 8:
-    version = "v2"
-else:
-    qwe
-
 dummy_class_enc = LabelEncoder()
 dummy_labbin = LabelBinarizer()
 # mag_idx, grad_idx = [pickle.load(open(f"{args.root_path}/Data/{s}_indices.p", "rb")) for s in ['mag', 'grad']]
@@ -89,17 +65,42 @@ dummy_labbin = LabelBinarizer()
 minmaxScaler = MinMaxScaler()
 
 ## All possible training time (depends on the property that is decoded).
-train_times = ['0.8', '2.6', '0.2', '1.4', '2.0']
-# train_times = ["0.17", "0.2", "0.3", "0.4", "0.5", "0.6", "0.8"] + ["0.77", "0.9", "1.0", "1.1", "1.2", "1.4"] + ["1.37", "1.5", "1.6", "1.7", "1.8", "2.0"]
-# train_times = train_times + ["1.97", "2.1", "2.2", "2.3", "2.4", "2.6"] + ["2.57", "2.7", "2.8", "2.9", "3.0", "3.2"]
+# train_times = ['0.8', '2.6', '0.2', '1.4', '2.0']
+train_times = ["0.17", "0.2", "0.3", "0.4", "0.5", "0.6", "0.8"] + ["0.77", "0.9", "1.0", "1.1", "1.2", "1.4"] + ["1.37", "1.5", "1.6", "1.7", "1.8", "2.0"]
+train_times = train_times + ["1.97", "2.1", "2.2", "2.3", "2.4", "2.6"] + ["2.57", "2.7", "2.8", "2.9", "3.0", "3.2"]
 ## Generalization window for objects and scenes
-gen_windows = [(3, 5), (1.5, 2.2)]
+gen_windows = [(3, 5)] #, (1.5, 2.2)]
 
 if args.dont_recompute is False:
+    # list all preds.npy files in the directory
+    all_fns = natsorted(glob(in_dir + f'/*preds.npy'))
+    if not all_fns:
+        raise RuntimeError(f"Did not find any preds files in {in_dir}/*preds.npy ... Did you pass the right config?")
+
+    # keep the first 8 subjects for the 1st version, all the remaining for v2
+    if args.subject == "v1":
+        all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) < 9]
+        version = "v1"
+    elif args.subject == "v2":
+        all_fns = [fn for fn in all_fns if int(op.basename(op.dirname(fn))[0:2]) > 8]
+        version = "v2"
+    elif args.subject == "all":
+        version = "v2"
+    elif args.subject == "goods":
+        all_fns = [fn for fn in all_fns if not op.basename(op.dirname(fn))[0:2] in bad_subjects]
+        version = "v2"
+    elif int(args.subject[0:2]) < 9:
+        version = "v1"
+    elif int(args.subject[0:2]) > 8:
+        version = "v2"
+    else:
+        qwe
+
     preds_fn = f"{op.dirname(op.dirname(out_dir))}/all_preds.p"
     metadata_fn = f"{op.dirname(op.dirname(out_dir))}/all_metadata.p"
     all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
     # preds_all_labels, pattern_all_labels, confusion_all_labels = {}, {}, {}
+    all_preds_data = []
     all_df = []
     for label in all_labels:
         if args.verbose: print(f"Doing {label}")
@@ -108,25 +109,15 @@ if args.dont_recompute is False:
             continue
         for train_cond in ["localizer", "obj", "scenes"]:
             for split_query in [False]: # no split query in replay decoding so far (but migh wanna include it later)
-            # for split_query in ["match", "nonmatch", "flash", "noflash", "match_or_Error_type=l0", "match_or_Error_type=l1", \
-            #                     "match_or_Error_type=l2", "Complexity=0", "Complexity=1", "Complexity=2", \
-            #                     "Change.str.containsshape", "Change.str.containscolour", False]:
                 for gen_cond in ["obj", "scenes"]: # "localizer", 
                     for train_time in train_times:
                         for gen_window in gen_windows:
                             if args.verbose: print(train_time)
-                            all_patterns, all_confusions, all_preds, all_subs, all_items = [], [], [], [], []
+                            # all_patterns, all_confusions, all_preds  = [], [], []
                             mds_this_cond = []
                             for fn in all_fns:
                                 if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
                                 if f"cond-{train_cond}-" not in fn: continue
-                                # print(fn)
-                                # if not split_query: # if not split_query or nonmatch markers, keep all non-splitqueries
-                                #     split_query_str = ""
-                                #     if "_for_" in fn: continue
-                                # else:
-                                #     if f"for_{split_query}" not in fn: continue
-                                #     split_query_str = f"_for_{split_query}"
                                 if gen_cond is not None:
                                     if f"#{train_time},{train_time}#{gen_window[0]},{gen_window[1]}#" not in fn: 
                                         continue
@@ -142,9 +133,7 @@ if args.dont_recompute is False:
                                 if args.verbose: print('loading file ', fn)
                                 preds = np.load(fn) # times * trials * classes 
                                 preds = preds.squeeze() # trials * classes (single time point for replay decoding)
-                                all_preds.append(preds) # len(n_subs) of array of inhomogeneous shape n_trials * n_classes
-                                # all_subs.append(op.basename(op.dirname(fn))[0:2])
-                                # all_items.append(op.basename(fn))
+                                # all_preds.append(preds) # len(n_subs) of array of inhomogeneous shape n_trials * n_classes
 
                                 metadata_fn = fn.replace('preds.npy', 'metadata.csv')
                                 md = pd.read_csv(metadata_fn) # times * trials * classes 
@@ -156,31 +145,32 @@ if args.dont_recompute is False:
                                 md["gen_cond"] = [gen_cond] * n_trials
                                 md["split_query"] = [split_query] * n_trials
                                 md["label"] = [label] * n_trials
-                                md["preds"] = preds.transpose(1,0,2).tolist()
                                 sub = op.basename(op.dirname(fn))[0:2]
                                 md["sub"] = [sub] * n_trials
-                                # md["trial"] = [f"{sub}_{i}" for i in range(n_trials)] # not unique for eqch trial
+                                # md["preds"] = preds.transpose(1,0,2).tolist()
+                                all_preds_data.extend(preds.transpose(1,0,2))
 
                                 # mds_this_cond.append(md)
                                 all_df.append(md)
 
 
-                            if not all_preds: 
+                            if not len(all_preds_data): 
                                 if args.verbose: print(f"found no file for {label} trained on {train_cond} with generalization to {gen_cond} for  split query {split_query}, train time {train_time}, gen window {gen_window}, continuing")
                                 continue
-                            if args.verbose: print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}")
-                            n_subs = len(all_preds)
-                            if n_subs < 2: 
-                                print(f"Single subject found, moving on to next conditon")
-                                continue
-                            if n_subs > 30: 
-                                set_trace()
-                            gen_str = f"_tested_on_{gen_cond}" if gen_cond is not None else ""
-                            out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}_{n_subs}ave"
+                            n_subs = md["sub"].nunique()
+                            # if args.verbose: print(f"\nDoing {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}")
+                            # n_subs = len(all_preds)
+                            # if n_subs < 2: 
+                            #     print(f"Single subject found, moving on to next conditon")
+                            #     continue
+                            # if n_subs > 30: 
+                            #     set_trace()
+                            # gen_str = f"_tested_on_{gen_cond}" if gen_cond is not None else ""
+                            # out_fn = f"{out_dir}/{label}_trained_on_{train_cond}{gen_str}_{n_subs}ave"
 
-                            if not len(all_preds): 
-                                print(f"did find any pred for {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}, continuing")
-                                continue
+                            # if not len(all_preds): 
+                            #     print(f"did find any pred for {label} trained on {train_cond} with generalization {gen_cond} for  split query {split_query}, continuing")
+                            #     continue
 
                             # store values for all labels for multi plot
                             # all_df.append(pd.DataFrame(future_df))
@@ -193,13 +183,23 @@ if args.dont_recompute is False:
     df = pd.concat(all_df)
     df.drop(columns=["Unnamed: 0", "Loc_word", "Word_position", "Mapping", "Matching", "Error_type", "Violated_position", "split_query", "Mismatch_side"], inplace=True)
     df.reset_index(inplace=True)
-    df['trial_id'] = df ["sub"] + df["run_nb"].apply(str) + df["RT"].apply(str) + df["Difficulty"] + df["Shape1"] + df["Colour1"] + df["Shape2"] + df["Colour2"]
+    df.drop(columns="index", inplace=True)
+    df['trial_id'] = df ["sub"] + df["run_nb"].apply(str) + df["RT"].apply(str) + df["Difficulty"] + df["Shape1"] + df["Colour1"] + df["Shape2"] + df["Colour2"] + df["Button"].apply(str)
     # + df["Img_position"]
      # + df["Fontsize"].apply(str) + df["Change"]
     df.to_csv(f"{out_dir}/all_preds_data.csv", index=False)
+    # cannot save a numpy array as an entry in the df. So saving data separately, but the order matches. 
+
+    # cannot save as np array because for the heterogeneity of the dimensions. so list of trials, for each category, for all subjects
+    # items in the last are of shape n_times * n_classes
+    pickle.dump(all_preds_data, open(f"{out_dir}/all_preds_data.pkl", 'wb'))
 
 else:
     df = pd.read_csv(f"{out_dir}/all_preds_data.csv")
+    all_preds_data = pickle.load(open(f"{out_dir}/all_preds_data.pkl", 'rb'))
+
+
+from ipdb import set_trace; set_trace()
 
 
 from utils.replays import *

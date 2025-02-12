@@ -28,8 +28,8 @@ from autoreject import AutoReject
 from mne.stats import permutation_cluster_1samp_test, fdr_correction
 from mne.decoding import UnsupervisedSpatialFilter
 
-from pyriemann.estimation import Covariances, XdawnCovariances
-from pyriemann.tangentspace import TangentSpace
+# from pyriemann.estimation import Covariances, XdawnCovariances
+# from pyriemann.tangentspace import TangentSpace
 
 
 # local import
@@ -876,7 +876,8 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
         # accuracy = np.zeros((n_times_train, n_times_test))
         accuracy = None
         all_confusions = np.zeros((n_times_train, n_times_test, n_classes, n_classes)) # full confusion matrix
-        all_preds = np.zeros((n_times_train, n_times_test, len(y), n_classes))
+        # all_preds = np.zeros((n_times_train, n_times_test, len(y), n_classes))
+        all_preds = None # Not saving pred for timegen. Takes too much memory and probabky not usefull
         for tgen in trange(n_times_test):
             t_data = X_test[:, :, tgen]
             for t in range(n_times_train):
@@ -888,7 +889,7 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                     all_folds_preds.append(y_pred)
                 mean_fold_pred = np.nanmean(all_folds_preds, 0)
                 all_confusions[t, tgen] += confusion_matrix(y_test, mean_fold_pred.argmax(1), normalize='all')
-                all_preds[t, tgen] = mean_fold_pred
+                # all_preds[t, tgen] = mean_fold_pred
                 if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
                 AUC[t, tgen] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
                 # accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1)) # dim error when n_classes = 2
