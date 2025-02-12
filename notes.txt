@@ -199,6 +199,6 @@ Add the regularization in the out_fn? Then you need to parse it in the results l
 test reactivations for later decoders ? 
 v16: still C=1/0.006, but not filtering by performance (we want also incorrect trials for the correlation with behavior), and doing multiple timepoints (.2, .3, .4, .6, .8).
 But no null trials?
-nice but how do I separates the different training time? TODO - hard. 
+nice but how do I separates the different training time? TODO - hard. Ran again, with saving the original training time (from word onset) in the Label. 
 
 v17: same with just 0.2 because it is easier. 

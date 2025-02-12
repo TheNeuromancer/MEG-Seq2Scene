@@ -64,18 +64,7 @@ def get_paths(args, dirname='Decoding', mkdir=True, verbose=True):
     out_fn = get_out_fn(args, dirname=dirname)
     if verbose: print(f"out fn: {out_fn}")
 
-    test_out_fns = []
-    if hasattr(args, "test_query_1") and hasattr(args, "test_query_2"): # typically for classical decoding
-        for i_fn, (test_cond, test_query1, test_query2) in enumerate(zip(args.test_cond, args.test_query_1, args.test_query_2)):
-            test_query_str = f"{'_'.join(test_query1.split())}_vs_{'_'.join(test_query2.split())}"
-            # add an int to the label to split the different tests
-            new_out_fn = f"{out_fn.split('-')[0]}_{i_fn}-{'-'.join(out_fn.split('-')[1::])}"
-            test_out_fns.append(shorten_filename(f"{new_out_fn}_tested_on_{test_cond}_{test_query_str}"))
-    elif hasattr(args, "test_query"): # typically for OVR and window decoding
-        for i_fn, (test_cond, test_query) in enumerate(zip(args.test_cond, args.test_query)):
-            test_query_str = '_'.join(test_query.split())
-            new_out_fn = f"{out_fn.split('-')[0]}_{i_fn}-{'-'.join(out_fn.split('-')[1::])}" # add an int to the label to split the different tests
-            test_out_fns.append(shorten_filename(f"{new_out_fn}_tested_on_{test_cond}_{test_query_str}"))
+    test_out_fns = get_test_out_fns(args, out_fn)
 
     # wait for a random time in order to avoid conflit (parallel jobs that try to construct the same directory)
     rand_time = float(str(abs(hash(str(args))))[0:8]) / 100000000
@@ -100,7 +89,6 @@ def get_paths(args, dirname='Decoding', mkdir=True, verbose=True):
                     print('overwrite is set to False ... exiting smoothly')
                 exit()
     return train_fn, test_fns, out_fn, test_out_fns
-
 
 def get_out_fn(args, dirname='Decoding'):
     if args.dummy: # temporary directory
@@ -140,6 +128,20 @@ def get_out_fn(args, dirname='Decoding'):
     print('eg:' + out_fn + '_AUC_diag.npy\n')
     return out_fn
 
+def get_test_out_fns(args, out_fn):
+    test_out_fns = []
+    if hasattr(args, "test_query_1") and hasattr(args, "test_query_2"): # typically for classical decoding
+        for i_fn, (test_cond, test_query1, test_query2) in enumerate(zip(args.test_cond, args.test_query_1, args.test_query_2)):
+            test_query_str = f"{'_'.join(test_query1.split())}_vs_{'_'.join(test_query2.split())}"
+            # add an int to the label to split the different tests
+            new_out_fn = f"{out_fn.split('-')[0]}_{i_fn}-{'-'.join(out_fn.split('-')[1::])}"
+            test_out_fns.append(shorten_filename(f"{new_out_fn}_tested_on_{test_cond}_{test_query_str}"))
+    elif hasattr(args, "test_query"): # typically for OVR and window decoding
+        for i_fn, (test_cond, test_query) in enumerate(zip(args.test_cond, args.test_query)):
+            test_query_str = '_'.join(test_query.split())
+            new_out_fn = f"{out_fn.split('-')[0]}_{i_fn}-{'-'.join(out_fn.split('-')[1::])}" # add an int to the label to split the different tests
+            test_out_fns.append(shorten_filename(f"{new_out_fn}_tested_on_{test_cond}_{test_query_str}"))
+    return test_out_fns
 
 def shorten_filename(fn):
     # shorten the output fn because we sometimes go over the 255-characters limit imposed by ubuntu

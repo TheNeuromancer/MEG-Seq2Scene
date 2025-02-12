@@ -224,7 +224,9 @@ def load_data(args, fn, query_1='', query_2='', crop_final=True):
     
 
 def get_class_queries(query):
-    if query == "Colour1": 
+    if query == "Property": # any property, implemented last, for replay analysis
+        class_queries = [f"Property=='{s}'" for s in shapes] + [f"Property=='{c}'" for c in colors] # add relation?
+    elif query == "Colour1": 
         class_queries = [f"Colour1=='{c}'" for c in colors]
     elif query == "Shape1":
         class_queries = [f"Shape1=='{s}'" for s in shapes]
@@ -1001,6 +1003,31 @@ def decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null):
     all_models_array[:] = [[pipeline]] # n_times=1, n_folds=1
 
     return all_models_array, patterns, filters, mds
+
+
+def test_decode_ovr_single_tp(args, epochs, all_models):
+    n_times_test = len(epochs.times)
+    n_times_train, n_folds = all_models.shape # 1 and 1 
+    assert n_times_train==1 and n_folds==1, "Single timepoint decoding should have only one model"
+
+    mds = epochs.metadata
+    X = epochs.get_data()
+    print(f"Using {len(X)} test trials")
+
+    if args.micro_ave:
+        raise NotImplementedError("Micro-averaging not implemented for single timepoint decoding - it would average out the reactivations!")
+    pipeline = all_models[0][0] # first training tp, first fold (only one in each case)
+    n_classes = len(pipeline.classes_)
+    all_preds = np.zeros((n_times_test, len(X), n_classes))
+    for t in trange(n_times_test):
+        t_data = X[:, :, t]
+        preds = predict(pipeline, t_data, multiclass=True)
+        if np.sum(np.isnan(preds)) > 0:
+            print(f"nan in preds (averaged over folds, or from the single clf if single tp decoding). Replaceing nans with equal probabilities, but it's weird.")
+            preds[np.isnan(preds)] = 1/n_classes
+        all_preds[t] = preds
+    
+    return all_preds, mds
 
 
 def filters2patterns(filters, X, y):

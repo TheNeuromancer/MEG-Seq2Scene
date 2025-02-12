@@ -199,130 +199,6 @@ else:
     all_preds_data = pickle.load(open(f"{out_dir}/all_preds_data.pkl", 'rb'))
 
 
-from ipdb import set_trace; set_trace()
-
-
-from utils.replays import *
-
-maxLag = 50
-times = np.arange(maxLag)*10
-# theoretical_peak = 11 # in the paper the peak lag is at 110ms
-# pval_th = 0.05 / maxLag
-subs = df['sub'].unique()
-n_subs = len(subs)
-
-def get_TF_2words(shape, color):
-    """ get the forward transition matrix
-    for 2-word blocks. 
-    Positions in the matrix are shape, then colors """
-    color_offset = 3
-    T = np.zeros((6, 6))
-    T[shapes.index(shape), colors.index(color) + color_offset] = 1
-    return T
-    # single transition ... is that ok for sequenceness? 
-
-
-def get_TF_5words(s1, c1, rel, s2, c2):
-    """ get the forward transition matrix
-    for 5-word blocks. 
-    Positions in the matrix are shape, color, then relation """
-    T = np.zeros((8, 8))
-    color_offset = 3
-    relation_offset = 6
-    s1_idx, c1_idx, r_idx, s2_idx, c2_idx = shapes.index(s1), colors.index(c1), relations.index(rel), shapes.index(s2), colors.index(c2)
-    T[s1_idx, c1_idx+color_offset] = 1
-    T[c1_idx+color_offset, r_idx+relation_offset] = 1
-    T[r_idx+relation_offset, s2_idx] = 1
-    T[s2_idx, c2_idx+color_offset] = 1
-    return T
-
-def splits(data, num_splits=30):
-    """
-    Splits the data into `num_splits` equal-length segments,
-    and then calculates the overall mean and SEM across splits.
-    """
-    split_data = np.array_split(data, num_splits, axis=0)  # Split data into `num_splits` parts
-    split_means = [np.mean(split, axis=0) for split in split_data]  # Mean of each split
-    split_means = np.array(split_means)
-    overall_mean = np.mean(split_means, axis=0)  # Overall mean across splits
-    overall_sem = np.std(split_means, axis=0) / np.sqrt(num_splits)  # SEM across splits
-    return overall_mean, overall_sem
-
-
-def plot_average_preds(present, absent, kind):
-    """ bar plot of average predictions during the delay
-    presents: list of np.array of len(n_trials), grouped for all subjects 
-    absents: list of np.array of len(n_trials), grouped for all subjects
-    kind: str to add to the out_fn, where the decoders were trained on (ImgLoc, scenes, ...)
-    """
-    # from ipdb import set_trace; set_trace()
-    present_ave, present_sem = [], []
-    for i in range(len(present)):
-        qwe, asd = splits(present[i])
-        present_ave.append(qwe)
-        present_sem.append(asd)
-    # present_ave, present_sem = splits(present)
-    # present_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in present]
-    # present_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in present]  # Split data into `num_splits` parts
-    # present_sem = [sem(preds, 0, nan_policy='omit') for preds in present]
-    # present_sem = [np.std(preds, 0) for preds in present]
-    # absent_ave = [np.mean(preds, 0) for preds in absent]
-    # absent_sem = [sem(preds, 0, nan_policy='omit') for preds in absent]
-    # absent_sem = [np.std(preds, 0) for preds in absent]
-    # absent_ave = [np.mean(np.array_split(preds, 30, axis=0), 0) for preds in absent]
-    # absent_sem = [sem(np.array_split(preds, 30, axis=0)) for preds in absent]  # Split data into `num_splits` parts
-    # absent_ave, absent_sem = splits(absent)
-    absent_ave, absent_sem = [], []
-    for i in range(len(absent)):
-        qwe, asd = splits(absent[i])
-        absent_ave.append(qwe)
-        absent_sem.append(asd)
-    
-    # Bar plot
-    labels = ['Shape', 'Color', 'Relation']
-    x = np.arange(len(labels))  # the label locations
-    width = 0.35  # the width of the bars
-    fig, ax = plt.subplots(figsize=(10, 6))
-    rects1 = ax.bar(x - width/2, present_ave, width, yerr=present_sem, label='Present', color='skyblue')
-    rects2 = ax.bar(x + width/2, absent_ave, width, yerr=absent_sem, label='Absent', color='orange')
-
-    # Add labels, title, and legend
-    ax.set_ylabel('Average Predictions')
-    # ax.set_title('Average Predictions by Presence')
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels)
-    ax.legend()
-    # Add value labels
-    # ax.bar_label(rects1, fmt='%.2f', padding=3)
-    # ax.bar_label(rects2, fmt='%.2f', padding=3)
-
-
-    # Perform t-tests for each category
-    preds_shape_present, preds_color_present, preds_rel_present = present
-    preds_shape_absent, preds_color_absent, preds_rel_absent = absent
-    shape_ttest = ttest_ind(preds_shape_present, preds_shape_absent)
-    color_ttest = ttest_ind(preds_color_present, preds_color_absent)
-    relation_ttest = ttest_ind(preds_rel_present, preds_rel_absent)
-    p_values = [shape_ttest.pvalue, color_ttest.pvalue, relation_ttest.pvalue]
-
-    alpha = 0.05
-    print("\nSignificance Testing Results:")
-    print(f"Shape: {'Significant' if shape_ttest.pvalue < alpha else 'Not Significant'} (p = {shape_ttest.pvalue:.4f})")
-    print(f"Color: {'Significant' if color_ttest.pvalue < alpha else 'Not Significant'} (p = {color_ttest.pvalue:.4f})")
-    print(f"Relation: {'Significant' if relation_ttest.pvalue < alpha else 'Not Significant'} (p = {relation_ttest.pvalue:.4f})")
-
-    # Add significance stars
-    for i, p_val in enumerate(p_values):
-        if p_val < alpha:
-            y_max = max(present_ave[i] + present_sem[i], absent_ave[i] + absent_sem[i])
-            ax.text(i, y_max + 0.05, '*', ha='center', va='bottom', fontsize=16, color='k')
-
-    # Save the plot
-    plt.tight_layout()
-    plt.savefig(f"{out_dir}/average_preds_{kind}_tested.png", dpi=400)
-
-
-    plt.close()
 
 
 # ### 5-words blocks ###
@@ -625,63 +501,63 @@ def plot_average_preds(present, absent, kind):
 # plot_average_preds(present, absent, "scenes_trained_on_Obj")
 
 
-### trained on 5-words blocks ###
-n_states = 8
-T_auto = np.eye(n_states)  # Autotransitions
-T_const = np.ones((n_states, n_states))  # Uniform transitions
-df_5words = df.query("label in ['S1_0', 'S2_1', 'R_0', 'C1_0', 'C2_1']") # only the 5-words blocks
-sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
-sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for checking purpose
-preds_shape_present, preds_color_present, preds_rel_present = [], [], []
-preds_shape_absent, preds_color_absent, preds_rel_absent = [], [], []
-for iSub, sub in tqdm(enumerate(subs)):
-    df_sub = df_5words.query(f"sub=='{sub}'")
-    trial_ids = df_sub.trial_id.unique()
-    n_trials = len(trial_ids)
+# ### trained on 5-words blocks ###
+# n_states = 8
+# T_auto = np.eye(n_states)  # Autotransitions
+# T_const = np.ones((n_states, n_states))  # Uniform transitions
+# df_5words = df.query("label in ['S1_0', 'S2_1', 'R_0', 'C1_0', 'C2_1']") # only the 5-words blocks
+# sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
+# sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for checking purpose
+# preds_shape_present, preds_color_present, preds_rel_present = [], [], []
+# preds_shape_absent, preds_color_absent, preds_rel_absent = [], [], []
+# for iSub, sub in tqdm(enumerate(subs)):
+#     df_sub = df_5words.query(f"sub=='{sub}'")
+#     trial_ids = df_sub.trial_id.unique()
+#     n_trials = len(trial_ids)
 
-    for iLag in range(maxLag): # for each lag
-        if iLag > 0: continue
+#     for iLag in range(maxLag): # for each lag
+#         if iLag > 0: continue
 
 
 
-        sf_all_trials, sb_all_trials, srand_all_trials = [], [], []
+#         sf_all_trials, sb_all_trials, srand_all_trials = [], [], []
 
-        for iTrial in range(n_trials):
-            df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
-            if len(df_trial) != 5: 
-                print(f"Had to skip trial {iTrial} for lag {iLag*10} ms")
-                continue
-            s1, c1, rel, s2, c2 = df_trial.iloc[0][["Shape1", "Colour1", "Relation", "Shape2", "Colour2"]].values
-            TF = get_TF_5words(s1, c1, rel, s2, c2)
-            TR = TF.T
-            rand_inds = np.random.permutation(8)
-            Trand = TF[rand_inds]
-            templates = [TF, TR, Trand, T_auto, T_const]
-            if iTrial==0: print(f"TODO: Check the trained on scenes / tested in scenes. You nw have 2 different decoders for the shape and for the colour.")
-            # preds_shape = df_trial.query("label=='S1_0'")['preds'].values[0] # now 'S1_0', 'S2_1' are different because based on different decoders.
-            # preds_color = df_trial.query("label=='C1_0'")['preds'].values[0]
-            preds_shape = df_trial.query("label=='S2_1'")['preds'].values[0] # now 'S1_0', 'S2_1' are different because based on different decoders.
-            preds_color = df_trial.query("label=='C2_1'")['preds'].values[0]
-            preds_rel = df_trial.query("label=='R_0'")['preds'].values[0]
+#         for iTrial in range(n_trials):
+#             df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
+#             if len(df_trial) != 5: 
+#                 print(f"Had to skip trial {iTrial} for lag {iLag*10} ms")
+#                 continue
+#             s1, c1, rel, s2, c2 = df_trial.iloc[0][["Shape1", "Colour1", "Relation", "Shape2", "Colour2"]].values
+#             TF = get_TF_5words(s1, c1, rel, s2, c2)
+#             TR = TF.T
+#             rand_inds = np.random.permutation(8)
+#             Trand = TF[rand_inds]
+#             templates = [TF, TR, Trand, T_auto, T_const]
+#             if iTrial==0: print(f"TODO: Check the trained on scenes / tested in scenes. You nw have 2 different decoders for the shape and for the colour.")
+#             # preds_shape = df_trial.query("label=='S1_0'")['preds'].values[0] # now 'S1_0', 'S2_1' are different because based on different decoders.
+#             # preds_color = df_trial.query("label=='C1_0'")['preds'].values[0]
+#             preds_shape = df_trial.query("label=='S2_1'")['preds'].values[0] # now 'S1_0', 'S2_1' are different because based on different decoders.
+#             preds_color = df_trial.query("label=='C2_1'")['preds'].values[0]
+#             preds_rel = df_trial.query("label=='R_0'")['preds'].values[0]
 
-            # save preds for barplot of average predictions
-            if iLag == 0:
-                preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
-                # present 
-                preds_shape_present.append(preds_shape[:, shapes.index(s1)].mean())
-                preds_shape_present.append(preds_shape[:, shapes.index(s2)].mean())
-                preds_rel_present.append(preds_rel[:, relations.index(rel)].mean())
-                preds_color_present.append(preds_color[:, colors.index(c1)].mean())
-                preds_color_present.append(preds_color[:, colors.index(c2)].mean())
-                # absent
-                shapes_absent = [s for s in shapes if s not in [s1, s2]]
-                colors_absent = [c for c in colors if c not in [c1, c2]]
-                relation_absent = [r for r in relations if r != rel][0]
-                for absent_shape in shapes_absent:
-                    preds_shape_absent.append(preds_shape[:, shapes.index(absent_shape)].mean())
-                for absent_color in colors_absent:
-                    preds_color_absent.append(preds_color[:, colors.index(absent_color)].mean())
-                preds_rel_absent.append(preds_rel[:, relations.index(relation_absent)].mean())
+#             # save preds for barplot of average predictions
+#             if iLag == 0:
+#                 preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
+#                 # present 
+#                 preds_shape_present.append(preds_shape[:, shapes.index(s1)].mean())
+#                 preds_shape_present.append(preds_shape[:, shapes.index(s2)].mean())
+#                 preds_rel_present.append(preds_rel[:, relations.index(rel)].mean())
+#                 preds_color_present.append(preds_color[:, colors.index(c1)].mean())
+#                 preds_color_present.append(preds_color[:, colors.index(c2)].mean())
+#                 # absent
+#                 shapes_absent = [s for s in shapes if s not in [s1, s2]]
+#                 colors_absent = [c for c in colors if c not in [c1, c2]]
+#                 relation_absent = [r for r in relations if r != rel][0]
+#                 for absent_shape in shapes_absent:
+#                     preds_shape_absent.append(preds_shape[:, shapes.index(absent_shape)].mean())
+#                 for absent_color in colors_absent:
+#                     preds_color_absent.append(preds_color[:, colors.index(absent_color)].mean())
+#                 preds_rel_absent.append(preds_rel[:, relations.index(relation_absent)].mean())
 
 
 #             trial_preds = np.concatenate([preds_shape, preds_color, preds_rel], axis=1)
@@ -720,9 +596,9 @@ for iSub, sub in tqdm(enumerate(subs)):
 # plt.savefig(f"{out_dir}/mean_sequenceness_avetrm_scenes_trained_on_Scenes.png", dpi=400)
 # plt.close()
 
-present = [preds_shape_present, preds_color_present, preds_rel_present]
-absent = [preds_shape_absent, preds_color_absent, preds_rel_absent]
-plot_average_preds(present, absent, "scenes_trained_on_scenes")
+# present = [preds_shape_present, preds_color_present, preds_rel_present]
+# absent = [preds_shape_absent, preds_color_absent, preds_rel_absent]
+# plot_average_preds(present, absent, "scenes_trained_on_scenes")
 
 
 # ### 2-words blocks ###

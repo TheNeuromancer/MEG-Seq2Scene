@@ -1,7 +1,7 @@
 import mne
 import pickle
 
-raw = mne.io.Raw("~/scratch/s2s/Data/orig/19/run4_1obj.fif", preload=True, verbose='error', allow_maxshield=True)
+raw = mne.io.Raw("/home/desborde/Documents/s2s/Data/orig/19/run4_1obj.fif", preload=True, verbose='error', allow_maxshield=True)
 raw = raw.pick_types(meg=True) # remove misc channels
 
 mag_int = 3022 # mag has this number in the info
@@ -21,7 +21,7 @@ all_idx = sorted(mag_idx + grad_idx)
 raw_mag = raw.copy().pick_types(meg='mag')
 raw_grad = raw.copy().pick_types(meg='grad')
 
-out_path = "/home/users/d/desborde/scratch/s2s/Data/"
+out_path = "/home/desborde/Documents/s2s/Data"
 pickle.dump(mag_idx, open(f"{out_path}/mag_indices.p", "wb"))
 pickle.dump(grad_idx, open(f"{out_path}/grad_indices.p", "wb"))
 pickle.dump(all_idx, open(f"{out_path}/all_indices.p", "wb"))
