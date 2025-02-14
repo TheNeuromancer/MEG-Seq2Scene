@@ -27,7 +27,7 @@ bad_subs_dim = ['29', '26', '25', '23', '20', '16', '15', '10', '04', '02']
 
 colors = ["vert", "bleu", "rouge"]
 shapes = ["triangle", "cercle", "carre"]
-relations = ["à gauche d'", "à droite d'"]
+relations = ["à gauche d\'", "à droite d\'"]
 properties = ["s1", "c1", "rel", "s2", "c2"]
 Properties = ["Shape1", "Colour1", "Relation", "Shape2", "Colour2"]
 

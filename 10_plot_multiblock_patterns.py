@@ -143,7 +143,7 @@ def plot_correlation(correlations, out_fn, labels, vmin=None, vmax=None):
 
 def get_labels(label):
     if "Prop" in label:
-        return shapes + colors # add the relations?
+        return shapes + colors + relations 
     else:
         raise ValueError(f"Unknown label {label}, should be Property")
     # if "S" in label:
@@ -245,7 +245,7 @@ for t in ["0.2", "0.3", "0.4", "0.6"]:
     # concat_patterns = np.concatenate(grouped_patterns, 1) # n_subs * total n_classes (3+3+2or1?+3+3) * n_sensors
     concat_patterns = grouped_patterns
     n_subs = len(concat_patterns)
-    labels = shapes + colors #+ ["rel"] + shapes + colors
+    labels = shapes + colors + relations #+ ["rel"] + shapes + colors
     corr_mat_all = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
     out_fn_all = f"{out_dir}/{n_subs}ave_over_subjects_All_Features_t{t}_all_ch"
     plot_correlation(corr_mat_all, out_fn_all, labels)

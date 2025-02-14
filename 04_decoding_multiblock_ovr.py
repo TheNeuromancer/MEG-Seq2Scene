@@ -87,9 +87,6 @@ train_cond_str = '_'.join(args.train_conds)
 out_fn = out_fn.replace(f"{args.train_cond}", f"{train_cond_str}") # hacky but works. Replaces the "dummy" train_cond, that is not used, by the actual set of training conditions
 ## !! Would not work if you test on the localier ... but probably that won't happen
 test_out_fns = [fn.replace(f"{args.train_cond}", f"{train_cond_str}") for fn in test_out_fns]
-# out_fn = get_out_fn(args, dirname=out_dir_name)
-# test_out_fns = get_test_out_fns(args, out_fn)
-# print(f'Output directory: {out_fn}, correct?')
 
 if args.windows:
     args.windows = [w.replace(" ", "") for w in args.windows] # remove spaces
@@ -127,8 +124,6 @@ for cond in args.train_conds:
         epoS1.metadata["Property"] = epoS1.metadata["Shape1"]
         epoC1.metadata["Property"] = epoC1.metadata["Colour1"]
         epoC1 = epoC1.shift_time(-0.6, relative=True) # Need to roll the times so that t0 is the color onset.
-        # epochs = mne.concatenate_epochs([epoS1, epoC1])
-        # all_epochs.extend([epoS1, epoC1])
         block_epo = [epoS1, epoC1]
     elif cond == "two_objects":
         epoS1, epoC1 = epochs.copy(), epochs.copy()
@@ -143,8 +138,6 @@ for cond in args.train_conds:
         epoC2.metadata["Property"] = epoC2.metadata["Colour2"]
         epoS2 = epoS2.shift_time(-1.8, relative=True)
         epoC2 = epoC2.shift_time(-2.4, relative=True)
-        # epochs = mne.concatenate_epochs([epoS1, epoC1, epoR, epoS2, epoC2])
-        # all_epochs.extend([epoS1, epoC1, epoR, epoS2, epoC2])
         block_epo = [epoS1, epoC1, epoR, epoS2, epoC2]
     else:
         raise RuntimeError(f"Condition {cond} not recognized")
@@ -193,7 +186,9 @@ if args.dummy:
     clf = LinearRegression(n_jobs=-1)
     setattr(args, 'n_folds', 2)
 else:
-    clf = LogisticRegression(C=1/0.006, solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000)
+    # clf = LogisticRegression(C=1/0.006, solver='saga', class_weight='balanced', multi_class='auto', max_iter=1000000)
+    # hyperparam optim found: [0.1, 'l1', 'liblinear', 'balanced']
+    clf = LogisticRegression(C=0.1, penalty='l1', solver='liblinear', class_weight='balanced', multi_class='auto', max_iter=100000)
 clf = OneVsRestClassifier(clf, n_jobs=1)
 
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')

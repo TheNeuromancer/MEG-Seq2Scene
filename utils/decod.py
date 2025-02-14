@@ -225,7 +225,9 @@ def load_data(args, fn, query_1='', query_2='', crop_final=True):
 
 def get_class_queries(query):
     if query == "Property": # any property, implemented last, for replay analysis
-        class_queries = [f"Property=='{s}'" for s in shapes] + [f"Property=='{c}'" for c in colors] # add relation?
+        class_queries = [f"Property=='{s}'" for s in shapes] + [f"Property=='{c}'" for c in colors] # + [f"Property==\"{r}\"" for r in relations]
+    elif query == "PropertyAll": # any property, implemented last, for replay analysis
+        class_queries = [f"Property=='{s}'" for s in shapes] + [f"Property=='{c}'" for c in colors] + [f"Property==\"{r}\"" for r in relations]
     elif query == "Colour1": 
         class_queries = [f"Colour1=='{c}'" for c in colors]
     elif query == "Shape1":

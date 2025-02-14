@@ -199,6 +199,17 @@ Add the regularization in the out_fn? Then you need to parse it in the results l
 test reactivations for later decoders ? 
 v16: still C=1/0.006, but not filtering by performance (we want also incorrect trials for the correlation with behavior), and doing multiple timepoints (.2, .3, .4, .6, .8).
 But no null trials?
-nice but how do I separates the different training time? TODO - hard. Ran again, with saving the original training time (from word onset) in the Label. 
+nice but how do I separates the different training time? TODO - hard. Ran again, with saving the original training time (from word onset) in the Label. That works!
 
-v17: same with just 0.2 because it is easier. 
+Working version if the multiblock decoding! Training on all possible trials. Include Relation as well?
+v17: adding the relation. Also increasing LogReg nb iteration from 10k to 1M. We have 10 x more trials for shapes and colors than relations, but shouldn't matter with classweights = balanced. 
+Weights patterns look fine. Now this version is labelled PropertyAll, whereas the shapes and colors is just Property.
+
+
+Hyperparameter optimization with 1vs6 training on localizer words and images and 1obj, and tested on 2obj, all positions. 
+best set of params: [0.1, 'l1', 'liblinear', 'balanced'] (average perf over subject is maximal)
+or [0.1, 'l1', 'saga', 'balanced'] (the numbef of subjects for which the perf is best is maximized).
+Will use [0.1, 'l1', 'liblinear', 'balanced']. Makese sense to maximize the overall perf.
+Also: sub-23 is at chance. REJECTING IT.
+
+v18: using the optimal parameters: [0.1, 'l1', 'liblinear', 'balanced']
