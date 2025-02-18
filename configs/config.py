@@ -15,7 +15,7 @@ class Config:
     epochs_dir: str = "Epochs_100hz_nofilter"
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
                            '08_ch180036', '09_jl190711', '10_ma200371', '12_mb160165', '13_lg170436', '14_eb180237', \
-                           '15_ar160084', '16_er123987', '19', '20', '21', '22', '24', '26', '28', '29', '30' \
+                           '15_ar160084', '16_er123987', '19', '20', '21', '22', '24', '26', '28', '29', '30', \
                            '11', '17', '23', '25', '27') 
                            # removed '18' because of missing data (it was there but Lorenzo couln't upload it)
                            # remove '23' because it is at chance on the hyperparam optim localizer + 25, 27, 11, 17 that are bad
