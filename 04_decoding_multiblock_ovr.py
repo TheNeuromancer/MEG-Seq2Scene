@@ -188,7 +188,7 @@ if args.dummy:
 else:
     # clf = LogisticRegression(C=1/0.006, solver='saga', class_weight='balanced', multi_class='auto', max_iter=1000000)
     # hyperparam optim found: [0.1, 'l1', 'liblinear', 'balanced']
-    clf = LogisticRegression(C=0.1, penalty='l1', solver='liblinear', class_weight='balanced', multi_class='auto', max_iter=100000)
+    clf = LogisticRegression(C=100, penalty='l1', solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000)
 clf = OneVsRestClassifier(clf, n_jobs=1)
 
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')

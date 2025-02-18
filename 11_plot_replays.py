@@ -13,7 +13,7 @@ import importlib
 from glob import glob
 from natsort import natsorted
 from mne.stats import permutation_cluster_1samp_test
-from scipy.stats import sem
+from scipy.stats import sem, ttest_rel
 import warnings
 # warnings.filterwarnings('ignore', '.*Provided stat_fun.*', )
 # warnings.filterwarnings('ignore', '.*No clusters found.*', )
@@ -30,6 +30,7 @@ plt.rcParams['figure.dpi'] = 300
 parser = argparse.ArgumentParser(description='MEG plotting of replay decoding results')
 parser.add_argument('-c', '--config', default='config', help='path to config file')
 parser.add_argument('-s', '--subject', default='all',help='subject name')
+parser.add_argument('-i', '--in-dir', default='multi', help='input directory (ovr or multi)')
 parser.add_argument('-o', '--out-dir', default='agg', help='output directory')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
 parser.add_argument('-v', '--verbose', action='store_true',  default=False, help='Print more stuff')
@@ -45,7 +46,7 @@ start_time = time.time()
 
 print('This script lists all the .npy files in all the subjects decoding output directories, takes the set of this and the averages all unique filenames to get on plot for all subjects per condition')
 v = args.version
-decoding_dir = f"Decoding_ovr_v{v}" # if args.ovr else f"Decoding_v{v}"
+decoding_dir = f"Decoding_{args.in_dir}_v{v}" # if args.ovr else f"Decoding_v{v}"
 res_dir = f"{args.root_path}/Results/{decoding_dir}/{args.epochs_dir}/{args.subject}/{args.out_dir}/"
 print('\noutput files will be in: ' + res_dir)
 create_folder(res_dir, args.overwrite)
@@ -54,8 +55,8 @@ df_fn = f"{res_dir}/all_preds_data.csv"
 df = pd.read_csv(df_fn)
 all_preds_data = pickle.load(open(f"{res_dir}/all_preds_data.pkl", 'rb'))
 
-print(f"\nOnly keeping the last second of the delay\n")
-all_preds_data = [p[100::] for p in all_preds_data]
+# print(f"\nOnly keeping the last second of the delay\n")
+# all_preds_data = [p[100::] for p in all_preds_data]
 
 maxLag = 5
 # times = np.arange(maxLag)*10
@@ -64,10 +65,8 @@ maxLag = 5
 # subs = df['sub'].unique()
 # n_subs = len(subs)
 
-# df = df.query("train_time == 0.2")
 
-
-def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, labels, maxLag=50, n_states=8):
+def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, labels, maxLag=1, n_states=8, do_rel=True):
     T_auto = np.eye(n_states)  # Autotransitions
     T_const = np.ones((n_states, n_states))  # Uniform transitions
     times = np.arange(maxLag)*10
@@ -79,7 +78,8 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, labels,
     sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
     sb, sr = np.copy(sf), np.copy(sf) # also a random matrix, for comparison purpose
     # preds_present, preds_absent = [], []
-    ave_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties}
+    props = Properties if do_rel else Properties[0:2] + Properties[3:5]
+    ave_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in props}
     behav_df = {"Subject": [], "Condition": [], "Property": [], "Reactivation": [], "Performance": [], "RT": []}
 
     # all_sync_react = [] # list of lists, for each subjects, for each trials, each synchronous reactivation
@@ -108,25 +108,26 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, labels,
             RTs = []
             for iTrial in range(n_trials):
                 df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
-                if len(df_trial) == 10:
-                    # print("\n weird, we get duplicate of each entry. Keeping only one of each line.")
-                    df_trial = df_trial.drop_duplicates(subset="train_time")
-                assert df_trial[Properties].nunique().sum() <= 5, f"More than five properties identified for trial {iTrial}: {trial_ids[iTrial]}"
-                if len(df_trial) != 5: from ipdb import set_trace; set_trace()
-                assert len(df_trial) == 5, f"Found more than the 5 entries for trial {iTrial}: {trial_ids[iTrial]}"
+                ## Useless now that we have a single decoder for all properties (actually 2, Prop and PropAll)
+                # if len(df_trial) == 10:
+                #     print("\n weird, we get duplicate of each entry. Keeping only one of each line.")
+                #     df_trial = df_trial.drop_duplicates(subset="train_time")
+                # assert df_trial[Properties].nunique().sum() <= 5, f"More than five properties identified for trial {iTrial}: {trial_ids[iTrial]}"
+                # if len(df_trial) != 5: from ipdb import set_trace; set_trace()
+                # assert len(df_trial) == 5, f"Found more than the 5 entries for trial {iTrial}: {trial_ids[iTrial]}"
                 
                 s1, c1, rel, s2, c2 = df_trial.iloc[0][Properties].values
-                TF = get_TF_5words(s1, c1, rel, s2, c2)
-                TR = TF.T
-                rand_inds = np.random.permutation(n_states)
-                Trand = TF[rand_inds]
-                templates = [TF, TR, Trand, T_auto, T_const]
+                # TF = get_TF_5words(s1, c1, rel, s2, c2)
+                # TR = TF.T
+                # rand_inds = np.random.permutation(n_states)
+                # Trand = TF[rand_inds]
+                # templates = [TF, TR, Trand, T_auto, T_const]
 
                 if iLag == 0: # save preds of present vs absent words for barplot of average predictions
 
-                    preds_props = get_trial_preds_from_data(df_trial, all_preds_data, labels)
+                    preds_props = get_trial_preds_from_data(df_trial, all_preds_data)
                     # update the dict of preds_sub_by_presence
-                    preds_sub_by_presence = add_present_or_absent_preds_one_trial(preds_props, [s1, c1, rel, s2, c2], preds_sub_by_presence)
+                    preds_sub_by_presence = add_present_or_absent_preds_one_trial(preds_props, [s1, c1, rel, s2, c2], preds_sub_by_presence, do_rel=do_rel)
                     
                     perf = df_trial["Perf"].unique()
                     assert len(perf) == 1, f"More than one performance value for trial {iTrial}: {trial_ids[iTrial]}"
@@ -139,24 +140,25 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, labels,
                     # get predictions over the whole window, for each property, depending on whether it is present or absent
                     # present: list of 5 arrays of shape (n_samples, n_states) for present
                     # absent: list of lists of one or two arrays of shape (n_samples, n_states) for absent (depending on how many absent properties)
-                    present, absent = get_present_or_absent_preds_one_trial(preds_props, [s1, c1, rel, s2, c2])
+                    present, absent = get_present_or_absent_preds_one_trial(preds_props, [s1, c1, rel, s2, c2], do_rel=do_rel)
                     ave_present = [p.mean() for p in present]
                     ave_absent = [np.mean([a.mean() for a in sublist]) for sublist in absent]
-                    for pres_prop, preds in zip(Properties, ave_present):
+                    Props = Properties if do_rel else Properties[0:2] + Properties[3:5]
+                    for pres_prop, preds in zip(Props, ave_present):
                         behav_df["Subject"].append(sub)
                         behav_df["Condition"].append("Present")
                         behav_df["Property"].append(pres_prop)
                         behav_df["Reactivation"].append(preds.mean())
                         behav_df["Performance"].append(perf[0])
                         behav_df["RT"].append(RT[0])
-                    for abs_prop, preds in zip(Properties, ave_absent):
+                    for abs_prop, preds in zip(Props, ave_absent):
                         behav_df["Subject"].append(sub)
                         behav_df["Condition"].append("Absent")
                         behav_df["Property"].append(abs_prop)
                         behav_df["Reactivation"].append(np.mean(preds))
                         behav_df["Performance"].append(perf[0])
                         behav_df["RT"].append(RT[0])
-                    for i, prop in enumerate(Properties):
+                    for i, prop in enumerate(Props):
                         behav_df["Subject"].append(sub)
                         behav_df["Condition"].append("Difference")
                         behav_df["Property"].append(prop)
@@ -195,14 +197,14 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, labels,
                 if len(preds_sub_by_presence["Shape1_present"]) == 0:
                     from ipdb import set_trace; set_trace()
                 # update the dict of averages
-                ave_preds_all_subs = get_subj_ave_preds(preds_sub_by_presence, ave_preds_all_subs) 
+                ave_preds_all_subs = get_subj_ave_preds(preds_sub_by_presence, ave_preds_all_subs, props=props) 
 
                 # synchronous coactivations
                 NP1_counts, NP1_overlap = count_coactivations_pairs(all_sync_react_this_subject, 0, 1)
                 NP2_counts, NP2_overlap = count_coactivations_pairs(all_sync_react_this_subject, 3, 4)
 
-                print(f"NP1 states co-activated {NP1_counts} times; average overlap: {NP1_overlap}")
-                print(f"NP2 states co-activated {NP2_counts} times; average overlap: {NP2_overlap}")
+                # print(f"NP1 states co-activated {NP1_counts} times; average overlap: {NP1_overlap}")
+                # print(f"NP2 states co-activated {NP2_counts} times; average overlap: {NP2_overlap}")
 
                 first_five_states = {0, 1, 2, 3, 4}
                 # subset_counts, ave_overlap_size = count_coactivations(all_sync_react_this_subject, first_five_states)
@@ -211,18 +213,18 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, labels,
                 #     print(f"{subset_size} states together: {count} times; average overlap: {ave_overlap_size[subset_size]}")
 
                 subset_counts, ave_overlap_size = count_coactivations(all_sync_react_this_subject, first_five_states)
-                print("Coactivation frequencies for the first 5 states:")
-                for subset_size, count in subset_counts.items():
-                    print(f"{subset_size} states (tol=-1 = strict overlap)together: {count} times; average overlap: {ave_overlap_size[subset_size]}")
+                # print("Coactivation frequencies for the first 5 states:")
+                # for subset_size, count in subset_counts.items():
+                #     print(f"{subset_size} states (tol=-1 = strict overlap)together: {count} times; average overlap: {ave_overlap_size[subset_size]}")
 
                 all_states = set(range(11))  # Adjust based on your data
                 NP1 = (0, 1)
                 NP2 = (3, 4)
                 summary = compute_np_significance(all_sync_react_this_subject, NP1, NP2, all_states)
                 all_subjects_summary.append(summary)
-                print("\nSummary Statistics:")
-                for key, value in summary.items():
-                    print(f"{key}: {value:.3f}")
+                # print("\nSummary Statistics:")
+                # for key, value in summary.items():
+                #     print(f"{key}: {value:.3f}")
             
 
         #     # mean over trials for this subject, lag and condition
@@ -237,65 +239,88 @@ def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, labels,
     return ave_preds_all_subs, behav_df, coactivation_df, sf, sb, sr
 
 
-def make_all_reactivation_plots(behav_df, ave_preds_all_subs, res_dir, add_str=''):
+def make_all_reactivation_plots(behav_df, ave_preds_all_subs, res_dir, add_str, do_rel):
+    Props = Properties if do_rel else Properties[0:2] + Properties[3:5]
     D = ave_preds_all_subs
-    present = [D["Shape1_present"], D["Colour1_present"], D["Relation_present"], D["Shape2_present"], D["Colour2_present"]]
-    absent = [D["Shape1_absent"], D["Colour1_absent"], D["Relation_absent"], D["Shape2_absent"], D["Colour2_absent"]]
+    if do_rel: 
+        present = [D["Shape1_present"], D["Colour1_present"], D["Relation_present"], D["Shape2_present"], D["Colour2_present"]]
+        absent = [D["Shape1_absent"], D["Colour1_absent"], D["Relation_absent"], D["Shape2_absent"], D["Colour2_absent"]]
+    else:
+        present = [D["Shape1_present"], D["Colour1_present"], D["Shape2_present"], D["Colour2_present"]]
+        absent = [D["Shape1_absent"], D["Colour1_absent"], D["Shape2_absent"], D["Colour2_absent"]]
     # plot_average_preds(present, absent, out_fn=f"{res_dir}/average_preds_scenes_trained_scenes_tested.png")
-    plot_average_preds_seaborn(present, absent, out_fn=f"{res_dir}/average_preds_scenes_trained_scenes_tested_sns_t{t}.png")
+    plot_average_preds_seaborn(present, absent, labels=Props, out_fn=f"{res_dir}/average_preds_scenes_trained_scenes_tested_sns_t{add_str}.png")
 
     behav_df = pd.DataFrame(behav_df)
 
-    does_reactivations_predict_behavioral(behav_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_t{t}.png")
-    does_reactivations_predict_behavioral(behav_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_t{t}.png")
-    for prop in Properties:
-        local_df = behav_df.query(f"Property=='{prop}'")
-        does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_{prop}_t{t}.png")
-        does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_{prop}_t{t}.png")
-        # does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_present_RT_{prop}_t{t}.png")
-        # does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_diff_RT_{prop}_t{t}.png")
+    ## Not averaged. Meaningless
+    # does_reactivations_predict_behavioral(behav_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_t{add_str}.png")
+    # does_reactivations_predict_behavioral(behav_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_t{add_str}.png")
+    # for prop in Props:
+    #     local_df = behav_df.query(f"Property=='{prop}'")
+    #     does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_{prop}_t{add_str}.png")
+    #     does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_{prop}_t{add_str}.png")
+    #     # does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_present_RT_{prop}_t{add_str}.png")
+    #     # does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_diff_RT_{prop}_t{add_str}.png")
 
     # average over trials 
     ave_df = behav_df.groupby(["Subject", "Condition", "Property"]).mean("Performance").reset_index()
-    does_reactivations_predict_behavioral(ave_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_aveTrials_t{t}.png")
-    does_reactivations_predict_behavioral(ave_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_aveTrials_t{t}.png")
-    for prop in Properties:
+    # doesn not work, pval=1 in all cases ... 
+    # # does_reactivations_predict_behavioral(ave_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_aveTrials_t{add_str}.png")
+    # does_reactivations_predict_behavioral(ave_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_aveTrials_t{add_str}.png")
+    # does_reactivations_predict_behavioral(ave_df.query("Condition=='Difference'"), y='RT', out_fn=f"{res_dir}/regplot_perf_react_diff_RT_aveTrials_t{add_str}.png")
+    for prop in Props:
         local_df = ave_df.query(f"Property=='{prop}'")
-        does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_{prop}_aveTrials_t{t}.png")
-        does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_{prop}_aveTrials_t{t}.png")
-        does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_present_RT_{prop}_aveTrials_t{t}.png")
-        does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_diff_RT_{prop}_aveTrials_t{t}.png")
+        # does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_{prop}_aveTrials_t{add_str}.png")
+        does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_{prop}_aveTrials_t{add_str}.png")
+        # does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_present_RT_{prop}_aveTrials_t{add_str}.png")
+        does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_diff_RT_{prop}_aveTrials_t{add_str}.png")
 
 
-for t in ["0.2", "0.3", "0.4", "0.6", "0.8"]:
-    print(f"Doing decoder trained at t = {t} s")
-    # df_t = df.query(f"{t} in label")
-    df_t = df[df["label"].str.contains(t, na=False)] # keep only the current training time
-    mask = df["label"].str.contains(t, na=False).to_list()  # get the corresponding binary mask 
-    preds_data_t = [pred for pred, keep in zip(all_preds_data, mask) if keep] # we need to do this because all_preds_data is a list
-    labels = [f"{l}{t}_0" for l in ["S1", "C1", "R", "S2", "C2"]]
-    ave_preds_all_subs, behav_df, coactivation_df, sf, sb, sr = get_preds_and_sequenceness_for_cond(df_t, \
-                                                                preds_data_t, "scenes", "scenes", labels)
+test_cond = "scenes"
+for label in ["Prop0"]: # "PropAll", 
+    print(f"Doing label {label}")
+    df_prop = df[df["label"].str.contains(label, na=False)]
+    do_rel = True if label=="PropAll" else False
 
-    from ipdb import set_trace; set_trace()
-    group_stats = coactivation_df.describe().T[['mean', 'std', '50%']]  # 50% is median
-    group_stats.rename(columns={'50%': 'median'}, inplace=True)
-    print(group_stats)
-    # Compare NP1 vs. mean of all pairs
-    t_stat, p_value = ttest_rel(coactivation_df["NP1_z_score"], coactivation_df["NP2_z_score"])
-    print(f"Paired t-test between NP1 and NP2: t = {t_stat:.3f}, p = {p_value:.3f}")
+    for train_cond in ["localizer_two_objects", "two_objects"]:
+        print(f"Doing train condition {train_cond}")
+        df_train = df_prop.query(f"train_cond == '{train_cond}'")
 
-    sns.boxplot(data=coactivation_df[["NP1_z_score", "NP2_z_score"]])
-    plt.title("Z-Scores of NP1 vs. NP2 Across Subjects")
-    plt.ylabel("Z-Score")
-    # plt.show()
-    plt.savefig(f"{res_dir}/NP1_vs_NP2_zscore_boxplot_t{t}.png")
-    
-    make_all_reactivation_plots(behav_df, ave_preds_all_subs, res_dir, add_str=t)
+        for t in ["0.2", "0.3", "0.4", "0.6", "0.8"]:
+            add_str = f"{t}_{label}_{train_cond}"
+
+            print(f"Doing decoder trained at t = {t} s")
+            # df_t = df.query(f"{t} in label")
+            df_t = df_train[df_train["label"].str.contains(t, na=False)] # keep only the current training time
+            mask = df_train["label"].str.contains(t, na=False).to_list()  # get the corresponding binary mask 
+            preds_data_t = [pred for pred, keep in zip(all_preds_data, mask) if keep] # we need to do this because all_preds_data is a list
+            labels = [f"{l}{t}_1" for l in ["S1", "C1", "R", "S2", "C2"]]
+            ave_preds_all_subs, behav_df, coactivation_df, sf, sb, sr = get_preds_and_sequenceness_for_cond(df_t, \
+                                                                        preds_data_t, train_cond, test_cond, labels, do_rel=do_rel)
+
+            # group_stats = coactivation_df.describe().T[['mean', 'std', '50%']]  # 50% is median
+            # group_stats.rename(columns={'50%': 'median'}, inplace=True)
+            # print(group_stats)
+            # # Compare NP1 vs. mean of all pairs
+            # try:
+            #     t_stat, p_value = ttest_rel(coactivation_df["NP1_z_score"], coactivation_df["NP2_z_score"])
+            # except:
+            #     from ipdb import set_trace; set_trace()
+            # print(f"Paired t-test between NP1 and NP2: t = {t_stat:.3f}, p = {p_value:.3f}")
+
+            # sns.boxplot(data=coactivation_df[["NP1_z_score", "NP2_z_score"]])
+            # plt.title("Z-Scores of NP1 vs. NP2 Across Subjects")
+            # plt.ylabel("Z-Score")
+            # # plt.show()
+            # plt.savefig(f"{res_dir}/NP1_vs_NP2_zscore_boxplot_t{add_str}.png")
+            # plt.close()
+            
+            make_all_reactivation_plots(behav_df, ave_preds_all_subs, res_dir, add_str, do_rel)
 
 
 from ipdb import set_trace; set_trace()
-
+exit()
 
 # does_reactivations_predict_behavioral(behav_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present.png")
 # does_reactivations_predict_behavioral(behav_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff.png")

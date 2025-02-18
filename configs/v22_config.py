@@ -7,7 +7,7 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "23"
+    version: str = "22"
     # root_path: str = "/home/users/d/desborde/scratch/s2s"
     root_path: str = "/home/desborde/Documents/s2s/" if os.path.exists("/home/desborde/Documents/s2s/") \
                     else "/Users/polo/Documents/MEG-Seq2Scene/" if platform.system() == "Darwin" \
@@ -44,9 +44,9 @@ class Config:
     ## Decoding single channel parameters
     reduc_dim_sing: float = 0 # dimensionality reduction
     ## General analysis parameters
-    cat: int = 0 # number of timepoints to concatenate
+    cat: int = 5 # number of timepoints to concatenate
     mean: bool = True # Wether to average instead of concatenate if using the "cat" argument
-    smooth: int = 0 # hanning smoothing window, in timesample,
+    smooth: int = 21 # hanning smoothing window, in timesample,
     clip: bool = True # Whether to clip to the 5th and 95th percentile for each channel
     subtract_evoked: bool = False # Whether to subtract the evoked signal from the epochs
     avg_clf: bool = False # Whether to average classifiers across cval folds

@@ -7,12 +7,12 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "23"
+    version: str = "500"
     # root_path: str = "/home/users/d/desborde/scratch/s2s"
     root_path: str = "/home/desborde/Documents/s2s/" if os.path.exists("/home/desborde/Documents/s2s/") \
                     else "/Users/polo/Documents/MEG-Seq2Scene/" if platform.system() == "Darwin" \
                     else "/home/users/d/desborde/scratch/s2s/" # path for labpc, then macbook, then yggdrasil cluster 
-    epochs_dir: str = "Epochs_100hz_nofilter"
+    epochs_dir: str = "Epochs_500hz_nofilter"
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
                            '08_ch180036', '09_jl190711', '10_ma200371', '12_mb160165', '13_lg170436', '14_eb180237', \
                            '15_ar160084', '16_er123987', '19', '20', '21', '22', '24', '26', '28', '29', '30') 
@@ -25,9 +25,9 @@ class Config:
     epo_var_reject: int = 0 # threshold for the variance-based epochs rejection, in number of std
     ref_run: int = 5 # reference run for head position for maxwell filter
     l_freq: float = 0.1 # high-pass filter cutoff
-    h_freq: float = 30 # low-pass filter cutoff
+    h_freq: float = 200 # low-pass filter cutoff
     notch: int = 50 # land line frequency
-    sfreq: int = 100 # final sampling frequency
+    sfreq: int = 500 # final sampling frequency
 
     ## Decoding parameters
     n_folds: int = 5 # number of splits

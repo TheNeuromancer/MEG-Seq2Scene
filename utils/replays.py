@@ -19,97 +19,168 @@ import itertools
 
 from .params import *
 
-
-def get_trial_preds_from_data(df_trial, all_preds_data, labels):
+def get_trial_preds_from_data(df_trial, all_preds_data):
     """ get the predictions for a given trial 
-    df_trial might have more than 5 entries, but we filter according to the list of labels
+    df_trial should have a single entry. 
     """
-    preds_shape1_idx = df_trial.query(f"label=='{labels[0]}'").index.values
-    assert len(preds_shape1_idx) == 1, f"len(preds_shape1_idx)={len(preds_shape1_idx)} for {labels[0]}"
-    preds_shape1 = all_preds_data[preds_shape1_idx[0]]
-
-    preds_color1_idx = df_trial.query(f"label=='{labels[1]}'").index.values
-    assert len(preds_color1_idx) == 1, f"len(preds_color1_idx)={len(preds_color1_idx)} for {labels[1]}"
-    preds_color1 = all_preds_data[preds_color1_idx[0]]
-
-    preds_rel_idx = df_trial.query(f"label=='{labels[2]}'").index.values
-    assert len(preds_rel_idx) == 1, f"len(preds_rel_idx)={len(preds_rel_idx)} for {labels[2]}"
-    preds_rel = all_preds_data[preds_rel_idx[0]]
-
-    preds_shape2_idx = df_trial.query(f"label=='{labels[3]}'").index.values
-    assert len(preds_shape2_idx) == 1, f"len(preds_shape2_idx)={len(preds_shape2_idx)} for {labels[3]}"
-    preds_shape2 = all_preds_data[preds_shape2_idx[0]]
-
-    preds_color2_idx = df_trial.query(f"label=='{labels[4]}'").index.values
-    assert len(preds_color2_idx) == 1, f"len(preds_color2_idx)={len(preds_color2_idx)} for {labels[4]}"
-    preds_color2 = all_preds_data[preds_color2_idx[0]]
+    assert len(df_trial) == 1, f"len(df_trial)={len(df_trial)}"
+    preds_idx = df_trial.index.values
+    preds = all_preds_data[preds_idx[0]]
+    return preds
 
 
-    return [preds_shape1, preds_color1, preds_rel, preds_shape2, preds_color2]
+# def get_trial_preds_from_data_OLD(df_trial, all_preds_data, labels):
+#     """ get the predictions for a given trial 
+#     df_trial might have more than 5 entries, but we filter according to the list of labels
+#     OLD VERSION, FOR BEFORE FITTING A SINGLE DECODER FOR ALL PROPERTIES
+#     """
+#     preds_shape1_idx = df_trial.query(f"label=='{labels[0]}'").index.values
+#     assert len(preds_shape1_idx) == 1, f"len(preds_shape1_idx)={len(preds_shape1_idx)} for {labels[0]}"
+#     preds_shape1 = all_preds_data[preds_shape1_idx[0]]
+
+#     preds_color1_idx = df_trial.query(f"label=='{labels[1]}'").index.values
+#     assert len(preds_color1_idx) == 1, f"len(preds_color1_idx)={len(preds_color1_idx)} for {labels[1]}"
+#     preds_color1 = all_preds_data[preds_color1_idx[0]]
+
+#     preds_rel_idx = df_trial.query(f"label=='{labels[2]}'").index.values
+#     assert len(preds_rel_idx) == 1, f"len(preds_rel_idx)={len(preds_rel_idx)} for {labels[2]}"
+#     preds_rel = all_preds_data[preds_rel_idx[0]]
+
+#     preds_shape2_idx = df_trial.query(f"label=='{labels[3]}'").index.values
+#     assert len(preds_shape2_idx) == 1, f"len(preds_shape2_idx)={len(preds_shape2_idx)} for {labels[3]}"
+#     preds_shape2 = all_preds_data[preds_shape2_idx[0]]
+
+#     preds_color2_idx = df_trial.query(f"label=='{labels[4]}'").index.values
+#     assert len(preds_color2_idx) == 1, f"len(preds_color2_idx)={len(preds_color2_idx)} for {labels[4]}"
+#     preds_color2 = all_preds_data[preds_color2_idx[0]]
+
+#     return [preds_shape1, preds_color1, preds_rel, preds_shape2, preds_color2]
 
 
-def add_present_or_absent_preds_one_trial(preds, props, preds_sub_by_presence):
+def add_present_or_absent_preds_one_trial(preds, props, preds_sub_by_presence, do_rel):
     """ take the predictions for a single trial
     and put them in the dict that stores all MEAN preds
     with this subjects, as a function of the property
     and whether it was present or absent in the sentence.
     """ 
+    # preds of shape n_samples, n_properties: shape (0:3), then colors (3:6), then Relation (6:8).
     s1, c1, rel, s2, c2 = props
-    preds_sub_by_presence["Shape1_present"].append(preds[0][:, shapes.index(s1)].mean())
-    preds_sub_by_presence["Colour1_present"].append(preds[1][:, colors.index(c1)].mean())
-    preds_sub_by_presence["Relation_present"].append(preds[2][:, relations.index(rel)].mean())
-    preds_sub_by_presence["Shape2_present"].append(preds[3][:, shapes.index(s2)].mean())
-    preds_sub_by_presence["Colour2_present"].append(preds[4][:, colors.index(c2)].mean())
+    preds_sub_by_presence["Shape1_present"].append(preds[:, 0:3][:, shapes.index(s1)].mean())
+    preds_sub_by_presence["Colour1_present"].append(preds[:, 3:6][:, colors.index(c1)].mean())
+    if do_rel:
+        preds_sub_by_presence["Relation_present"].append(preds[:, 6::][:, relations.index(rel)].mean())
+    preds_sub_by_presence["Shape2_present"].append(preds[:, 0:3][:, shapes.index(s2)].mean())
+    preds_sub_by_presence["Colour2_present"].append(preds[:, 3:6][:, colors.index(c2)].mean())
 
     shapes_absent = [s for s in shapes if s not in [s1, s2]]
     colors_absent = [c for c in colors if c not in [c1, c2]]
     relation_absent = [r for r in relations if r != rel][0]
     for absent_shape in shapes_absent:
-        preds_sub_by_presence["Shape1_absent"].append(preds[0][:, shapes.index(absent_shape)].mean())
-        preds_sub_by_presence["Shape2_absent"].append(preds[3][:, shapes.index(absent_shape)].mean())
+        preds_sub_by_presence["Shape1_absent"].append(preds[:, 0:3][:, shapes.index(absent_shape)].mean())
+        preds_sub_by_presence["Shape2_absent"].append(preds[:, 0:3][:, shapes.index(absent_shape)].mean())
     for absent_color in colors_absent:
-        preds_sub_by_presence["Colour1_absent"].append(preds[1][:, colors.index(absent_color)].mean())
-        preds_sub_by_presence["Colour2_absent"].append(preds[4][:, colors.index(absent_color)].mean())
-    preds_sub_by_presence['Relation_absent'].append(preds[2][:, relations.index(relation_absent)].mean())
+        preds_sub_by_presence["Colour1_absent"].append(preds[:, 3:6][:, colors.index(absent_color)].mean())
+        preds_sub_by_presence["Colour2_absent"].append(preds[:, 3:6][:, colors.index(absent_color)].mean())
+    if do_rel:
+        preds_sub_by_presence['Relation_absent'].append(preds[:, 6::][:, relations.index(relation_absent)].mean())
 
     return preds_sub_by_presence
 
 
-def get_present_or_absent_preds_one_trial(preds, props):
+# def add_present_or_absent_preds_one_trial_OLD(preds, props, preds_sub_by_presence):
+#     """ take the predictions for a single trial
+#     and put them in the dict that stores all MEAN preds
+#     with this subjects, as a function of the property
+#     and whether it was present or absent in the sentence.
+#     """ 
+#     s1, c1, rel, s2, c2 = props
+#     preds_sub_by_presence["Shape1_present"].append(preds[0][:, shapes.index(s1)].mean())
+#     preds_sub_by_presence["Colour1_present"].append(preds[1][:, colors.index(c1)].mean())
+#     preds_sub_by_presence["Relation_present"].append(preds[2][:, relations.index(rel)].mean())
+#     preds_sub_by_presence["Shape2_present"].append(preds[3][:, shapes.index(s2)].mean())
+#     preds_sub_by_presence["Colour2_present"].append(preds[4][:, colors.index(c2)].mean())
+
+#     shapes_absent = [s for s in shapes if s not in [s1, s2]]
+#     colors_absent = [c for c in colors if c not in [c1, c2]]
+#     relation_absent = [r for r in relations if r != rel][0]
+#     for absent_shape in shapes_absent:
+#         preds_sub_by_presence["Shape1_absent"].append(preds[0][:, shapes.index(absent_shape)].mean())
+#         preds_sub_by_presence["Shape2_absent"].append(preds[3][:, shapes.index(absent_shape)].mean())
+#     for absent_color in colors_absent:
+#         preds_sub_by_presence["Colour1_absent"].append(preds[1][:, colors.index(absent_color)].mean())
+#         preds_sub_by_presence["Colour2_absent"].append(preds[4][:, colors.index(absent_color)].mean())
+#     preds_sub_by_presence['Relation_absent'].append(preds[2][:, relations.index(relation_absent)].mean())
+
+#     return preds_sub_by_presence
+
+
+def get_present_or_absent_preds_one_trial(preds, props, do_rel):
     """ take the predictions for a single trial
     and returns them as 2 list of the 5 Properties
     (Present and Absent), not averaged
     """ 
+    # preds or shapes (0:3), then colors (3:6), then Relation (6:8).
     s1, c1, rel, s2, c2 = props
-    Shape1_present = preds[0][:, shapes.index(s1)] #.mean()
-    Colour1_present = preds[1][:, colors.index(c1)] #.mean()
-    Relation_present = preds[2][:, relations.index(rel)] #.mean()
-    Shape2_present = preds[3][:, shapes.index(s2)] #.mean()
-    Colour2_present = preds[4][:, colors.index(c2)] #.mean()
+    Shape1_present = preds[:, 0:3][:, shapes.index(s1)]
+    Colour1_present = preds[:, 3:6][:, colors.index(c1)]
+    if do_rel:
+        Relation_present = preds[:, 6::][:, relations.index(rel)]
+    Shape2_present = preds[:, 0:3][:, shapes.index(s2)]
+    Colour2_present = preds[:, 3:6][:, colors.index(c2)]
 
     shapes_absent = [s for s in shapes if s not in [s1, s2]]
     colors_absent = [c for c in colors if c not in [c1, c2]]
     relation_absent = [r for r in relations if r != rel][0]
     Shape1_absent, Shape2_absent, Colour1_absent, Colour2_absent = [], [], [], []
     for absent_shape in shapes_absent:
-        Shape1_absent.append(preds[0][:, shapes.index(absent_shape)]) #.mean())
-        Shape2_absent.append(preds[3][:, shapes.index(absent_shape)]) #.mean())
+        Shape1_absent.append(preds[:, 0:3][:, shapes.index(absent_shape)])
+        Shape2_absent.append(preds[:, 0:3][:, shapes.index(absent_shape)])
     for absent_color in colors_absent:
-        Colour1_absent.append(preds[1][:, colors.index(absent_color)]) #.mean())
-        Colour2_absent.append(preds[4][:, colors.index(absent_color)]) #.mean())
-    Relation_absent = [preds[2][:, relations.index(relation_absent)]] #.mean() # cast to list, for consistency with other absents
+        Colour1_absent.append(preds[:, 3:6][:, colors.index(absent_color)])
+        Colour2_absent.append(preds[:, 3:6][:, colors.index(absent_color)])
+    if do_rel:
+        Relation_absent = [preds[:, 6::][:, relations.index(relation_absent)]] # cast to list, for consistency with other absents
+        return [Shape1_present, Colour1_present, Relation_present, Shape2_present, Colour2_present], [Shape1_absent, Colour1_absent, Relation_absent, Shape2_absent, Colour2_absent]
+    else:
+        return [Shape1_present, Colour1_present, Shape2_present, Colour2_present], [Shape1_absent, Colour1_absent, Shape2_absent, Colour2_absent]
 
-    return [Shape1_present, Colour1_present, Relation_present, Shape2_present, Colour2_present], [Shape1_absent, Colour1_absent, Relation_absent, Shape2_absent, Colour2_absent]
+
+# def get_present_or_absent_preds_one_trial_OLD(preds, props):
+#     """ take the predictions for a single trial
+#     and returns them as 2 list of the 5 Properties
+#     (Present and Absent), not averaged
+#     """ 
+#     s1, c1, rel, s2, c2 = props
+#     Shape1_present = preds[0][:, shapes.index(s1)] #.mean()
+#     Colour1_present = preds[1][:, colors.index(c1)] #.mean()
+#     Relation_present = preds[2][:, relations.index(rel)] #.mean()
+#     Shape2_present = preds[3][:, shapes.index(s2)] #.mean()
+#     Colour2_present = preds[4][:, colors.index(c2)] #.mean()
+
+#     shapes_absent = [s for s in shapes if s not in [s1, s2]]
+#     colors_absent = [c for c in colors if c not in [c1, c2]]
+#     relation_absent = [r for r in relations if r != rel][0]
+#     Shape1_absent, Shape2_absent, Colour1_absent, Colour2_absent = [], [], [], []
+#     for absent_shape in shapes_absent:
+#         Shape1_absent.append(preds[0][:, shapes.index(absent_shape)]) #.mean())
+#         Shape2_absent.append(preds[3][:, shapes.index(absent_shape)]) #.mean())
+#     for absent_color in colors_absent:
+#         Colour1_absent.append(preds[1][:, colors.index(absent_color)]) #.mean())
+#         Colour2_absent.append(preds[4][:, colors.index(absent_color)]) #.mean())
+#     Relation_absent = [preds[2][:, relations.index(relation_absent)]] #.mean() # cast to list, for consistency with other absents
+
+#     return [Shape1_present, Colour1_present, Relation_present, Shape2_present, Colour2_present], [Shape1_absent, Colour1_absent, Relation_absent, Shape2_absent, Colour2_absent]
 
 
-def get_subj_ave_preds(preds_by_presence, ave_preds):
+def get_subj_ave_preds(preds_by_presence, ave_preds, props):
     """ Updates the across subjects dict with the values
     for this subject
     """
-    for prop in Properties:
+    for prop in props:
         for presence in ['present', 'absent']:
             preds = preds_by_presence[f"{prop}_{presence}"]
             ave_preds[f"{prop}_{presence}"].append(np.nanmean(preds))
+            if not len(preds): print(prop, presence)
     return ave_preds
 
 
@@ -427,6 +498,9 @@ def count_coactivations(all_synchronous_episodes, state_set):
             coactivation_counts[nb_coactive_states] += 1
             coactivation_overlaps[nb_coactive_states].append(overlap)
 
+    # Remove empty lists to avoid warnings
+    coactivation_overlaps = {k: v for k, v in coactivation_overlaps.items() if v}
+    
     ave_coactivation_overlaps = {k: np.mean(v) for k, v in coactivation_overlaps.items()}
     return coactivation_counts, ave_coactivation_overlaps
 
@@ -615,7 +689,7 @@ def does_reactivations_predict_behavioral(df, out_fn, y="Performance"):
     # plt.legend(title="Subject", bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
     plt.tight_layout()
     plt.savefig(out_fn, dpi=400)
-    # plt.show()
+    plt.close()
 
 
 

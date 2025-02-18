@@ -51,7 +51,7 @@ start_time = time.time()
 
 print('This script lists all the .npy files in all the subjects decoding output directories, takes the set of this and the averages all unique filenames to get on plot for all subjects per condition')
 v = args.version
-decoding_dir = f"Decoding_ovr_v{v}" # if args.ovr else f"Decoding_v{v}"
+decoding_dir = f"Decoding_multi_v{v}" # if args.ovr else f"Decoding_v{v}"
 if args.subject in ["all", "v1", "v2",  "goods"]: # for v1 and v2 we filter later
     in_dir = f"{args.root_path}/Results/{decoding_dir}/{args.epochs_dir}/*/"
 else:
@@ -162,11 +162,15 @@ def plot_correlation(correlations, out_fn, labels, vmin=None, vmax=None):
 
 def get_labels(label):
     if "S" in label:
-        return ["carre", "cercle", "triangle"]
+        return shapes
     elif "C" in label:
-        return ["rouge", "bleu", "vert"]
+        return colors
     elif "R" in label:
-        return ["left", "right"]
+        return relations # ["left", "right"]
+    elif "PropAll" in label:
+        return shapes + colors + relations
+    elif "Prop" in label:
+        return shapes + colors
     else:
         from ipdb import set_trace; set_trace()
 
@@ -186,7 +190,7 @@ if not args.already_saved:
         if "Obj" in label:
             print("Skipping Objects for now")
             continue
-        for train_cond in ["localizer", "obj", "scenes"]:
+        for train_cond in ["localizer_one_object_two_objects"]: # "localizer", "obj", "scenes", 
             gen_cond = None
             for train_time in train_times:
                 if args.verbose: print(train_time)
@@ -254,7 +258,6 @@ if not args.already_saved:
 
     df = pd.concat(all_df)
     df.to_csv(f"{out_dir}/all_patterns.csv") #, index=False)
-    from ipdb import set_trace; set_trace()
 
 else: # if already saved, just load the data
     df = pd.read_csv(f"{out_dir}/all_patterns.csv")
@@ -265,46 +268,49 @@ else: # if already saved, just load the data
 #     for train_time in train_times:
 # no loop, just specifiy conditions of interest
 
-for t in ["0.2", "0.3", "0.4", "0.6"]:
+for t in ["0.2", "0.3", "0.4", "0.6", "0.8"]:
 
     # colors, shapes, 1 and 2 
     grouped_patterns = []
+    grouped_patterns = np.stack(df.query(f"label=='Prop{t}' & train_cond=='localizer_one_object_two_objects' & train_time=='{t}'")['pattern'].values)
     # from ipdb import set_trace; set_trace()
-    grouped_patterns.append(np.stack(df.query(f"label=='S1{t}' & train_cond=='scenes' & train_time=='{t}'")['pattern'].values))
-    grouped_patterns.append(np.stack(df.query(f"label=='C1{t}' & train_cond=='scenes' & train_time=='{float(t)+.6:.1f}'")['pattern'].values)) #[:len(grouped_patterns[0])])
-    grouped_patterns.append(np.stack(df.query(f"label=='R{t}' & train_cond=='scenes' & train_time=='{float(t)+1.2:.1f}'")['pattern'].values)[:,np.newaxis,:])
-    grouped_patterns.append(np.stack(df.query(f"label=='S2{t}' & train_cond=='scenes' & train_time=='{float(t)+1.8:.1f}'")['pattern'].values))
-    grouped_patterns.append(np.stack(df.query(f"label=='C2{t}' & train_cond=='scenes' & train_time=='{float(t)+2.4:.1f}'")['pattern'].values)) # {str(float(t)+2.4)}
+    # grouped_patterns.append(np.stack(df.query(f"label=='S1{t}' & train_cond=='scenes' & train_time=='{t}'")['pattern'].values))
+    # grouped_patterns.append(np.stack(df.query(f"label=='C1{t}' & train_cond=='scenes' & train_time=='{float(t)+.6:.1f}'")['pattern'].values)) #[:len(grouped_patterns[0])])
+    # grouped_patterns.append(np.stack(df.query(f"label=='R{t}' & train_cond=='scenes' & train_time=='{float(t)+1.2:.1f}'")['pattern'].values)[:,np.newaxis,:])
+    # grouped_patterns.append(np.stack(df.query(f"label=='S2{t}' & train_cond=='scenes' & train_time=='{float(t)+1.8:.1f}'")['pattern'].values))
+    # grouped_patterns.append(np.stack(df.query(f"label=='C2{t}' & train_cond=='scenes' & train_time=='{float(t)+2.4:.1f}'")['pattern'].values)) # {str(float(t)+2.4)}
     # grouped_patterns.append(np.stack(df.query(f"label=='S1' & train_cond=='scenes' & train_time=='{t}'")['pattern'].values))
     # grouped_patterns.append(np.stack(df.query(f"label=='C1' & train_cond=='scenes' & train_time=='{float(t)+.6:.1f}'")['pattern'].values)) #[:len(grouped_patterns[0])])
     # grouped_patterns.append(np.stack(df.query(f"label=='R' & train_cond=='scenes' & train_time=='{float(t)+1.2:.1f}'")['pattern'].values)[:,np.newaxis,:])
     # grouped_patterns.append(np.stack(df.query(f"label=='S2' & train_cond=='scenes' & train_time=='{float(t)+1.8:.1f}'")['pattern'].values))
     # grouped_patterns.append(np.stack(df.query(f"label=='C2' & train_cond=='scenes' & train_time=='{float(t)+2.4:.1f}'")['pattern'].values)) # {str(float(t)+2.4)}
-    concat_patterns = np.concatenate(grouped_patterns, 1) # n_subs * total n_classes (3+3+2or1?+3+3) * n_sensors
+    # concat_patterns = np.concatenate(grouped_patterns, 1) # n_subs * total n_classes (3+3+2or1?+3+3) * n_sensors
+    concat_patterns = grouped_patterns
     n_subs = len(concat_patterns)
-    labels = shapes + colors + ["rel"] + shapes + colors
+    # labels = shapes + colors + ["rel"] + shapes + colors
+    labels = get_labels(f"Prop{t}")
     corr_mat_all = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
-    out_fn_all = f"{out_dir}/{n_subs}ave_over_subjects_All_Features_t{t}_all_ch"
+    out_fn_all = f"{out_dir}/{n_subs}ave_over_subjects_Prop_t{t}_all_ch"
     plot_correlation(corr_mat_all, out_fn_all, labels)
     corr_mat_mag = get_correlation_across_subjects(concat_patterns[:,:,indices['mag']])
-    out_fn_mag = f"{out_dir}/{n_subs}ave_over_subjects_All_Features_t{t}_mag"
+    out_fn_mag = f"{out_dir}/{n_subs}ave_over_subjects_Prop_t{t}_mag"
     plot_correlation(corr_mat_mag, out_fn_mag, labels)
     corr_mat_grad = get_correlation_across_subjects(concat_patterns[:,:,indices['grad']])
-    out_fn_grad = f"{out_dir}/{n_subs}ave_over_subjects_All_Features_t{t}_grad"
+    out_fn_grad = f"{out_dir}/{n_subs}ave_over_subjects_Prop_t{t}_grad"
     plot_correlation(corr_mat_grad, out_fn_grad, labels)
 
-    # localizer, word and images 
-    grouped_patterns = []
-    grouped_patterns.append(np.stack(df.query(f"label=='WordC' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
-    grouped_patterns.append(np.stack(df.query(f"label=='WordS' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
-    grouped_patterns.append(np.stack(df.query(f"label=='ImgC' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
-    grouped_patterns.append(np.stack(df.query(f"label=='ImgS' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
-    concat_patterns = np.concatenate(grouped_patterns, 1) # n_subs * total n_classes (3+3+3+3) * n_sensors
-    corr_mat = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
-    labels = shapes + colors + shapes + colors
-    n_subs = len(concat_patterns)
-    out_fn = f"{out_dir}/{n_subs}ave_over_subjects_All_Localizer_Features_t{t}"
-    plot_correlation(corr_mat, out_fn, labels)
+    # # localizer, word and images 
+    # grouped_patterns = []
+    # grouped_patterns.append(np.stack(df.query(f"label=='WordC' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
+    # grouped_patterns.append(np.stack(df.query(f"label=='WordS' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
+    # grouped_patterns.append(np.stack(df.query(f"label=='ImgC' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
+    # grouped_patterns.append(np.stack(df.query(f"label=='ImgS' & train_cond=='localizer' & train_time=='{t}'")['pattern'].values))
+    # concat_patterns = np.concatenate(grouped_patterns, 1) # n_subs * total n_classes (3+3+3+3) * n_sensors
+    # corr_mat = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
+    # labels = shapes + colors + shapes + colors
+    # n_subs = len(concat_patterns)
+    # out_fn = f"{out_dir}/{n_subs}ave_over_subjects_All_Localizer_Features_t{t}"
+    # plot_correlation(corr_mat, out_fn, labels)
                 
 
 # # colors, shapes, 1 and 2 
