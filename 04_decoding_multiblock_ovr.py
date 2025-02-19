@@ -83,10 +83,12 @@ start_time = time.time()
 out_dir_name = "Decoding_multi"
 _, test_fns, out_fn, test_out_fns = get_paths(args, out_dir_name)
 # adjust the out_fns 
-train_cond_str = '_'.join(args.train_conds)
+train_cond_str = '_'.join(natsorted(args.train_conds))
 out_fn = out_fn.replace(f"{args.train_cond}", f"{train_cond_str}") # hacky but works. Replaces the "dummy" train_cond, that is not used, by the actual set of training conditions
+print(out_fn)
 ## !! Would not work if you test on the localier ... but probably that won't happen
 test_out_fns = [fn.replace(f"{args.train_cond}", f"{train_cond_str}") for fn in test_out_fns]
+print(test_out_fns)
 
 if args.windows:
     args.windows = [w.replace(" ", "") for w in args.windows] # remove spaces
@@ -112,8 +114,10 @@ for cond in args.train_conds:
     args.train_cond = cond  # Set current condition
     train_fn, _, _, _ = get_paths(args, out_dir_name)  # Get file paths
     
-    epochs_orig = load_data(args, train_fn)[0]
-    epochs = epochs_orig  # hack but works
+    # epochs_orig = load_data(args, train_fn)[0]
+    # epochs = epochs_orig  # hack but works
+    epochs = load_data(args, train_fn)[0]
+    epochs_orig = None
 
     # Complement the md to get query-compatibility
     if cond == "localizer":
@@ -142,6 +146,15 @@ for cond in args.train_conds:
     else:
         raise RuntimeError(f"Condition {cond} not recognized")
 
+    for epo in block_epo: epo.baseline = None # hack, but works (else concat does not work)
+    
+    # Crop to the windows (tested for single time point window only)
+    windows = [tuple([float(x) for x in win.split(",")]) for win in args.windows]
+    if windows:
+        print(f"Using training time window: {windows[0]}s")
+        for epo in block_epo: epo = epo.crop(*windows[0])
+        # epochs = epochs.crop(*windows[0])
+
     all_epochs.extend(block_epo)
     # all_epochs_orig.append(epochs_orig) # useless? Maybe for null trials?
     
@@ -150,17 +163,13 @@ for cond in args.train_conds:
         trial_counts = epo.metadata["Property"].value_counts().to_dict()
         print(trial_counts) 
 
-if args.baseline:
-    # print(f"Re-applying baseline correction to each epoch -- after the time shift -- ... not sure that's the best way to go, but otherwise the concatenation doesn't work")
-    # all_epochs = [epo.apply_baseline((-.5, 0)) for epo in all_epochs]
-    for epo in all_epochs: epo.baseline = None # hack, but works
 
-# Crop to the windows (tested for single time point window only)
-windows = [tuple([float(x) for x in win.split(",")]) for win in args.windows]
-if windows:
-    print(f"Using training time window: {windows[0]}s")
-    for epo in all_epochs: epo = epo.crop(*windows[0])
-    # epochs = epochs.crop(*windows[0])
+# # Crop to the windows (tested for single time point window only)
+# windows = [tuple([float(x) for x in win.split(",")]) for win in args.windows]
+# if windows:
+#     print(f"Using training time window: {windows[0]}s")
+#     for epo in all_epochs: epo = epo.crop(*windows[0])
+#     # epochs = epochs.crop(*windows[0])
 epochs = mne.concatenate_epochs(all_epochs)  # Merge all epochs
 del all_epochs  # Free up memory
 train_tmin, train_tmax = epochs.tmin, epochs.tmax

@@ -86,7 +86,7 @@ all_preds_data = []
 all_df = []
 for label in all_labels:
     if args.verbose: print(f"Doing {label}")
-    for train_cond in ["localizer", "obj", "scenes", "localizer_one_object_two_objects", "localizer_two_objects", "two_objects"]:
+    for train_cond in ["two_objects_localizer", "localizer", "obj", "scenes", "localizer_one_object_two_objects", "localizer_two_objects", "two_objects"]:
         for split_query in [False]: # no split query in replay decoding so far (but migh wanna include it later)
             for gen_cond in ["obj", "scenes"]: # "localizer", 
                 for train_time in train_times:

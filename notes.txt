@@ -218,3 +218,5 @@ v20: saga, C=100, classseights=None
 v21: saga, C=1000, classseights='balanced' - also removing the test in one obj. - fuck launched as v20. probably overwrote the previous .
 v22: removing training on one obj. - saga-c=100 --- better without one_obj! 
 v23: not cat no smooth
+
+Doing v500 = 500hz. Not very different from the 100hz versions. 

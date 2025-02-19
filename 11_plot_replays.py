@@ -55,7 +55,8 @@ df_fn = f"{res_dir}/all_preds_data.csv"
 df = pd.read_csv(df_fn)
 all_preds_data = pickle.load(open(f"{res_dir}/all_preds_data.pkl", 'rb'))
 
-# print(f"\nOnly keeping the last second of the delay\n")
+print(f"\nOnly keeping the last second of the delay\n")
+all_preds_data = [p[500::] for p in all_preds_data]
 # all_preds_data = [p[100::] for p in all_preds_data]
 
 maxLag = 5
@@ -278,22 +279,24 @@ def make_all_reactivation_plots(behav_df, ave_preds_all_subs, res_dir, add_str, 
 
 
 test_cond = "scenes"
-for label in ["Prop0"]: # "PropAll", 
+for label in ["Prop0", "PropAll"]: # , 
     print(f"Doing label {label}")
     df_prop = df[df["label"].str.contains(label, na=False)]
     do_rel = True if label=="PropAll" else False
 
-    for train_cond in ["localizer_two_objects", "two_objects"]:
+    for train_cond in ["localizer_two_objects", "two_objects", "two_objects_localizer"]:
         print(f"Doing train condition {train_cond}")
         df_train = df_prop.query(f"train_cond == '{train_cond}'")
 
         for t in ["0.2", "0.3", "0.4", "0.6", "0.8"]:
             add_str = f"{t}_{label}_{train_cond}"
-
-            print(f"Doing decoder trained at t = {t} s")
+            # print(f"Doing decoder trained at t = {t} s")
             # df_t = df.query(f"{t} in label")
             df_t = df_train[df_train["label"].str.contains(t, na=False)] # keep only the current training time
             mask = df_train["label"].str.contains(t, na=False).to_list()  # get the corresponding binary mask 
+            if not len(df_t): 
+                print(f"No data for {label}, traincond={train_cond} t={t} s")
+                continue
             preds_data_t = [pred for pred, keep in zip(all_preds_data, mask) if keep] # we need to do this because all_preds_data is a list
             labels = [f"{l}{t}_1" for l in ["S1", "C1", "R", "S2", "C2"]]
             ave_preds_all_subs, behav_df, coactivation_df, sf, sb, sr = get_preds_and_sequenceness_for_cond(df_t, \
