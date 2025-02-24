@@ -70,6 +70,8 @@ mag_info, grad_info, all_info = [pickle.load(open(f"{args.root_path}/Data/{s}_in
 indices = {'mag': mag_idx, 'grad': grad_idx, 'all': all_idx}
 infos = {'mag': mag_info, 'grad': grad_info, 'all': all_info}
 
+vmin, vmax = -.1, .1 # for the across subjects correlations
+
 def plot_patterns(pattern, out_fn, mag_info, mag_idx, grad_info, grad_idx):
     fig, ax = plt.subplots()
     mne.viz.plot_topomap(pattern[mag_idx], mag_info, axes=ax, contours=0)
@@ -128,17 +130,20 @@ def get_correlation_across_subjects(all_patterns):
     return correlation_matrix    
 
 
-def plot_correlation(correlations, out_fn, labels, vmin=None, vmax=None):
+def plot_correlation(correlations, out_fn, labels, vmin, vmax, vcenter=0):
     fig, ax = plt.subplots()
-    if vmin is None: vmin = np.min(correlations)
-    if vmax is None: vmax = np.max(correlations)
-    im = ax.imshow(correlations, cmap='viridis', vmin=vmin, vmax=vmax)
+    # if vmin is None: vmin = np.min(correlations)
+    # if vmax is None: vmax = np.max(correlations)
+    divnorm = matplotlib.colors.TwoSlopeNorm(vmin=vmin, vcenter=vcenter, vmax=vmax)
+
+    im = ax.imshow(correlations, norm=divnorm, cmap='bwr', origin='lower')
     ax.set_xticks(np.arange(len(correlations)))
     ax.set_yticks(np.arange(len(correlations)))
     ax.set_xticklabels(labels)
     ax.set_yticklabels(labels)
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
     plt.colorbar(im, label="Correlation")
+    plt.tight_layout()
     plt.savefig(f'{out_fn}_correlations.png')
 
 def get_labels(label):
@@ -195,7 +200,9 @@ if not args.already_saved:
                     continue
                 else:
                     median_pattern = np.median(all_patterns, 0) # median over subjects
+                    median_filter = np.median(all_filters, 0) # median over subjects
                     all_patterns = np.array(all_patterns) # shape: (n_subjects, n_classes, n_sensors)
+                    all_filters = np.array(all_filters) # shape: (n_subjects, n_classes, n_sensors)
                 out_fn = f"{out_dir}/{label}_trained_on_{train_cond}_at_{train_time}_{n_subs}ave"
 
                 if median_pattern.ndim == 2: # OVR, one additional dimension n_classes  * n_sensors
@@ -207,15 +214,22 @@ if not args.already_saved:
                         plot_correlation(correlations, f"{out_fn}_averaged_{ch_type}", labels, vmin=-1, vmax=1)
                         ## correlation over subjects
                         corr_mat = get_correlation_across_subjects(all_patterns[:,:,indices[ch_type]])
-                        plot_correlation(corr_mat, f"{out_fn}_over_subjects_{ch_type}", labels)
+                        plot_correlation(corr_mat, f"{out_fn}_over_subjects_{ch_type}", labels, vmin=vmin, vmax=vmax)
+
+                        # # average correlation plot between the filters averaged over subjects (not so interesting, diag is ones)
+                        # correlations = np.corrcoef(median_filter[:,indices[ch_type]])
+                        # plot_correlation(correlations, f"{out_fn}_filter_averaged_{ch_type}", labels, vmin=-1, vmax=1)
+                        # ## correlation over subjects
+                        # corr_mat = get_correlation_across_subjects(all_filters[:,:,indices[ch_type]])
+                        # plot_correlation(corr_mat, f"{out_fn}_filter_over_subjects_{ch_type}", labels, vmin=vmin, vmax=vmax)
 
                     # report.add_figs_to_section(f'{label} trained on {train_cond} at {train_time}', [f'{out_fn}_correlations.png'], section=f'{label} trained on {train_cond} at {train_time}')
 
-                    for patt in median_pattern:
-                        plot_patterns(patt, out_fn, mag_info, mag_idx, grad_info, grad_idx)
+                    # for patt in median_pattern:
+                    #     plot_patterns(patt, out_fn, mag_info, mag_idx, grad_info, grad_idx)
 
-                else:
-                    plot_patterns(median_pattern, out_fn, mag_info, mag_idx, grad_info, grad_idx)
+                # else:
+                    # plot_patterns(median_pattern, out_fn, mag_info, mag_idx, grad_info, grad_idx)
 
                 if args.verbose: print(f"Finished {label} trained on {train_cond} at {train_time}\n")
                 plt.close('all')
@@ -232,42 +246,46 @@ else: # if already saved, just load the data
 
 for t in ["0.2", "0.3", "0.4", "0.6"]:
 
-    t_df = df.query(f"label=='Prop{t}'")
-    if t_df.empty:
+    # t_df = df.query(f"label=='Prop{t}'")
+    # if t_df.empty:
+    #     print(f"No data for {t}")
+    #     continue
+
+    t_df_all = df.query(f"label=='PropAll{t}'")
+    if t_df_all.empty:
         print(f"No data for {t}")
         continue
 
-    for patOrFilt in ["pattern", "filter"]:
+    for patOrFilt in ["pattern"]: #, "filter"]:
         # colors, shapes, 1 and 2 
-        grouped_patterns = np.stack(t_df[patOrFilt].values) # already of shape n_subs * total n_classes * n_sensors
-        concat_patterns = grouped_patterns
-        n_subs = len(concat_patterns)
-        labels = shapes + colors #+ relations #+ ["rel"] + shapes + colors
-        from ipdb import set_trace; set_trace()
-        corr_mat_all = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
-        out_fn_all = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_Prop_t{t}_all_ch"
-        plot_correlation(corr_mat_all, out_fn_all, labels)
-        corr_mat_mag = get_correlation_across_subjects(concat_patterns[:,:,indices['mag']])
-        out_fn_mag = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_Prop_t{t}_mag"
-        plot_correlation(corr_mat_mag, out_fn_mag, labels)
-        corr_mat_grad = get_correlation_across_subjects(concat_patterns[:,:,indices['grad']])
-        out_fn_grad = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_Prop_t{t}_grad"
-        plot_correlation(corr_mat_grad, out_fn_grad, labels)
+        # grouped_patterns = np.stack(t_df[patOrFilt].values) # already of shape n_subs * total n_classes * n_sensors
+        # concat_patterns = grouped_patterns
+        # n_subs = len(concat_patterns)
+        # labels = shapes + colors #+ relations #+ ["rel"] + shapes + colors
+        # corr_mat_all = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
+        # out_fn_all = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_Prop_t{t}_all_ch"
+        # plot_correlation(corr_mat_all, out_fn_all, labels, vmin=vmin, vmax=vmax)
+        # corr_mat_mag = get_correlation_across_subjects(concat_patterns[:,:,indices['mag']])
+        # out_fn_mag = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_Prop_t{t}_mag"
+        # plot_correlation(corr_mat_mag, out_fn_mag, labels, vmin=vmin, vmax=vmax)
+        # corr_mat_grad = get_correlation_across_subjects(concat_patterns[:,:,indices['grad']])
+        # out_fn_grad = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_Prop_t{t}_grad"
+        # plot_correlation(corr_mat_grad, out_fn_grad, labels, vmin=vmin, vmax=vmax)
                 
 
         # colors, shapes, 1 and 2 + Relation
         grouped_patterns = np.stack(df.query(f"label=='PropAll{t}'")[patOrFilt].values) # already of shape n_subs * total n_classes * n_sensors
         concat_patterns = grouped_patterns
         n_subs = len(concat_patterns)
-        labels = shapes + colors + relations
+        labels = shapes + colors + ["rel"] #relations
         corr_mat_all = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
         out_fn_all = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_PropAll_t{t}_all_ch"
-        plot_correlation(corr_mat_all, out_fn_all, labels)
+        plot_correlation(corr_mat_all, out_fn_all, labels, vmin=vmin, vmax=vmax)
         corr_mat_mag = get_correlation_across_subjects(concat_patterns[:,:,indices['mag']])
         out_fn_mag = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_PropAll_t{t}_mag"
-        plot_correlation(corr_mat_mag, out_fn_mag, labels)
+        plot_correlation(corr_mat_mag, out_fn_mag, labels, vmin=vmin, vmax=vmax)
         corr_mat_grad = get_correlation_across_subjects(concat_patterns[:,:,indices['grad']])
         out_fn_grad = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_PropAll_t{t}_grad"
-        plot_correlation(corr_mat_grad, out_fn_grad, labels)
+        plot_correlation(corr_mat_grad, out_fn_grad, labels, vmin=vmin, vmax=vmax)
 
 print(f"ALL FINISHED, elpased time: {(time.time()-start_time)/60:.2f}min")

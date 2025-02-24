@@ -232,14 +232,8 @@ Reactivations are between shapes and colors, never, it seems, across words and c
 v24: train a separate OVR for each property, because training all props together encourages the classifier to identifiy the category but not the items (each shape decoder is strongly correlated), leading to correlations in the predictions and false reactivation results. New argument: --split_props
 v25: same with null trials, as much as 2obj trials (before the fix for getting as much null as needed).
 Deleted 24 by accident.but have all the plots
-
-
-Change the structure of the code? Have 2 lists, present and absent, of various length each, to take into account trials of all complexities. Then you need to find a way to keep only the trial with no bias for the coactivations. If there is a repeated word, then it should not count as coactivation with itself.
-
 Hope for t=.4, v25, training on all the data. 
 But still some weird thing with the absent properties. Maybe just compare S1-C1 and S2-C2 vs S1-C2 and S2-C1
-Maybe try less null trials? It seems that the patterns are correlated now.
-
 
 Use linear or gaussian SVM?
 LR is good because it gives calibrated probabilities, that can be interpreted as the confidence in the decision (but maybe with you reactiation detection tecchnique that doesn't matter so much). 
@@ -254,7 +248,17 @@ v26: with the best decoder from the grisearch = [0.1, 'l1', 'saga', 'balanced'].
 ->: stop training on 2obj only, and focus on 0.4s. Also, synchronous does not seem different for the present props
 Kind of similar to v25 for seq, but worse for sync.
 v27: same as v26 but with the old way to make null trials (single null trial per trial). (or it could be that you added back the shitty subjects)
-v28: SVC-rbf
+v28: SVC-rbf - mouais, pas mieux.
+v29: back to LR, with best params. Removing bad subjects. single null trial per trial. Mouais
+v30: adding more null trials null_prop=0.5 (true 50% of tests). Not too bad, weights are ok-ish.
+v31: same with null_prop=0.25
+v32: same with no baseline. not better, and weights correlations are weird.
+v33: back to baselining, null_prop=0.1
+v34: again with no null_prop
+v35: same with equalize events to avoid the slight bias in weights correlations (triangle vert, cerlce bleu, carre rouge). Still there although weaker, but the sequential react is worse.
 
-try without bseline?  more or less null trials? null_prop = 0.1 or 0.5
 try the hyperparam optim for t=0.4s?
+try looking for SL-SR (left-right) instead of first-second! If there is a specific order with the relation, it might only pop up then. 
+
+
+Change the structure of the code? Have 2 lists, present and absent, of various length each, to take into account trials of all complexities. Then you need to find a way to keep only the trial with no bias for the coactivations. If there is a repeated word, then it should not count as coactivation with itself.

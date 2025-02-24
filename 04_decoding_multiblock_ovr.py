@@ -176,12 +176,12 @@ if args.null_prop > 0:
     epochs_null = epochs_orig.crop(epochs_orig.tmin, 0)
     dat_null = epochs_null.get_data(picks='meg').squeeze()
     n_trials, n_chans, n_times_fixation = dat_null.shape
-    # random_indices = np.random.choice(n_times_fixation, size=(len(epochs_orig), num_null), replace=True)
-    # # Use advanced indexing to extract the selected time points
-    # dat_null = dat_null[np.arange(n_trials)[:, None, None], np.arange(n_chans)[None, :, None], random_indices[:, None, :]]
-    # dat_null = dat_null.transpose(0, 2, 1).reshape(n_trials * num_null, n_chans)
-    random_indices = np.random.choice(n_times_fixation, size=n_trials, replace=True)
-    dat_null = dat_null[np.arange(n_trials), :, random_indices]  # Shape (n_trials, n_chans)
+    random_indices = np.random.choice(n_times_fixation, size=(len(epochs_orig), num_null), replace=True)
+    # Use advanced indexing to extract the selected time points
+    dat_null = dat_null[np.arange(n_trials)[:, None, None], np.arange(n_chans)[None, :, None], random_indices[:, None, :]]
+    dat_null = dat_null.transpose(0, 2, 1).reshape(n_trials * num_null, n_chans)
+    # random_indices = np.random.choice(n_times_fixation, size=n_trials, replace=True)
+    # dat_null = dat_null[np.arange(n_trials), :, random_indices]  # Shape (n_trials, n_chans)
     out_fn += f"_null{args.null_prop}"
 else:
     dat_null = None
@@ -194,8 +194,8 @@ if args.dummy:
 else:
     # clf = LogisticRegression(C=1/0.006, solver='saga', class_weight='balanced', multi_class='auto', max_iter=1000000)
     # hyperparam optim found: [0.1, 'l1', 'liblinear', 'balanced']
-    # clf = LogisticRegression(C=0.1, penalty='l1', solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000)
-    clf = SVC(kernel='rbf', class_weight='balanced', max_iter=-1, C=1, gamma=0.001, probability=True, random_state=42)
+    clf = LogisticRegression(C=0.1, penalty='l1', solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000)
+    # clf = SVC(kernel='rbf', class_weight='balanced', max_iter=-1, C=1, gamma=0.001, probability=True, random_state=42)
 clf = OneVsRestClassifier(clf, n_jobs=1)
 
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')

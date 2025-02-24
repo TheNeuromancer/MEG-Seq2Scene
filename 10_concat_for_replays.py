@@ -96,6 +96,9 @@ for label in all_labels:
                         for fn in all_fns:
                             if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
                             if f"cond-{train_cond}-" not in fn: continue
+                            # if any([str(sub) in fn for sub in [25, 27, 11, 20]]): 
+                            #     print(f"rejecting fn {fn}")
+                            #     continue # bad subjects
                             if gen_cond is not None:
                                 if f"#{train_time},{train_time}#{gen_window[0]},{gen_window[1]}#" not in fn: 
                                     continue
@@ -150,6 +153,8 @@ df.to_csv(f"{out_dir}/all_preds_data.csv", index=False)
 # cannot save as np array because for the heterogeneity of the dimensions. so list of trials, for each category, for all subjects
 # items in the last are of shape n_times * n_classes
 pickle.dump(all_preds_data, open(f"{out_dir}/all_preds_data.pkl", 'wb'))
+
+print(f"Used {df['sub'].nunique()} subjects)")
 
 
 print(f"ALL FINISHED, elpased time: {(time.time()-start_time)/60:.2f}min")

@@ -51,7 +51,7 @@ do
 # --test-cond 'two_objects' \
 # --test-query 'PropertyAll' --windows '3, 5' "
 
-echo "python 04_decoding_multiblock_ovr.py -w -s $sub --null_prop 0.5 --split_props --label PropAll$t \
+echo "python 04_decoding_multiblock_ovr.py -w -s $sub --null_prop 0.1 --equalize_events --split_props --label PropAll$t \
 --train-conds 'two_objects' --train-conds 'localizer' --train-conds 'one_object' \
 --train-query 'PropertyAll' --windows '$t,$t' \
 --test-cond 'two_objects' \

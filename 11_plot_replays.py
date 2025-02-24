@@ -56,7 +56,7 @@ df = pd.read_csv(df_fn)
 all_preds_data = pickle.load(open(f"{res_dir}/all_preds_data.pkl", 'rb'))
 
 print(f"\nOnly keeping the last second of the delay\n")
-all_preds_data = [p[100::] for p in all_preds_data]
+all_preds_data = [p[50::] for p in all_preds_data]
 
 print(F"Only keeping Complexity==2 trials, because else the repeated states fucks up the replays analyses")
 df = df.query(f"Complexity==2")
@@ -67,6 +67,7 @@ def get_replays_sophie_style(df, all_preds_data, train_cond, gen_cond, do_rel=Tr
     """
     subs = df['sub'].unique()
     n_subs = len(subs)
+    print(f"Found {n_subs} subjects")
     if df['train_cond'].nunique() > 1 or df['gen_cond'].nunique() > 1:
         print(f"More than one train or gen condition in the dataframe; it should be pre-filtered before being fed to the func!")
         from ipdb import set_trace; set_trace()
@@ -118,7 +119,7 @@ def get_replays_sophie_style(df, all_preds_data, train_cond, gen_cond, do_rel=Tr
             preds_this_trial, labels_this_trial = restructure_data(present, absent, do_rel=do_rel) # list of arrays of len n_times. The first five are the present items. The nexts are the absents. 
             # preds_this_trial, labels_this_trial = remove_label_duplicates(preds_this_trial, labels_this_trial) # randomly select one of the absent properties if there are multiple absents
             preds_this_trial, labels_this_trial = average_label_duplicates(preds_this_trial, labels_this_trial) # randomly select one of the absent properties if there are multiple absents
-            signif_react = get_significant_reactivations(preds_this_trial)
+            signif_react = get_significant_reactivations(preds_this_trial, threshold=2)
             # reac_times = get_reactivation_times(signif_react) # not used
             consecutive_react = get_reactivation_episodes(signif_react) # list of tuples: [(start, end, state, duration), ...] for all reactivation episodes.
 
