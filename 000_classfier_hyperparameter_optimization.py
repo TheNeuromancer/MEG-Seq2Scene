@@ -58,7 +58,7 @@ np.random.seed(args.seed)
 start_time = time.time()
 
 ### GET EPOCHS FILENAMES ###
-out_dir_name = "Decoding_opti"
+out_dir_name = "Decoding_opti_svc"
 _, test_fns, out_fn, _ = get_paths(args, out_dir_name)
 # adjust the out_fns 
 train_cond_str = '_'.join(args.train_conds)
@@ -69,38 +69,25 @@ out_fn = out_fn.replace(f"{args.train_cond}", f"{train_cond_str}") # hacky but w
 ######## TRAINING #########
 ###########################
 
+# param_grid = {
+#     "solver": ["saga", "liblinear"],  # Both solvers support L1 and L2
+#     "penalty": ["l1", "l2"],  # L1 = Lasso, L2 = Ridge
+#     "C": [0.001, 0.01, 0.1, 1, 10, 100, 1000],  # Regularization strength
+#     "class_weight": [None, "balanced"]  # Compare default vs. balanced weighting
+# }
 param_grid = {
-    "solver": ["saga", "liblinear"],  # Both solvers support L1 and L2
-    "penalty": ["l1", "l2"],  # L1 = Lasso, L2 = Ridge
-    "C": [0.001, 0.01, 0.1, 1, 10, 100, 1000],  # Regularization strength
+    'C': [0.1, 1, 10, 100, 1000],  # Regularization parameter
+    'gamma': ['scale', 'auto', 0.001, 0.01, 0.1, 1, 10],  # Kernel coefficient
     "class_weight": [None, "balanced"]  # Compare default vs. balanced weighting
 }
+
 # Create all combinations of hyperparameters
-param_combinations = list(itertools.product(param_grid['C'], param_grid['penalty'], param_grid['solver'], param_grid['class_weight']))
+# param_combinations = list(itertools.product(param_grid['C'], param_grid['penalty'], param_grid['solver'], param_grid['class_weight']))
+param_combinations = list(itertools.product(param_grid['C'], param_grid['gamma'], param_grid['class_weight']))
 
 print('\nStarting training')
 
 class_queries = get_class_queries("Property")
-
-# train on loc and test on 1obj - old
-# # train_fn, test_fns, _, _ = get_paths(args, out_dir_name)  # Get file paths
-# train_epochs = load_data(args, train_fn)[0]
-# train_epochs = train_epochs.crop(0.2, 0.2)
-# X_train, y_train, groups, _, _ = get_X_y_from_queries(train_epochs, class_queries, args.split_queries)
-# X_train = X_train.squeeze()
-
-# # test data
-# test_epochs = load_data(args, test_fns[0])[0]
-# epoS1, epoC1 = test_epochs.copy(), test_epochs.copy()
-# epoS1.metadata["Property"] = epoS1.metadata["Shape1"]
-# epoC1.metadata["Property"] = epoC1.metadata["Colour1"]
-# epoC1 = epoC1.shift_time(-0.6, relative=True) # Need to roll the times so that t0 is the color onset.
-# block_epo = [epoS1, epoC1]
-# for epo in block_epo: epo.baseline = None # hack, but works
-# for epo in block_epo: epo = epo.crop(0.2, 0.2)
-# test_epochs = mne.concatenate_epochs(block_epo)
-# X_test, y_test, groups, _, _ = get_X_y_from_queries(test_epochs, class_queries, args.split_queries)
-# X_test = X_test.squeeze()
 
 all_train_epochs = []
 for cond in args.train_conds:
@@ -148,8 +135,10 @@ X_test = X_test.squeeze()
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
 # Iterate over each hyperparameter combination and train the model
 sub_perfs, sub_params = [], []
-for C, penalty, solver, class_weight in tqdm(param_combinations):
-    clf = LogisticRegression(class_weight=class_weight, max_iter=10000, C=C, penalty=penalty, solver=solver)
+# for C, penalty, solver, class_weight in tqdm(param_combinations):
+    # clf = LogisticRegression(class_weight=class_weight, max_iter=10000, C=C, penalty=penalty, solver=solver)
+for C, gamma, class_weight in tqdm(param_combinations):
+    clf = SVC(kernel='rbf', class_weight=class_weight, max_iter=-1, C=C, gamma=gamma, probability=True, random_state=42)
     clf = OneVsRestClassifier(clf, n_jobs=1)
     pipeline = make_pipeline(RobustScaler(), clf)
     pipeline.fit(X_train, y_train)
@@ -158,7 +147,7 @@ for C, penalty, solver, class_weight in tqdm(param_combinations):
     test_auc = roc_auc_score(y_test, y_pred, multi_class='ovr')
 
     sub_perfs.append(test_auc)
-    sub_params.append([C, penalty, solver, class_weight])
+    sub_params.append([C, gamma, class_weight])
 
 pickle.dump(sub_perfs, open(f"{out_fn}_sub_perfs_{args.subject}.pkl", "wb"))
 pickle.dump(sub_params, open(f"{out_fn}_sub_params_{args.subject}.pkl", "wb"))

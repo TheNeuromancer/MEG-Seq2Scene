@@ -7,7 +7,7 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "28"
+    version: str = "25"
     # root_path: str = "/home/users/d/desborde/scratch/s2s"
     root_path: str = "/home/desborde/Documents/s2s/" if os.path.exists("/home/desborde/Documents/s2s/") \
                     else "/Users/polo/Documents/MEG-Seq2Scene/" if platform.system() == "Darwin" \

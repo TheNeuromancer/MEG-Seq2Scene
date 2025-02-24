@@ -153,5 +153,3 @@ pickle.dump(all_preds_data, open(f"{out_dir}/all_preds_data.pkl", 'wb'))
 
 
 print(f"ALL FINISHED, elpased time: {(time.time()-start_time)/60:.2f}min")
-
-from ipdb import set_trace; set_trace()

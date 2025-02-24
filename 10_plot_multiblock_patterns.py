@@ -143,7 +143,7 @@ def plot_correlation(correlations, out_fn, labels, vmin=None, vmax=None):
 
 def get_labels(label):
     if "PropAll" in label:
-        return shapes + colors + relations 
+        return shapes + colors + ["Rel"] #+ relations 
     elif "Prop" in label:
         return shapes + colors
     else:
@@ -162,7 +162,7 @@ if not args.already_saved:
         for train_cond in ["localizer_one_object_two_objects"]:
             for train_time in train_times:
                 if args.verbose: print(train_time)
-                all_patterns = []
+                all_patterns, all_filters = [], []
                 future_df = {}
                 for fn in all_fns: # maybe change this loop? Loop only once for every file and use string comprehension to get the file parameters. 
                     if op.basename(fn)[0:len(label)+1] != f"{label}-": continue 
@@ -176,8 +176,12 @@ if not args.already_saved:
                     if args.verbose: print('loading file ', fn)
                     pattern = np.load(fn)
                     all_patterns.append(pattern)
+                    fn_filter = fn.replace('patterns.npy', 'filters.npy')
+                    filters = np.load(fn_filter)
+                    all_filters.append(filters)
                     
                     future_df['pattern'] = [pattern]
+                    future_df['filter'] = [filters]
                     future_df['subject'] = [op.basename(op.dirname(fn))[0:2]]
                     future_df['train_cond'] = [train_cond]
                     future_df['train_time'] = [train_time]
@@ -228,35 +232,42 @@ else: # if already saved, just load the data
 
 for t in ["0.2", "0.3", "0.4", "0.6"]:
 
-    # colors, shapes, 1 and 2 
-    grouped_patterns = np.stack(df.query(f"label=='Prop{t}'")['pattern'].values) # already of shape n_subs * total n_classes * n_sensors
-    concat_patterns = grouped_patterns
-    n_subs = len(concat_patterns)
-    labels = shapes + colors #+ relations #+ ["rel"] + shapes + colors
-    corr_mat_all = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
-    out_fn_all = f"{out_dir}/{n_subs}ave_over_subjects_Prop_t{t}_all_ch"
-    plot_correlation(corr_mat_all, out_fn_all, labels)
-    corr_mat_mag = get_correlation_across_subjects(concat_patterns[:,:,indices['mag']])
-    out_fn_mag = f"{out_dir}/{n_subs}ave_over_subjects_Prop_t{t}_mag"
-    plot_correlation(corr_mat_mag, out_fn_mag, labels)
-    corr_mat_grad = get_correlation_across_subjects(concat_patterns[:,:,indices['grad']])
-    out_fn_grad = f"{out_dir}/{n_subs}ave_over_subjects_Prop_t{t}_grad"
-    plot_correlation(corr_mat_grad, out_fn_grad, labels)
-            
+    t_df = df.query(f"label=='Prop{t}'")
+    if t_df.empty:
+        print(f"No data for {t}")
+        continue
 
-    # colors, shapes, 1 and 2 + Relation
-    grouped_patterns = np.stack(df.query(f"label=='PropAll{t}'")['pattern'].values) # already of shape n_subs * total n_classes * n_sensors
-    concat_patterns = grouped_patterns
-    n_subs = len(concat_patterns)
-    labels = shapes + colors + relations
-    corr_mat_all = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
-    out_fn_all = f"{out_dir}/{n_subs}ave_over_subjects_PropAll_t{t}_all_ch"
-    plot_correlation(corr_mat_all, out_fn_all, labels)
-    corr_mat_mag = get_correlation_across_subjects(concat_patterns[:,:,indices['mag']])
-    out_fn_mag = f"{out_dir}/{n_subs}ave_over_subjects_PropAll_t{t}_mag"
-    plot_correlation(corr_mat_mag, out_fn_mag, labels)
-    corr_mat_grad = get_correlation_across_subjects(concat_patterns[:,:,indices['grad']])
-    out_fn_grad = f"{out_dir}/{n_subs}ave_over_subjects_PropAll_t{t}_grad"
-    plot_correlation(corr_mat_grad, out_fn_grad, labels)
+    for patOrFilt in ["pattern", "filter"]:
+        # colors, shapes, 1 and 2 
+        grouped_patterns = np.stack(t_df[patOrFilt].values) # already of shape n_subs * total n_classes * n_sensors
+        concat_patterns = grouped_patterns
+        n_subs = len(concat_patterns)
+        labels = shapes + colors #+ relations #+ ["rel"] + shapes + colors
+        from ipdb import set_trace; set_trace()
+        corr_mat_all = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
+        out_fn_all = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_Prop_t{t}_all_ch"
+        plot_correlation(corr_mat_all, out_fn_all, labels)
+        corr_mat_mag = get_correlation_across_subjects(concat_patterns[:,:,indices['mag']])
+        out_fn_mag = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_Prop_t{t}_mag"
+        plot_correlation(corr_mat_mag, out_fn_mag, labels)
+        corr_mat_grad = get_correlation_across_subjects(concat_patterns[:,:,indices['grad']])
+        out_fn_grad = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_Prop_t{t}_grad"
+        plot_correlation(corr_mat_grad, out_fn_grad, labels)
+                
+
+        # colors, shapes, 1 and 2 + Relation
+        grouped_patterns = np.stack(df.query(f"label=='PropAll{t}'")[patOrFilt].values) # already of shape n_subs * total n_classes * n_sensors
+        concat_patterns = grouped_patterns
+        n_subs = len(concat_patterns)
+        labels = shapes + colors + relations
+        corr_mat_all = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
+        out_fn_all = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_PropAll_t{t}_all_ch"
+        plot_correlation(corr_mat_all, out_fn_all, labels)
+        corr_mat_mag = get_correlation_across_subjects(concat_patterns[:,:,indices['mag']])
+        out_fn_mag = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_PropAll_t{t}_mag"
+        plot_correlation(corr_mat_mag, out_fn_mag, labels)
+        corr_mat_grad = get_correlation_across_subjects(concat_patterns[:,:,indices['grad']])
+        out_fn_grad = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_PropAll_t{t}_grad"
+        plot_correlation(corr_mat_grad, out_fn_grad, labels)
 
 print(f"ALL FINISHED, elpased time: {(time.time()-start_time)/60:.2f}min")

@@ -5,9 +5,12 @@ from glob import glob
 import pandas as pd
 import numpy as np
 import pickle
+from random import choice
+from collections import defaultdict
 from scipy.stats import sem, pearsonr, zscore, ttest_ind
 from sklearn.preprocessing import scale, MinMaxScaler
 from sklearn.linear_model import LinearRegression
+from sklearn.exceptions import ConvergenceWarning
 # from scipy.linalg import toeplitz
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -15,6 +18,7 @@ import seaborn as sns
 from statannotations.Annotator import Annotator
 import statsmodels.formula.api as smf
 import itertools
+import warnings
 
 
 from .params import *
@@ -24,8 +28,8 @@ def get_trial_preds_from_data(df_trial, all_preds_data):
     df_trial should have a single entry. 
     """
     assert len(df_trial) == 1, f"len(df_trial)={len(df_trial)}"
-    preds_idx = df_trial.index.values
-    preds = all_preds_data[preds_idx[0]]
+    preds_idx = df_trial.index.values[0]
+    preds = all_preds_data[preds_idx]
     return preds
 
 
@@ -57,34 +61,35 @@ def get_trial_preds_from_data(df_trial, all_preds_data):
 #     return [preds_shape1, preds_color1, preds_rel, preds_shape2, preds_color2]
 
 
-def add_present_or_absent_preds_one_trial(preds, props, preds_sub_by_presence, do_rel):
-    """ take the predictions for a single trial
-    and put them in the dict that stores all MEAN preds
-    with this subjects, as a function of the property
-    and whether it was present or absent in the sentence.
-    """ 
-    # preds of shape n_samples, n_properties: shape (0:3), then colors (3:6), then Relation (6:8).
-    s1, c1, rel, s2, c2 = props
-    preds_sub_by_presence["Shape1_present"].append(preds[:, 0:3][:, shapes.index(s1)].mean())
-    preds_sub_by_presence["Colour1_present"].append(preds[:, 3:6][:, colors.index(c1)].mean())
-    if do_rel:
-        preds_sub_by_presence["Relation_present"].append(preds[:, 6::][:, relations.index(rel)].mean())
-    preds_sub_by_presence["Shape2_present"].append(preds[:, 0:3][:, shapes.index(s2)].mean())
-    preds_sub_by_presence["Colour2_present"].append(preds[:, 3:6][:, colors.index(c2)].mean())
+# def add_present_or_absent_preds_one_trial(preds, props, preds_sub_by_presence, do_rel):
+#     """ take the predictions for a single trial
+#     and put them in the dict that stores all MEAN preds
+#     with this subjects, as a function of the property
+#     and whether it was present or absent in the sentence.
+#     """ 
+#     # preds of shape n_samples, n_properties: shape (0:3), then colors (3:6), then Relation (6:8).
+#     s1, c1, rel, s2, c2 = props
+#     preds_sub_by_presence["Shape1_present"].append(preds[:, 0:3][:, shapes.index(s1)].mean())
+#     preds_sub_by_presence["Colour1_present"].append(preds[:, 3:6][:, colors.index(c1)].mean())
+#     if do_rel:
+#         preds_sub_by_presence["Relation_present"].append(preds[:, 6::][:, relations.index(rel)].mean())
+#     preds_sub_by_presence["Shape2_present"].append(preds[:, 0:3][:, shapes.index(s2)].mean())
+#     preds_sub_by_presence["Colour2_present"].append(preds[:, 3:6][:, colors.index(c2)].mean())
 
-    shapes_absent = [s for s in shapes if s not in [s1, s2]]
-    colors_absent = [c for c in colors if c not in [c1, c2]]
-    relation_absent = [r for r in relations if r != rel][0]
-    for absent_shape in shapes_absent:
-        preds_sub_by_presence["Shape1_absent"].append(preds[:, 0:3][:, shapes.index(absent_shape)].mean())
-        preds_sub_by_presence["Shape2_absent"].append(preds[:, 0:3][:, shapes.index(absent_shape)].mean())
-    for absent_color in colors_absent:
-        preds_sub_by_presence["Colour1_absent"].append(preds[:, 3:6][:, colors.index(absent_color)].mean())
-        preds_sub_by_presence["Colour2_absent"].append(preds[:, 3:6][:, colors.index(absent_color)].mean())
-    if do_rel:
-        preds_sub_by_presence['Relation_absent'].append(preds[:, 6::][:, relations.index(relation_absent)].mean())
+#     shapes_absent = [s for s in shapes if s not in [s1, s2]]
+#     colors_absent = [c for c in colors if c not in [c1, c2]]
+#     relation_absent = [r for r in relations if r != rel][0]
+#     for absent_shape in shapes_absent:
+#         preds_sub_by_presence["Shape1_absent"].append(preds[:, 0:3][:, shapes.index(absent_shape)].mean())
+#         preds_sub_by_presence["Shape2_absent"].append(preds[:, 0:3][:, shapes.index(absent_shape)].mean())
+#     for absent_color in colors_absent:
+#         preds_sub_by_presence["Colour1_absent"].append(preds[:, 3:6][:, colors.index(absent_color)].mean())
+#         preds_sub_by_presence["Colour2_absent"].append(preds[:, 3:6][:, colors.index(absent_color)].mean())
+#     if do_rel:
+#         preds_sub_by_presence['Relation_absent'].append(preds[:, 6::][:, relations.index(relation_absent)].mean())
 
-    return preds_sub_by_presence
+#     from ipdb import set_trace; set_trace()
+#     return preds_sub_by_presence
 
 
 # def add_present_or_absent_preds_one_trial_OLD(preds, props, preds_sub_by_presence):
@@ -144,7 +149,6 @@ def get_present_or_absent_preds_one_trial(preds, props, do_rel):
     else:
         return [Shape1_present, Colour1_present, Shape2_present, Colour2_present], [Shape1_absent, Colour1_absent, Shape2_absent, Colour2_absent]
 
-
 # def get_present_or_absent_preds_one_trial_OLD(preds, props):
 #     """ take the predictions for a single trial
 #     and returns them as 2 list of the 5 Properties
@@ -171,6 +175,63 @@ def get_present_or_absent_preds_one_trial(preds, props, do_rel):
 
 #     return [Shape1_present, Colour1_present, Relation_present, Shape2_present, Colour2_present], [Shape1_absent, Colour1_absent, Relation_absent, Shape2_absent, Colour2_absent]
 
+def update_present_or_absent_preds_one_trial(preds_sub_by_presence, present, absent, do_rel):
+    """ update the dict with preselected present
+    and absent probabilities averaged over the window.
+    """ 
+    # preds of shape n_samples, n_properties: shape (0:3), then colors (3:6), then Relation (6:8).
+    if do_rel:
+        Shape1_present, Colour1_present, Relation_present, Shape2_present, Colour2_present = present
+        # Shape1_absent, Colour1_absent, Relation_absent, Shape2_absent, Colour2_absent = absent
+        Shape1_absent, Colour1_absent, Relation_absent = absent
+    else:
+        Shape1_present, Colour1_present, Shape2_present, Colour2_present = present
+        # Shape1_absent, Colour1_absent, Shape2_absent, Colour2_absent = absent
+        Shape1_absent, Colour1_absent = absent
+
+    preds_sub_by_presence["Shape1_present"].append(Shape1_present)
+    preds_sub_by_presence["Colour1_present"].append(Colour1_present)
+    if do_rel:
+        preds_sub_by_presence["Relation_present"].append(Relation_present)
+    preds_sub_by_presence["Shape2_present"].append(Shape2_present)
+    preds_sub_by_presence["Colour2_present"].append(Colour2_present)
+
+    # for absent_shape in shapes_absent:
+    preds_sub_by_presence["Shape1_absent"].append(Shape1_absent)
+    # preds_sub_by_presence["Shape2_absent"].append(Shape2_absent)
+    preds_sub_by_presence["Colour1_absent"].append(Colour1_absent)
+    # preds_sub_by_presence["Colour2_absent"].append(Colour2_absent)
+    if do_rel:
+        preds_sub_by_presence['Relation_absent'].append(Relation_absent)
+    return preds_sub_by_presence
+
+
+def update_behav_df(behav_df, sub, perf, RT, ave_present, ave_absent, props, do_rel):
+    """ Update the longform df with all behavioral results
+    """    
+    for pres_prop, preds in zip(props, ave_present):
+        behav_df["Subject"].append(sub)
+        behav_df["Condition"].append("Present")
+        behav_df["Property"].append(pres_prop)
+        behav_df["Reactivation"].append(preds.mean())
+        behav_df["Performance"].append(perf)
+        behav_df["RT"].append(RT)
+    for abs_prop, preds in zip(props, ave_absent):
+        behav_df["Subject"].append(sub)
+        behav_df["Condition"].append("Absent")
+        behav_df["Property"].append(abs_prop)
+        behav_df["Reactivation"].append(np.mean(preds))
+        behav_df["Performance"].append(perf)
+        behav_df["RT"].append(RT)
+    for i, (prop, _) in enumerate(zip(props, ave_absent)): # fancy trick to iterate only to the length of ave_absent, which is shorter than present and props (no 2nd item)
+        behav_df["Subject"].append(sub)
+        behav_df["Condition"].append("Difference")
+        behav_df["Property"].append(prop)
+        behav_df["Reactivation"].append(np.mean(ave_present[i]) - np.mean(ave_absent[i]))
+        behav_df["Performance"].append(perf)
+        behav_df["RT"].append(RT)
+    return behav_df
+
 
 def get_subj_ave_preds(preds_by_presence, ave_preds, props):
     """ Updates the across subjects dict with the values
@@ -184,67 +245,100 @@ def get_subj_ave_preds(preds_by_presence, ave_preds, props):
     return ave_preds
 
 
-
-def get_TF_2words(shape, color):
-    """ get the forward transition matrix
-    for 2-word blocks. 
-    Positions in the matrix are shape, then colors """
-    color_offset = 3
-    T = np.zeros((6, 6))
-    T[shapes.index(shape), colors.index(color) + color_offset] = 1
-    return T
-    # single transition ... is that ok for sequenceness? 
-
-
-def get_TF_5words(s1, c1, rel, s2, c2):
-    """ get the forward transition matrix
-    for 5-word blocks. 
-    Positions in the matrix are shape, color, then relation """
-    T = np.zeros((8, 8))
-    color_offset = 3
-    relation_offset = 6
-    s1_idx, c1_idx, r_idx, s2_idx, c2_idx = shapes.index(s1), colors.index(c1), relations.index(rel), shapes.index(s2), colors.index(c2)
-    T[s1_idx, c1_idx+color_offset] = 1
-    T[c1_idx+color_offset, r_idx+relation_offset] = 1
-    T[r_idx+relation_offset, s2_idx] = 1
-    T[s2_idx, c2_idx+color_offset] = 1
-    return T
-
-
-def restructure_data(present, absent):
+def restructure_data(present, absent, do_rel=True):
     """Converts present and absent lists into a single list of arrays with corresponding labels.
     Args:
-        present (list): List of 5 arrays (n_samples, n_states) for present properties.
+        present (list): List of (4 or) 5 arrays (n_samples, n_states) for present properties.
         absent (list): List of lists of 1 or 2 arrays (n_samples, n_states) for absent properties.
     Returns:
         all_arrays (list of np.ndarray): Flattened list of (n_samples, n_states) arrays.
         all_labels (list of tuples): Labels with (trial_idx, property, 'present'/'absent').
     """
+    Props = Properties if do_rel else Properties[0:2] + Properties[3:5]
     all_arrays, all_labels = [], []
-    for prop, arr in zip(Properties, present): # Add present properties
+    for prop, arr in zip(Props, present): # Add present properties
         all_arrays.append(arr)
         all_labels.append((prop, "present"))
-    for prop, sublist in zip(Properties, absent): # Add absent properties (list of lists)
+    for prop, sublist in zip(Props, absent): # Add absent properties (list of lists)
         for abs_idx, arr in enumerate(sublist):
             all_arrays.append(arr)
             all_labels.append((prop, "absent"))
     return all_arrays, all_labels
 
 
+def remove_label_duplicates(preds, labels):
+    """
+    Removes one random occurrence of each duplicate entry in `labels`, 
+    ensuring the same elements are removed from `preds`.
+
+    Parameters:
+    - labels (list of tuples): List containing (feature, state) pairs.
+    - preds (list of numpy arrays): Corresponding prediction arrays.
+
+    Returns:
+    - filtered_labels (list of tuples): Labels with duplicates removed.
+    - filtered_preds (list of numpy arrays): Corresponding predictions.
+    """
+
+    # Dictionary to track first occurrence of each label
+    seen = {}
+    # List to store duplicate index pairs
+    duplicates = []
+
+    # Identify duplicates
+    for i, label in enumerate(labels):
+        if label in seen:
+            duplicates.append((seen[label], i))  # Store both indices of duplicate
+        else:
+            seen[label] = i  # Store first occurrence index
+
+    # Randomly select one occurrence to remove for each duplicate pair
+    indices_to_remove = set(choice(pair) for pair in duplicates)
+
+    # Filter out the selected indices
+    filtered_labels = [lbl for i, lbl in enumerate(labels) if i not in indices_to_remove]
+    filtered_preds = [pred for i, pred in enumerate(preds) if i not in indices_to_remove]
+
+    return filtered_preds, filtered_labels
+
+
+def average_label_duplicates(preds, labels):
+    """
+    Merges duplicate entries in `labels` by averaging their corresponding `preds` values.
+
+    Parameters:
+    - labels (list of tuples): List containing (feature, state) pairs.
+    - preds (list of numpy arrays): Corresponding prediction arrays.
+
+    Returns:
+    - merged_labels (list of tuples): Labels with duplicates merged.
+    - merged_preds (list of numpy arrays): Predictions averaged for duplicate entries.
+    """
+
+    label_dict = defaultdict(list)  # Dictionary to store predictions for each unique label
+
+    # Group predictions by label
+    for label, pred in zip(labels, preds):
+        label_dict[label].append(pred)
+
+    # Compute the average prediction for each unique label
+    merged_labels = list(label_dict.keys())
+    merged_preds = [np.mean(np.stack(pred_list), axis=0) for pred_list in label_dict.values()]
+    return merged_preds, merged_labels
+
+
 # This one or the next? zscore or just percentile? 
-def get_significant_reactivations(all_probs, threshold=0.9):
+def get_significant_reactivations(all_probs, threshold=2):
     """ get the significant reactivations
     for each property, and for each presence/absence
     threshold is applied to z-scored reactivations
     Maybe keep the actual value, to differentiate 
     "strong" from "weak" reactiations? 
+    Use a scaler fit on the whole data, not just a trial?
     """
     significant_reactivations = [(zscore(arr) > threshold) for arr in all_probs]
     return significant_reactivations
-    # reactivation_present = [(zscore(arr) > threshold) for arr in present]
-    # reactivation_absent = [[(zscore(arr) > threshold) for arr in lst] for lst in absent]
-    # return reactivation_present, reactivation_absent
-
+    
 # def get_significant_reactivations(preds, percentile):
 #     """ get the significant reactivations
 #     for each property, and for each presence/absence
@@ -267,18 +361,6 @@ def get_reactivation_times(signif_react):
     """
     return [np.where(reac)[0] for reac in signif_react]
 
-# def get_sequential_reactivations(signif_react, maxLag):
-#     """ From significant reactivations
-#     get the sequence of reactivations , Sophie-style
-#     and the delay between them (up to maxLag)
-#     """
-#     sequences, delays = [], []
-#     for react in signif_react: # is this ones and zeros? the id of the significant react? 
-#         if not react: continue
-#         sequences.append(react)
-#         for lag in range(maxLag):
-#             if react[lag] > 0:
-#                 pass
                 
 def get_reactivation_episodes(signif_react):
     """Extracts consecutive reactivations per state, and their duration
@@ -287,7 +369,7 @@ def get_reactivation_episodes(signif_react):
     Args:
         signif_react (list of np.ndarray): List of 1D boolean arrays (n_samples,).
     Returns:
-        list of tuples: [(start, end, state, duration), ...] for all episodes.
+        list of tuples: [(start, end, state, duration), ...] for all reactivation episodes.
     """
     consecutive_react = []
     for state, reac in enumerate(signif_react):
@@ -310,7 +392,7 @@ def get_reactivation_episodes(signif_react):
 
 def get_sequential_reactivations(consecutive_react, iLag):
     """Extracts full chains of sequential reactivations up to the lag, storing gaps between them.
-    (gap is the time elapsed since the last reactivation). Gap for first state is always None.
+    (gap is the time elapsed since the reactivation of the previous item in the episode). Gap for first state is always None.
     Args:
         consecutive_react (list of tuples): [(start, end, state, duration), ...] for all episodes.
         iLag (int): Maximum lag for sequential transitions.
@@ -479,7 +561,7 @@ def count_coactivations_pairs(synchronous_episodes, state1, state2):
     return count, average_overlap
 
 
-def count_coactivations(all_synchronous_episodes, state_set):
+def count_synchronous_coactivations(all_synchronous_episodes, state_set):
     """Counts occurrences where at least part of the state set is activated together.
     Args:
         all_synchronous_episodes (list): List of sets representing synchronous activations.
@@ -489,6 +571,7 @@ def count_coactivations(all_synchronous_episodes, state_set):
     """
     coactivation_counts = {i: 0 for i in range(1, len(state_set) + 1)}
     coactivation_overlaps = {i: [] for i in range(1, len(state_set) + 1)}
+    coactivation_matrix = {state: {other_state: 0. for other_state in state_set} for state in state_set}
 
     for episode in all_synchronous_episodes:
         activated_states, _, overlap = episode
@@ -497,12 +580,111 @@ def count_coactivations(all_synchronous_episodes, state_set):
         if nb_coactive_states > 0:
             coactivation_counts[nb_coactive_states] += 1
             coactivation_overlaps[nb_coactive_states].append(overlap)
-
+            
+            for state in activated_states.intersection(state_set):
+                for other_state in activated_states.intersection(state_set):
+                    if state != other_state:
+                        coactivation_matrix[state][other_state] += 1
+    
     # Remove empty lists to avoid warnings
     coactivation_overlaps = {k: v for k, v in coactivation_overlaps.items() if v}
     
     ave_coactivation_overlaps = {k: np.mean(v) for k, v in coactivation_overlaps.items()}
-    return coactivation_counts, ave_coactivation_overlaps
+    
+    return coactivation_counts, ave_coactivation_overlaps, coactivation_matrix
+
+
+def count_sequential_coactivations(sequential_episodes, state_set):
+    """
+    Counts occurrences where at least part of the state set appears in a sequence.
+
+    Args:
+        sequential_episodes (list of lists): Each episode is a list of (state, duration, gap).
+        state_set (set): The group of states to analyze.
+
+    Returns:
+        tuple:
+            - coactivation_counts (dict): Keys are the subset sizes (1 to max sequence length), values are occurrence counts.
+            - ave_durations (dict): Average duration for each subset size.
+            - ave_gaps (dict): Average gap between consecutive coactivations.
+            - coactivation_matrix (dict of dicts): Counts of direct transitions between states in state_set.
+    """
+    coactivation_counts = defaultdict(int)
+    coactivation_durations = defaultdict(list)
+    coactivation_gaps = defaultdict(list)
+    
+    # Transition matrix: counts how often state A transitions to state B
+    coactivation_matrix = {state: defaultdict(float) for state in state_set}
+
+    for episode in sequential_episodes:
+        # Extract states that are in the state_set
+        filtered_episode = [(state, duration, gap) for state, duration, gap in episode if state in state_set]
+        nb_coactive_states = len(filtered_episode)
+
+        if nb_coactive_states > 0:
+            coactivation_counts[nb_coactive_states] += 1
+            durations, gaps = zip(*[(d, g) for _, d, g in filtered_episode])
+
+            coactivation_durations[nb_coactive_states].extend(durations)
+            coactivation_gaps[nb_coactive_states].extend(gaps)
+
+            # Populate transition matrix
+            for (state1, _, _), (state2, _, _) in zip(filtered_episode[:-1], filtered_episode[1:]):
+                coactivation_matrix[state1][state2] += 1
+
+    # Compute averages (avoiding empty lists)
+    ave_durations = {k: np.mean(v) for k, v in coactivation_durations.items() if v}
+    # ave_gaps = {k: np.mean(v) for k, v in coactivation_gaps.items() if v}
+    # remove None values
+    ave_gaps = {k: np.mean([v for v in vals if v is not None]) for k, vals in coactivation_gaps.items() if vals}
+
+    return coactivation_counts, ave_durations, ave_gaps, coactivation_matrix
+
+
+def average_coactivation_matrices(coactivation_matrices):
+    """Averages coactivation matrices across multiple subjects."""
+    states = list(coactivation_matrices[0].keys())
+    avg_matrix = {state: {other_state: 0 for other_state in states} for state in states}
+    num_subjects = len(coactivation_matrices)
+    
+    for matrix in coactivation_matrices:
+        for state in states:
+            for other_state in states:
+                avg_matrix[state][other_state] += matrix[state][other_state] / num_subjects
+    
+    return avg_matrix
+
+
+def plot_coactivation_heatmap(coactivation_matrix, labels, out_fn):
+    """Plots a heatmap of state pair coactivations."""
+    states = list(coactivation_matrix.keys())
+    if len(labels) != len(states):
+        print(f"Number of labels ({len(labels)}) must match number of states ({len(states)}).")
+        from ipdb import set_trace; set_trace()
+    # assert len(labels) == len(states), "Number of labels must match number of states."
+    matrix = np.array([[coactivation_matrix[s1][s2] for s2 in states] for s1 in states])
+
+    # Normalize by total number of reactivations
+    total_reactivations = np.sum(matrix)
+    if total_reactivations > 0: matrix /= total_reactivations
+    
+    plt.figure(figsize=(10, 8))
+    ax = sns.heatmap(matrix, xticklabels=labels, yticklabels=labels, cmap="viridis") #, annot=True)
+    # plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels at 45 degrees
+    # plt.yticks(rotation=45, va='top')    # Rotate y-axis labels at 45 degrees
+    # plt.xlabel("State")
+    # plt.ylabel("State")
+    plt.yticks(rotation=0, va='top')    # Rotate y-axis labels at 45 degrees
+    
+    ax.invert_yaxis() # Reverse y-axis
+
+    # Draw a red line to separate present/absent conditions
+    ax.axvline(len(labels) // 2, color='red', linewidth=2)  # Vertical line
+    ax.axhline(len(labels) // 2, color='red', linewidth=2)  # Horizontal line
+    # plt.title("Normalized Averaged State Pair Coactivation Heatmap")
+    plt.tight_layout()
+    plt.savefig(out_fn, dpi=600)
+    plt.close()
 
 
 def compute_np_significance(all_sync_react_this_subject, NP1, NP2, all_states):
@@ -522,6 +704,9 @@ def compute_np_significance(all_sync_react_this_subject, NP1, NP2, all_states):
 
     # Compute coactivations for all possible state pairs
     all_pairs = list(itertools.combinations(all_states, 2))
+    # remove the NPs for random pairs
+    all_pairs.remove(NP1) 
+    all_pairs.remove(NP2)
     all_counts = []
     all_overlaps = []
 
@@ -564,57 +749,13 @@ def compute_np_significance(all_sync_react_this_subject, NP1, NP2, all_states):
         "NP2_overlap_z": NP2_overlap_z,
     }
 
+    # print(f"X most co-activated pairs of states:")
+    # for i in range(10):
+    #     max_idx = np.argmax(all_counts)
+    #     print(all_pairs[max_idx], all_counts[max_idx], all_overlaps[max_idx])
+    #     all_counts[max_idx] = 0
+
     return summary_metrics
-
-
-# def plot_average_preds(all_present, all_absent, out_fn, labels=["S1","C1","R","S2","C2"]):
-#     """ bar plot of average predictions during the delay
-#     all_present: list of np.array of len(n_subs), average for each subject of the predictions 
-#     The length of all_present should match that of all_absent, and it will define the number of bars.
-#     labels: list of str, same length as all_present/absent. Labels for each of the predictions.
-#     additional_str: str to add to the out_fn, where the decoders were trained on (ImgLoc, scenes, ...)
-#     """
-#     all_present_ave, all_present_sem = [], []
-#     for i in range(len(all_present)):
-#         all_present_ave.append(np.nanmean(all_present[i]))
-#         all_present_sem.append(sem(all_present[i], nan_policy='omit'))
-#     all_absent_ave, all_absent_sem = [], []
-#     for i in range(len(all_absent)):
-#         all_absent_ave.append(np.mean(all_absent[i]))
-#         all_absent_sem.append(sem(all_absent[i], nan_policy='omit'))
-    
-#     # Bar plot
-#     # labels = ['Shape', 'Color', 'Relation']
-#     x = np.arange(len(labels))  # the label locations
-#     width = 0.35  # the width of the bars
-#     fig, ax = plt.subplots(figsize=(10, 6))
-#     rects1 = ax.bar(x - width/2, all_present_ave, width, yerr=all_present_sem, label='Present', color='skyblue')
-#     rects2 = ax.bar(x + width/2, all_absent_ave, width, yerr=all_absent_sem, label='Absent', color='orange')
-
-#     # Add labels, title, and legend
-#     ax.set_ylabel('Average Predictions')
-#     ax.set_xticks(x)
-#     ax.set_xticklabels(labels)
-#     ax.legend()
-
-#     # Perform t-tests for each category
-#     alpha = 0.05
-#     p_values = []
-#     for present, absent in zip(all_present, all_absent):
-#         ttest = ttest_ind(present, absent)
-#         p_values.append(ttest.pvalue)
-
-#     # Add significance stars
-#     for i, p_val in enumerate(p_values):
-#         if p_val < alpha:
-#             y_max = max(all_present_ave[i] + all_present_sem[i], all_absent_ave[i] + all_absent_sem[i])
-#             ax.text(i, y_max + 0.05, '*', ha='center', va='bottom', fontsize=16, color='k')
-
-#     # Save the plot
-#     plt.tight_layout()
-#     plt.savefig(out_fn, dpi=400)
-
-#     plt.close()
 
 
 def plot_average_preds_seaborn(all_present, all_absent, out_fn, labels=["S1", "C1", "R", "S2", "C2"]):
@@ -641,7 +782,7 @@ def plot_average_preds_seaborn(all_present, all_absent, out_fn, labels=["S1", "C
     pairs = [((label, 'Present'), (label, 'Absent')) for label in labels]
     # p_values = [ttest_ind(all_present[i], all_absent[i], nan_policy='omit').pvalue for i in range(len(labels))]
     annotator = Annotator(ax, pairs, data=df, x='Category', y='Prediction', hue='Condition')
-    annotator.configure(test='t-test_ind', text_format='star', loc='outside')
+    annotator.configure(test='t-test_ind', text_format='star', loc='outside', verbose=1)
     # annotator.set_pvalues(p_values)
     # annotator.annotate()
     annotator.apply_and_annotate()
@@ -656,26 +797,34 @@ def plot_average_preds_seaborn(all_present, all_absent, out_fn, labels=["S1", "C
     plt.close()
 
 
-def does_reactivations_predict_behavioral(df, out_fn, y="Performance"):
+def does_reactivations_predict_behavioral(df, out_fn, y="Performance", mixed='sub', scatter=True):
     """
     Regression plot of reactivations vs. behavioral performance.
+    mixed: kind of random effect. 'sub' or 'sub+prop'
+    Mixed-effects model (accounts for repeated measures within subjects)
     (for present items)
-    """
-        
-    # Mixed-effects model (accounts for repeated measures within subjects)
-    # crossed random effects of subject and property
-    # vc = {"Property": "0 + C(Property)"}  # Define Property as a random effect
-    # model = smf.mixedlm(f"{y} ~ Reactivation", df, groups=df["Subject"], vc_formula=vc).fit()
-    # hierarchical random effect of subject and property
-    # model = smf.mixedlm(f"{y} ~ Reactivation", df, groups=df["Subject"], re_formula="1 + Property").fit()
+    """        
+    # warnings.filterwarnings("ignore", category=ConvergenceWarning)
+    warnings.filterwarnings("ignore", ".*MLE*.")
+    warnings.filterwarnings("ignore", ".*Hessian*.")
 
+    if mixed == 'sub+prop': # hierarchical random effect of subject and property
+        model = smf.mixedlm(f"{y} ~ Reactivation", df, groups=df["Subject"], re_formula="1 + Property").fit()
+        # crossed random effects of subject and property
+        # vc = {"Property": "0 + C(Property)"}  # Define Property as a random effect
+        # model = smf.mixedlm(f"{y} ~ Reactivation", df, groups=df["Subject"], vc_formula=vc).fit()
+    else:
     # random effect of subjects
-    model = smf.mixedlm(f"{y} ~ Reactivation", df, groups=df["Subject"]).fit()
-    print(model.summary())
+        try:
+            model = smf.mixedlm(f"{y} ~ Reactivation", df, groups=df["Subject"]).fit()
+        except:
+            print(f"Error in mixedlm for out_fn: {out_fn}")
+            return
 
     # Scatter plot with subject-level data
     plt.figure(figsize=(8, 6))
-    sns.scatterplot(data=df, x="Reactivation", y=y, hue="Subject", palette="tab10", alpha=0.6)
+    if scatter: 
+        sns.scatterplot(data=df, x="Reactivation", y=y, hue="Subject", palette="tab10", alpha=0.6)
 
     # Add a regression line for the overall effect
     sns.regplot(data=df, x="Reactivation", y=y, scatter=False, color="black")
@@ -685,12 +834,40 @@ def does_reactivations_predict_behavioral(df, out_fn, y="Performance"):
     # plt.title("Mixed-Effects Model: Reactivation vs. Performance")
     plt.title(f"tvalue: {model.tvalues["Reactivation"]:.3f} - pvalue: {model.pvalues["Reactivation"]:.3f}")
     ax = plt.gca()
-    ax.get_legend().remove()
+    if scatter: ax.get_legend().remove()
     # plt.legend(title="Subject", bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
     plt.tight_layout()
     plt.savefig(out_fn, dpi=400)
     plt.close()
 
+
+
+#### TDLM-style #####
+
+def get_TF_2words(shape, color):
+    """ get the forward transition matrix
+    for 2-word blocks. 
+    Positions in the matrix are shape, then colors """
+    color_offset = 3
+    T = np.zeros((6, 6))
+    T[shapes.index(shape), colors.index(color) + color_offset] = 1
+    return T
+    # single transition ... is that ok for sequenceness? 
+
+
+def get_TF_5words(s1, c1, rel, s2, c2):
+    """ get the forward transition matrix
+    for 5-word blocks. 
+    Positions in the matrix are shape, color, then relation """
+    T = np.zeros((8, 8))
+    color_offset = 3
+    relation_offset = 6
+    s1_idx, c1_idx, r_idx, s2_idx, c2_idx = shapes.index(s1), colors.index(c1), relations.index(rel), shapes.index(s2), colors.index(c2)
+    T[s1_idx, c1_idx+color_offset] = 1
+    T[c1_idx+color_offset, r_idx+relation_offset] = 1
+    T[r_idx+relation_offset, s2_idx] = 1
+    T[s2_idx, c2_idx+color_offset] = 1
+    return T
 
 
 def sequenceness_Crosscorr(rd, T, lag=1):
@@ -1126,4 +1303,190 @@ def combine_null_distributions_and_test(null_distributions, observed_values):
         p_values[lag] = np.mean(combined_null[:, lag] >= combined_observed[lag])
 
     return z_scores, p_values
+
+
+
+
+
+
+
+
+
+
+def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, labels, maxLag=1, n_states=8, do_rel=True):
+    T_auto = np.eye(n_states)  # Autotransitions
+    T_const = np.ones((n_states, n_states))  # Uniform transitions
+    times = np.arange(maxLag)*10
+    subs = df['sub'].unique()
+    n_subs = len(subs)
+    minmaxScaler = MinMaxScaler()
+
+    df_cond = df.query(f"train_cond == '{train_cond}' and gen_cond == '{gen_cond}'")
+    sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
+    sb, sr = np.copy(sf), np.copy(sf) # also a random matrix, for comparison purpose
+    # preds_present, preds_absent = [], []
+    props = Properties if do_rel else Properties[0:2] + Properties[3:5]
+    ave_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in props}
+    behav_df = {"Subject": [], "Condition": [], "Property": [], "Reactivation": [], "Performance": [], "RT": []}
+
+    # all_sync_react = [] # list of lists, for each subjects, for each trials, each synchronous reactivation
+#     [[{A, B}, t1, duration1], 
+#     [{C, D}, t2, duration2], 
+#     [{A, B, C, D, E}, t3, duration3], 
+#     ...]
+
+    for iLag in range(maxLag): # for each lag
+        if iLag > 0: continue # quick fix for just looking at the predictions, no replay
+
+        for iSub, sub in tqdm(enumerate(subs)):
+            df_sub = df_cond.query(f"sub=={sub}")
+            trial_ids = df_sub.trial_id.unique()
+            n_trials = len(trial_ids)
+
+            # all_sync_react.append([]) # for this subject
+            all_sync_react_this_subject = []
+            all_subjects_summary = []
+
+            sf_all_trials, sb_all_trials, sr_all_trials = [], [], []
+            # preds_present_all_trials, preds_absent_all_trials = [], []
+            preds_sub_by_presence = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties} # for this subject and lag
+            preds_sub_by_trial = [{f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties} for i in range(n_trials)] # for this subject and lag, each trial separately
+            perfs = []
+            RTs = []
+            for iTrial in range(n_trials):
+                df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
+                ## Useless now that we have a single decoder for all properties (actually 2, Prop and PropAll)
+                # if len(df_trial) == 10:
+                #     print("\n weird, we get duplicate of each entry. Keeping only one of each line.")
+                #     df_trial = df_trial.drop_duplicates(subset="train_time")
+                # assert df_trial[Properties].nunique().sum() <= 5, f"More than five properties identified for trial {iTrial}: {trial_ids[iTrial]}"
+                # if len(df_trial) != 5: from ipdb import set_trace; set_trace()
+                # assert len(df_trial) == 5, f"Found more than the 5 entries for trial {iTrial}: {trial_ids[iTrial]}"
+                
+                s1, c1, rel, s2, c2 = df_trial.iloc[0][Properties].values
+                # print(s1, c1, rel, s2, c2)
+                # TF = get_TF_5words(s1, c1, rel, s2, c2)
+                # TR = TF.T
+                # rand_inds = np.random.permutation(n_states)
+                # Trand = TF[rand_inds]
+                # templates = [TF, TR, Trand, T_auto, T_const]
+
+                if iLag == 0: # save preds of present vs absent words for barplot of average predictions
+
+                    preds_props = get_trial_preds_from_data(df_trial, all_preds_data)
+                    # update the dict of preds_sub_by_presence
+                    preds_sub_by_presence = add_present_or_absent_preds_one_trial(preds_props, [s1, c1, rel, s2, c2], preds_sub_by_presence, do_rel=do_rel)
+                    
+                    perf = df_trial["Perf"].unique()
+                    assert len(perf) == 1, f"More than one performance value for trial {iTrial}: {trial_ids[iTrial]}" # useless if we test the uniqueness of each trial above
+                    perfs.append(perf[0])
+
+                    RT = df_trial["RT"].unique()
+                    assert len(RT) == 1, f"More than one RT value for trial {iTrial}: {trial_ids[iTrial]}"
+                    RTs.append(RT[0])
+
+                    # get predictions over the whole window, for each property, depending on whether it is present or absent
+                    # present: list of 5 arrays of shape (n_samples, n_states) for present
+                    # absent: list of lists of one or two arrays of shape (n_samples, n_states) for absent (depending on how many absent properties)
+                    present, absent = get_present_or_absent_preds_one_trial(preds_props, [s1, c1, rel, s2, c2], do_rel=do_rel)
+                    ave_present = [p.mean() for p in present]
+                    ave_absent = [np.mean([a.mean() for a in sublist]) for sublist in absent]
+                    Props = Properties if do_rel else Properties[0:2] + Properties[3:5]
+                    for pres_prop, preds in zip(Props, ave_present):
+                        behav_df["Subject"].append(sub)
+                        behav_df["Condition"].append("Present")
+                        behav_df["Property"].append(pres_prop)
+                        behav_df["Reactivation"].append(preds.mean())
+                        behav_df["Performance"].append(perf[0])
+                        behav_df["RT"].append(RT[0])
+                    for abs_prop, preds in zip(Props, ave_absent):
+                        behav_df["Subject"].append(sub)
+                        behav_df["Condition"].append("Absent")
+                        behav_df["Property"].append(abs_prop)
+                        behav_df["Reactivation"].append(np.mean(preds))
+                        behav_df["Performance"].append(perf[0])
+                        behav_df["RT"].append(RT[0])
+                    for i, prop in enumerate(Props):
+                        behav_df["Subject"].append(sub)
+                        behav_df["Condition"].append("Difference")
+                        behav_df["Property"].append(prop)
+                        behav_df["Reactivation"].append(np.mean(ave_present[i]) - np.mean(ave_absent[i]))
+                        behav_df["Performance"].append(perf[0])
+                        behav_df["RT"].append(RT[0])
+
+
+                    # get Sophie-style reactivations
+                    preds_this_trial, labels_this_trial = restructure_data(present, absent)
+                    # signif_react_present, signif_react_absent = get_significant_reactivations(present, absent)
+                    signif_react = get_significant_reactivations(preds_this_trial)
+                    reac_times = get_reactivation_times(signif_react)
+                    consecutive_react = get_reactivation_episodes(signif_react)
+
+                    if iLag == 0:
+                        sequential_episodes = get_sequential_reactivations(consecutive_react, iLag)
+                        # synchronous_episodes_pairs = get_synchronous_reactivations_pairs(consecutive_react)
+                        synchronous_episodes = get_synchronous_reactivations(consecutive_react, tolerance=-1) 
+                        all_sync_react_this_subject.extend(synchronous_episodes)
+
+                # # trial_preds = np.concatenate([preds_shape, preds_color, preds_rel], axis=1)
+                # trial_preds = np.concatenate(preds_props, axis=1)
+                # trm = compute_TRM_single_trial(np.array(trial_preds), iLag)
+                # trm = minmaxScaler.fit_transform(trm) # a priori no used in wimmer
+                # from ipdb import set_trace; set_trace()
+                # # 8 states but 14 reactivations ...
+                # Z = second_level_analysis(trm, templates)
+
+                # sf_all_trials.append(Z[0])
+                # sb_all_trials.append(Z[1])
+                # sr_all_trials.append(Z[2])
+
+            ## For this subject, get the average of the predictions
+            if iLag == 0:
+                if len(preds_sub_by_presence["Shape1_present"]) == 0:
+                    from ipdb import set_trace; set_trace()
+                # update the dict of averages
+                ave_preds_all_subs = get_subj_ave_preds(preds_sub_by_presence, ave_preds_all_subs, props=props) 
+
+                # synchronous coactivations
+                NP1_counts, NP1_overlap = count_coactivations_pairs(all_sync_react_this_subject, 0, 1)
+                NP2_counts, NP2_overlap = count_coactivations_pairs(all_sync_react_this_subject, 3, 4)
+
+                # print(f"NP1 states co-activated {NP1_counts} times; average overlap: {NP1_overlap}")
+                # print(f"NP2 states co-activated {NP2_counts} times; average overlap: {NP2_overlap}")
+
+                first_five_states = {0, 1, 2, 3, 4}
+                # subset_counts, ave_overlap_size = count_coactivations(all_sync_react_this_subject, first_five_states)
+                # print("Coactivation frequencies for the first 5 states:")
+                # for subset_size, count in subset_counts.items():
+                #     print(f"{subset_size} states together: {count} times; average overlap: {ave_overlap_size[subset_size]}")
+
+                subset_counts, ave_overlap_size = count_coactivations(all_sync_react_this_subject, first_five_states)
+                # print("Coactivation frequencies for the first 5 states:")
+                # for subset_size, count in subset_counts.items():
+                #     print(f"{subset_size} states (tol=-1 = strict overlap)together: {count} times; average overlap: {ave_overlap_size[subset_size]}")
+
+                all_states = set(range(11))  # Adjust based on your data
+                NP1 = (0, 1)
+                NP2 = (3, 4)
+                summary = compute_np_significance(all_sync_react_this_subject, NP1, NP2, all_states)
+                all_subjects_summary.append(summary)
+                # print("\nSummary Statistics:")
+                # for key, value in summary.items():
+                #     print(f"{key}: {value:.3f}")
+            
+
+        #     # mean over trials for this subject, lag and condition
+        #     sf[iSub, iLag] = np.nanmean(np.array(sf_all_trials), axis=0)
+        #     sb[iSub, iLag] = np.nanmean(np.array(sb_all_trials), axis=0)
+        #     srand[iSub, iLag] = np.nanmean(np.array(sr_all_trials), axis=0)
+
+        # sf[iSub] -= np.nanmean(sf[iSub]) # mean correct
+        # sb[iSub] -= np.nanmean(sb[iSub]) # mean correct
+        # srand[iSub] -= np.nanmean(srand[iSub]) # mean correct
+    coactivation_df = pd.DataFrame(all_subjects_summary)
+    return ave_preds_all_subs, behav_df, coactivation_df, sf, sb, sr
+
+
+
+
 

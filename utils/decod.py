@@ -965,6 +965,9 @@ def decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null):
     if args.null_prop: 
         n_null = int(len(X) * 2 * args.null_prop)
         print(f"Adding fixation period negative trials, {2*args.null_prop*100}% compared to normal trials, ie: {n_null}")
+        if n_null > len(dat_null):
+            print(f"not enough null trials ({len(dat_null)}) to match the null proportion ({args.null_prop}), using {len(dat_null)}")
+            n_null = len(dat_null)
         dat_null = dat_null[np.random.choice(len(dat_null), n_null, replace=False)]
         X = np.concatenate([X, dat_null])
         y = np.concatenate([y, n_classes * np.ones(n_null)]) # assign a new class for null trials
@@ -991,13 +994,14 @@ def decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null):
         pipeline[-1].classes_ = np.delete(pipeline[-1].classes_, null_idx)
     
     patterns, filters = [], [] # final shape: n_classes * n_sensors
-    if n_classes > 2:
-        for i in range(n_classes):
-            filters.append(pipeline[-1].estimators_[i].coef_)
+    if hasattr(pipeline[-1].estimators_[0], "coef_"): # SVC-rbf does not have linear weights
+        if n_classes > 2:
+            for i in range(n_classes):
+                filters.append(pipeline[-1].estimators_[i].coef_)
+                patterns.append(filters2patterns(filters[-1], X, y))
+        else: # 2 classes, not a true OVR then there is a single pattern
+            filters.append(pipeline[-1].estimators_[0].coef_)
             patterns.append(filters2patterns(filters[-1], X, y))
-    else: # 2 classes, not a true OVR then there is a single pattern
-        filters.append(pipeline[-1].estimators_[0].coef_)
-        patterns.append(filters2patterns(filters[-1], X, y))
     patterns, filters = np.array(patterns).squeeze(), np.array(filters).squeeze()
 
     # put the pipeline object in an array without unpacking them

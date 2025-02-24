@@ -220,3 +220,41 @@ v22: removing training on one obj. - saga-c=100 --- better without one_obj!
 v23: not cat no smooth
 
 Doing v500 = 500hz. Not very different from the 100hz versions. 
+
+
+It seems that S1 and S2 are reactivated together AT THE SAME TIME. Check for the absent, maybe you'll have to average of something, to make sure that the order is always the same depending on whether there are 1 or 2 absent shapes. True for each training cond (just two_obj, up to loc-1obj-2obj).
+
+Train position decoders?
+
+Need to check all functions to make sure that the fact that we use only complex 2 trials is fine. Also find a way to use back all the trials.
+Reactivations are between shapes and colors, never, it seems, across words and colors. 
+
+v24: train a separate OVR for each property, because training all props together encourages the classifier to identifiy the category but not the items (each shape decoder is strongly correlated), leading to correlations in the predictions and false reactivation results. New argument: --split_props
+v25: same with null trials, as much as 2obj trials (before the fix for getting as much null as needed).
+Deleted 24 by accident.but have all the plots
+
+
+Change the structure of the code? Have 2 lists, present and absent, of various length each, to take into account trials of all complexities. Then you need to find a way to keep only the trial with no bias for the coactivations. If there is a repeated word, then it should not count as coactivation with itself.
+
+Hope for t=.4, v25, training on all the data. 
+But still some weird thing with the absent properties. Maybe just compare S1-C1 and S2-C2 vs S1-C2 and S2-C1
+Maybe try less null trials? It seems that the patterns are correlated now.
+
+
+Use linear or gaussian SVM?
+LR is good because it gives calibrated probabilities, that can be interpreted as the confidence in the decision (but maybe with you reactiation detection tecchnique that doesn't matter so much). 
+SVM are in general better for generalization. Is this what we want? We generalize to a different setup, but precisely, it doesn't look like the training examples, sooo... 
+Try SVM-G, if it works better then use it and cite: "machine learning" by Andrew NG. It can be found in week 7 at the end of: "Support vector machines - using an SVM"
+sources: https://stats.stackexchange.com/questions/95340/comparing-svm-and-logistic-regression#95348 
+
+added back the 4 "bad" subjects and launched the hyperparm optim for SVC-rbf: (overall the perf on this is slightly better than with LR).
+clf = SVC(kernel='rbf', class_weight='balanced', max_iter=-1, C=1, gamma=0.001, probability=True, random_state=42)
+
+v26: with the best decoder from the grisearch = [0.1, 'l1', 'saga', 'balanced']. Also null_prop=0.1 (after the fix), so that it's most similar to v25.
+->: stop training on 2obj only, and focus on 0.4s. Also, synchronous does not seem different for the present props
+Kind of similar to v25 for seq, but worse for sync.
+v27: same as v26 but with the old way to make null trials (single null trial per trial). (or it could be that you added back the shitty subjects)
+v28: SVC-rbf
+
+try without bseline?  more or less null trials? null_prop = 0.1 or 0.5
+try the hyperparam optim for t=0.4s?

@@ -41,6 +41,7 @@ parser.add_argument('--train-query', help='Metadata query for training classes')
 parser.add_argument('--test-cond', default=[], action='append', help='localizer, one_object or two_objects, should have the same length as test-queries')
 parser.add_argument('--test-query', default=[], action='append', help='Metadata query for testing classes')
 parser.add_argument('--windows', default=[], action='append', help='tmin and tmax to crop the epochs, one for each train and test cond')
+parser.add_argument('--split_props', action='store_true', default=False, help='Separate each property instead of training a single OVR for shapes, images and relations')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
@@ -79,6 +80,7 @@ if args.null_prop > 0 and not (len(args.windows) == 0 or args.windows[0][0] != a
 np.random.seed(args.seed)
 start_time = time.time()
 
+
 ### GET EPOCHS FILENAMES ###
 out_dir_name = "Decoding_multi"
 _, test_fns, out_fn, test_out_fns = get_paths(args, out_dir_name)
@@ -108,16 +110,12 @@ print('\nStarting training')
 
 ### LOAD MULTIPLE BLOCK TYPES ###
 all_epochs = []  # To store all epochs before merging
-all_epochs_orig = [] # backup for fixation period "null" trials
 
 for cond in args.train_conds:
     args.train_cond = cond  # Set current condition
     train_fn, _, _, _ = get_paths(args, out_dir_name)  # Get file paths
     
-    # epochs_orig = load_data(args, train_fn)[0]
-    # epochs = epochs_orig  # hack but works
     epochs = load_data(args, train_fn)[0]
-    epochs_orig = None
 
     # Complement the md to get query-compatibility
     if cond == "localizer":
@@ -130,6 +128,7 @@ for cond in args.train_conds:
         epoC1 = epoC1.shift_time(-0.6, relative=True) # Need to roll the times so that t0 is the color onset.
         block_epo = [epoS1, epoC1]
     elif cond == "two_objects":
+        epochs_orig = epochs.copy() # keep a copy for the null trials
         epoS1, epoC1 = epochs.copy(), epochs.copy()
         epoS1.metadata["Property"] = epoS1.metadata["Shape1"]
         epoC1.metadata["Property"] = epoC1.metadata["Colour1"]
@@ -153,23 +152,14 @@ for cond in args.train_conds:
     if windows:
         print(f"Using training time window: {windows[0]}s")
         for epo in block_epo: epo = epo.crop(*windows[0])
-        # epochs = epochs.crop(*windows[0])
 
     all_epochs.extend(block_epo)
-    # all_epochs_orig.append(epochs_orig) # useless? Maybe for null trials?
     
     for epo in block_epo: # print event counts
         print(f"\nLoaded {len(epo)} trials from {cond}") # Print trial count
         trial_counts = epo.metadata["Property"].value_counts().to_dict()
         print(trial_counts) 
 
-
-# # Crop to the windows (tested for single time point window only)
-# windows = [tuple([float(x) for x in win.split(",")]) for win in args.windows]
-# if windows:
-#     print(f"Using training time window: {windows[0]}s")
-#     for epo in all_epochs: epo = epo.crop(*windows[0])
-#     # epochs = epochs.crop(*windows[0])
 epochs = mne.concatenate_epochs(all_epochs)  # Merge all epochs
 del all_epochs  # Free up memory
 train_tmin, train_tmax = epochs.tmin, epochs.tmax
@@ -182,9 +172,16 @@ n_times = len(epochs.times)
 
 ### GET DATA FROM THE FIXATION PERIOD
 if args.null_prop > 0: 
-    raise NotImplementedError("null trials is not implemented yet")
-    epochs_null = epochs_orig.crop(epochs_orig.times[0], epochs_orig.times[0]) # very first time point. TODO: add some flexibility, maybe random for each trial?
-    dat_null = epochs_null.get_data(picks='meg').squeeze() # get as much as possibly needed
+    num_null = 10 # number of null trial per trial. 
+    epochs_null = epochs_orig.crop(epochs_orig.tmin, 0)
+    dat_null = epochs_null.get_data(picks='meg').squeeze()
+    n_trials, n_chans, n_times_fixation = dat_null.shape
+    # random_indices = np.random.choice(n_times_fixation, size=(len(epochs_orig), num_null), replace=True)
+    # # Use advanced indexing to extract the selected time points
+    # dat_null = dat_null[np.arange(n_trials)[:, None, None], np.arange(n_chans)[None, :, None], random_indices[:, None, :]]
+    # dat_null = dat_null.transpose(0, 2, 1).reshape(n_trials * num_null, n_chans)
+    random_indices = np.random.choice(n_times_fixation, size=n_trials, replace=True)
+    dat_null = dat_null[np.arange(n_trials), :, random_indices]  # Shape (n_trials, n_chans)
     out_fn += f"_null{args.null_prop}"
 else:
     dat_null = None
@@ -197,13 +194,28 @@ if args.dummy:
 else:
     # clf = LogisticRegression(C=1/0.006, solver='saga', class_weight='balanced', multi_class='auto', max_iter=1000000)
     # hyperparam optim found: [0.1, 'l1', 'liblinear', 'balanced']
-    clf = LogisticRegression(C=100, penalty='l1', solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000)
+    # clf = LogisticRegression(C=0.1, penalty='l1', solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000)
+    clf = SVC(kernel='rbf', class_weight='balanced', max_iter=-1, C=1, gamma=0.001, probability=True, random_state=42)
 clf = OneVsRestClassifier(clf, n_jobs=1)
 
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
 if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
-    all_models, patterns, filters, mds = decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null)
-    save_results(out_fn, patterns, fn_end="patterns", time=False, mds=mds)
+    if args.split_props: # train a separte OVR for each property
+        all_props_models, patterns, filters = [], [], []
+        for props in [shapes, colors, relations]:
+            epo_prop = epochs[f"Property in {props}"]
+            query_prop = [q for q in class_queries if any([prop in q for prop in props])]
+            if not query_prop: continue # If we don't train a relation decoder, this will be empty
+            prop_models, prop_patterns, prop_filters, prop_mds = decode_ovr_single_tp(args, clf, epo_prop, query_prop, dat_null)
+            all_props_models.append(deepcopy(prop_models))
+            patterns.append(prop_patterns)
+            filters.append(prop_filters)
+        patterns = np.concatenate([np.atleast_2d(p) for p in patterns]) # Relation is not a true OVR, so single set of weights ... 
+        filters = np.concatenate([np.atleast_2d(f) for f in filters])
+
+    else: # OVR with all properties
+        all_models, patterns, filters, mds = decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null)
+    save_results(out_fn, patterns, fn_end="patterns", time=False) # , mds=mds
     save_results(out_fn, filters, fn_end="filters", time=False)
 else:
     print("This script was only made for single timepoint decoding. Use the args.windows argument")
@@ -229,8 +241,16 @@ for i_test, (cond, query, test_fn, test_out_fn) in enumerate(zip(args.test_cond,
         epochs = epochs.crop(*windows[i_test+1]) # first window is for training
     test_tmin, test_tmax = epochs.tmin, epochs.tmax
 
-    preds, mds = test_decode_ovr_single_tp(args, epochs, all_models)
+    if args.split_props:
+        preds_all_props = [] 
+        for props, prop_models in zip([shapes, colors, relations], all_props_models):
+            preds_prop, mds = test_decode_ovr_single_tp(args, epochs, prop_models)
+            preds_all_props.append(preds_prop)
+        preds = np.concatenate(preds_all_props, 2)
 
+    else:
+        preds, mds = test_decode_ovr_single_tp(args, epochs, all_models)
+    
     ### SAVE RESULTS ###
     if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
         # add a trial id to the md to help identification later on.

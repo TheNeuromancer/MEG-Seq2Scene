@@ -56,188 +56,130 @@ df = pd.read_csv(df_fn)
 all_preds_data = pickle.load(open(f"{res_dir}/all_preds_data.pkl", 'rb'))
 
 print(f"\nOnly keeping the last second of the delay\n")
-all_preds_data = [p[500::] for p in all_preds_data]
-# all_preds_data = [p[100::] for p in all_preds_data]
+all_preds_data = [p[100::] for p in all_preds_data]
 
-maxLag = 5
-# times = np.arange(maxLag)*10
-# theoretical_peak = 11 # in the paper the peak lag is at 110ms
-# pval_th = 0.05 / maxLag
-# subs = df['sub'].unique()
-# n_subs = len(subs)
+print(F"Only keeping Complexity==2 trials, because else the repeated states fucks up the replays analyses")
+df = df.query(f"Complexity==2")
 
-
-def get_preds_and_sequenceness_for_cond(df, preds, train_cond, gen_cond, labels, maxLag=1, n_states=8, do_rel=True):
-    T_auto = np.eye(n_states)  # Autotransitions
-    T_const = np.ones((n_states, n_states))  # Uniform transitions
-    times = np.arange(maxLag)*10
+def get_replays_sophie_style(df, all_preds_data, train_cond, gen_cond, do_rel=True):
+    """ Get sequential and synchronous reactivations
+    for a prefiltered train and gen cond
+    """
     subs = df['sub'].unique()
     n_subs = len(subs)
-    minmaxScaler = MinMaxScaler()
-
-    df_cond = df.query(f"train_cond == '{train_cond}' and gen_cond == '{gen_cond}'")
-    sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
-    sb, sr = np.copy(sf), np.copy(sf) # also a random matrix, for comparison purpose
-    # preds_present, preds_absent = [], []
+    if df['train_cond'].nunique() > 1 or df['gen_cond'].nunique() > 1:
+        print(f"More than one train or gen condition in the dataframe; it should be pre-filtered before being fed to the func!")
+        from ipdb import set_trace; set_trace()
     props = Properties if do_rel else Properties[0:2] + Properties[3:5]
     ave_preds_all_subs = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in props}
     behav_df = {"Subject": [], "Condition": [], "Property": [], "Reactivation": [], "Performance": [], "RT": []}
+    all_subjects_summary = []
+    all_sync_coactivation_matrices, all_seq_coactivation_matrices = [], []
 
-    # all_sync_react = [] # list of lists, for each subjects, for each trials, each synchronous reactivation
-#     [[{A, B}, t1, duration1], 
-#     [{C, D}, t2, duration2], 
-#     [{A, B, C, D, E}, t3, duration3], 
-#     ...]
+    for iSub, sub in tqdm(enumerate(subs)):
+        df_sub = df.query(f"sub=={sub}")
+        trial_ids = df_sub.trial_id.unique()
+        n_trials = len(trial_ids)
 
-    for iLag in range(maxLag): # for each lag
-        if iLag > 0: continue # quick fix for just looking at the predictions, no replay
+        all_sync_react_this_subject = []
+        all_seq_react_this_subject = []
 
-        for iSub, sub in tqdm(enumerate(subs)):
-            df_sub = df_cond.query(f"sub=={sub}")
-            trial_ids = df_sub.trial_id.unique()
-            n_trials = len(trial_ids)
+        preds_sub_by_presence = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties} # for this subject and lag
+        preds_sub_by_trial = [{f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties} for i in range(n_trials)] # for this subject and lag, each trial separately
+        perfs = []
+        RTs = []
+        for iTrial in range(n_trials):
+            df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
+            if len(df_trial) > 1:
+                print(f"Found more than one entry for trial {iTrial}: {trial_ids[iTrial]}")
 
-            # all_sync_react.append([]) # for this subject
-            all_sync_react_this_subject = []
-            all_subjects_summary = []
+            s1, c1, rel, s2, c2 = df_trial.iloc[0][Properties].values
 
-            sf_all_trials, sb_all_trials, sr_all_trials = [], [], []
-            # preds_present_all_trials, preds_absent_all_trials = [], []
-            preds_sub_by_presence = {f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties} # for this subject and lag
-            preds_sub_by_trial = [{f"{prop}_{presence}": [] for presence in ['present', 'absent'] for prop in Properties} for i in range(n_trials)] # for this subject and lag, each trial separately
-            perfs = []
-            RTs = []
-            for iTrial in range(n_trials):
-                df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
-                ## Useless now that we have a single decoder for all properties (actually 2, Prop and PropAll)
-                # if len(df_trial) == 10:
-                #     print("\n weird, we get duplicate of each entry. Keeping only one of each line.")
-                #     df_trial = df_trial.drop_duplicates(subset="train_time")
-                # assert df_trial[Properties].nunique().sum() <= 5, f"More than five properties identified for trial {iTrial}: {trial_ids[iTrial]}"
-                # if len(df_trial) != 5: from ipdb import set_trace; set_trace()
-                # assert len(df_trial) == 5, f"Found more than the 5 entries for trial {iTrial}: {trial_ids[iTrial]}"
-                
-                s1, c1, rel, s2, c2 = df_trial.iloc[0][Properties].values
-                # TF = get_TF_5words(s1, c1, rel, s2, c2)
-                # TR = TF.T
-                # rand_inds = np.random.permutation(n_states)
-                # Trand = TF[rand_inds]
-                # templates = [TF, TR, Trand, T_auto, T_const]
-
-                if iLag == 0: # save preds of present vs absent words for barplot of average predictions
-
-                    preds_props = get_trial_preds_from_data(df_trial, all_preds_data)
-                    # update the dict of preds_sub_by_presence
-                    preds_sub_by_presence = add_present_or_absent_preds_one_trial(preds_props, [s1, c1, rel, s2, c2], preds_sub_by_presence, do_rel=do_rel)
-                    
-                    perf = df_trial["Perf"].unique()
-                    assert len(perf) == 1, f"More than one performance value for trial {iTrial}: {trial_ids[iTrial]}"
-                    perfs.append(perf[0])
-
-                    RT = df_trial["RT"].unique()
-                    assert len(RT) == 1, f"More than one RT value for trial {iTrial}: {trial_ids[iTrial]}"
-                    RTs.append(RT[0])
-
-                    # get predictions over the whole window, for each property, depending on whether it is present or absent
-                    # present: list of 5 arrays of shape (n_samples, n_states) for present
-                    # absent: list of lists of one or two arrays of shape (n_samples, n_states) for absent (depending on how many absent properties)
-                    present, absent = get_present_or_absent_preds_one_trial(preds_props, [s1, c1, rel, s2, c2], do_rel=do_rel)
-                    ave_present = [p.mean() for p in present]
-                    ave_absent = [np.mean([a.mean() for a in sublist]) for sublist in absent]
-                    Props = Properties if do_rel else Properties[0:2] + Properties[3:5]
-                    for pres_prop, preds in zip(Props, ave_present):
-                        behav_df["Subject"].append(sub)
-                        behav_df["Condition"].append("Present")
-                        behav_df["Property"].append(pres_prop)
-                        behav_df["Reactivation"].append(preds.mean())
-                        behav_df["Performance"].append(perf[0])
-                        behav_df["RT"].append(RT[0])
-                    for abs_prop, preds in zip(Props, ave_absent):
-                        behav_df["Subject"].append(sub)
-                        behav_df["Condition"].append("Absent")
-                        behav_df["Property"].append(abs_prop)
-                        behav_df["Reactivation"].append(np.mean(preds))
-                        behav_df["Performance"].append(perf[0])
-                        behav_df["RT"].append(RT[0])
-                    for i, prop in enumerate(Props):
-                        behav_df["Subject"].append(sub)
-                        behav_df["Condition"].append("Difference")
-                        behav_df["Property"].append(prop)
-                        behav_df["Reactivation"].append(np.mean(ave_present[i]) - np.mean(ave_absent[i]))
-                        behav_df["Performance"].append(perf[0])
-                        behav_df["RT"].append(RT[0])
-
-
-                    # get Sophie-style reactivations
-                    preds_this_trial, labels_this_trial = restructure_data(present, absent)
-                    # signif_react_present, signif_react_absent = get_significant_reactivations(present, absent)
-                    signif_react = get_significant_reactivations(preds_this_trial)
-                    reac_times = get_reactivation_times(signif_react)
-                    consecutive_react = get_reactivation_episodes(signif_react)
-
-                    if iLag == 0:
-                        sequential_episodes = get_sequential_reactivations(consecutive_react, iLag)
-                        # synchronous_episodes_pairs = get_synchronous_reactivations_pairs(consecutive_react)
-                        synchronous_episodes = get_synchronous_reactivations(consecutive_react, tolerance=-1) 
-                        all_sync_react_this_subject.extend(synchronous_episodes)
-
-                # # trial_preds = np.concatenate([preds_shape, preds_color, preds_rel], axis=1)
-                # trial_preds = np.concatenate(preds_props, axis=1)
-                # trm = compute_TRM_single_trial(np.array(trial_preds), iLag)
-                # trm = minmaxScaler.fit_transform(trm) # a priori no used in wimmer
-                # from ipdb import set_trace; set_trace()
-                # # 8 states but 14 reactivations ...
-                # Z = second_level_analysis(trm, templates)
-
-                # sf_all_trials.append(Z[0])
-                # sb_all_trials.append(Z[1])
-                # sr_all_trials.append(Z[2])
-
-            ## For this subject, get the average of the predictions
-            if iLag == 0:
-                if len(preds_sub_by_presence["Shape1_present"]) == 0:
-                    from ipdb import set_trace; set_trace()
-                # update the dict of averages
-                ave_preds_all_subs = get_subj_ave_preds(preds_sub_by_presence, ave_preds_all_subs, props=props) 
-
-                # synchronous coactivations
-                NP1_counts, NP1_overlap = count_coactivations_pairs(all_sync_react_this_subject, 0, 1)
-                NP2_counts, NP2_overlap = count_coactivations_pairs(all_sync_react_this_subject, 3, 4)
-
-                # print(f"NP1 states co-activated {NP1_counts} times; average overlap: {NP1_overlap}")
-                # print(f"NP2 states co-activated {NP2_counts} times; average overlap: {NP2_overlap}")
-
-                first_five_states = {0, 1, 2, 3, 4}
-                # subset_counts, ave_overlap_size = count_coactivations(all_sync_react_this_subject, first_five_states)
-                # print("Coactivation frequencies for the first 5 states:")
-                # for subset_size, count in subset_counts.items():
-                #     print(f"{subset_size} states together: {count} times; average overlap: {ave_overlap_size[subset_size]}")
-
-                subset_counts, ave_overlap_size = count_coactivations(all_sync_react_this_subject, first_five_states)
-                # print("Coactivation frequencies for the first 5 states:")
-                # for subset_size, count in subset_counts.items():
-                #     print(f"{subset_size} states (tol=-1 = strict overlap)together: {count} times; average overlap: {ave_overlap_size[subset_size]}")
-
-                all_states = set(range(11))  # Adjust based on your data
-                NP1 = (0, 1)
-                NP2 = (3, 4)
-                summary = compute_np_significance(all_sync_react_this_subject, NP1, NP2, all_states)
-                all_subjects_summary.append(summary)
-                # print("\nSummary Statistics:")
-                # for key, value in summary.items():
-                #     print(f"{key}: {value:.3f}")
+            preds_props = get_trial_preds_from_data(df_trial, all_preds_data) # shape n_times * n_classes
             
+            # get predictions over the whole window, for each property, depending on whether it is present or absent
+            # present: list of 5 arrays of shape (n_samples) for present properties
+            # absent: list of lists of one or two arrays of shape (n_samples, n_states) for absent (depending on how many absent properties)
+            present, absent = get_present_or_absent_preds_one_trial(preds_props, [s1, c1, rel, s2, c2], do_rel=do_rel)
+            # keep only the first absent color and shape: if we that way we avoid repetitions that lead to high reactivations. 
+            absent = absent[0:3] if do_rel else absent[0:2]
+            ave_present = [p.mean() for p in present]
+            ave_absent = [np.mean([a.mean() for a in sublist]) for sublist in absent] # average of averages, if there are multiple absent properties (ie, repetition in the original sentence)
 
-        #     # mean over trials for this subject, lag and condition
-        #     sf[iSub, iLag] = np.nanmean(np.array(sf_all_trials), axis=0)
-        #     sb[iSub, iLag] = np.nanmean(np.array(sb_all_trials), axis=0)
-        #     srand[iSub, iLag] = np.nanmean(np.array(sr_all_trials), axis=0)
+            # update the dict of preds_sub_by_presence
+            preds_sub_by_presence = update_present_or_absent_preds_one_trial(preds_sub_by_presence, ave_present, ave_absent, do_rel=do_rel)
 
-        # sf[iSub] -= np.nanmean(sf[iSub]) # mean correct
-        # sb[iSub] -= np.nanmean(sb[iSub]) # mean correct
-        # srand[iSub] -= np.nanmean(srand[iSub]) # mean correct
+            # behavioral results
+            perf = df_trial["Perf"].values[0]
+            RT = df_trial["RT"].values[0]
+            behav_df = update_behav_df(behav_df, sub, perf, RT, ave_present, ave_absent, props, do_rel=do_rel)
+
+            # get Sophie-style reactivations
+            preds_this_trial, labels_this_trial = restructure_data(present, absent, do_rel=do_rel) # list of arrays of len n_times. The first five are the present items. The nexts are the absents. 
+            # preds_this_trial, labels_this_trial = remove_label_duplicates(preds_this_trial, labels_this_trial) # randomly select one of the absent properties if there are multiple absents
+            preds_this_trial, labels_this_trial = average_label_duplicates(preds_this_trial, labels_this_trial) # randomly select one of the absent properties if there are multiple absents
+            signif_react = get_significant_reactivations(preds_this_trial)
+            # reac_times = get_reactivation_times(signif_react) # not used
+            consecutive_react = get_reactivation_episodes(signif_react) # list of tuples: [(start, end, state, duration), ...] for all reactivation episodes.
+
+            # synchronous_episodes_pairs = get_synchronous_reactivations_pairs(consecutive_react) # (list of tuples): [(state1, state2, overlap_start, overlap_duration), ...]
+            synchronous_episodes = get_synchronous_reactivations(consecutive_react, tolerance=-1) # list of tuples: [(states, overlap_start, overlap_duration)]
+            all_sync_react_this_subject.extend(synchronous_episodes)
+            
+            sequential_episodes = get_sequential_reactivations(consecutive_react, iLag=10) # (list of lists): [[(state1, duration1, gap1), (state2, duration2, gap2), ...], ...]
+            all_seq_react_this_subject.extend(sequential_episodes)
+
+
+
+        ## For this subject, get the average of the predictions
+        # update the dict of averages
+        ave_preds_all_subs = get_subj_ave_preds(preds_sub_by_presence, ave_preds_all_subs, props=props) 
+
+
+        # # synchronous coactivations
+        np2_idx = 3 if do_rel else 4
+        # NP1_counts, NP1_overlap = count_coactivations_pairs(all_sync_react_this_subject, 0, 1)
+        # NP2_counts, NP2_overlap = count_coactivations_pairs(all_sync_react_this_subject, np2_idx, np2_idx+1)
+        # print(f"NP1 states co-activated {NP1_counts} times; average overlap: {NP1_overlap}")
+        # print(f"NP2 states co-activated {NP2_counts} times; average overlap: {NP2_overlap}")
+
+        # n_states = max([state for episode in all_sync_react_this_subject for state in episode[0]]) + 1
+        n_states = 8 if do_rel else 6
+        all_states = set(range(n_states)) 
+        
+        # first_five_states = {0, 1, 2, 3, 4}
+        subset_counts, ave_overlap_size, coactivation_matrix = count_synchronous_coactivations(all_sync_react_this_subject, all_states)
+        all_sync_coactivation_matrices.append(coactivation_matrix)
+
+        coactivation_counts, ave_durations, ave_gaps, coactivation_matrix = count_sequential_coactivations(all_seq_react_this_subject, all_states)
+        all_seq_coactivation_matrices.append(coactivation_matrix)
+
+        # print("Coactivation Matrix (State Transitions):")
+        # for state1, transitions in coactivation_matrix.items():
+        #     for state2, count in transitions.items():
+        #         if count > 0:
+        #             print(f"{state1} -> {state2}: {count}")
+
+        # for i, episode in enumerate(all_seq_react_this_subject):
+        #     filtered_episode = [(state, duration, gap) for state, duration, gap in episode if state in all_states]
+        #     print(f"Episode {i}: {filtered_episode}")
+        #     # I get transitions from and to the state ... that's not ok. 
+        # from ipdb import set_trace; set_trace()
+        
+        # print("Coactivation frequencies for the first 5 states:")
+        # for subset_size, count in subset_counts.items():
+        #     print(f"{subset_size} states (tol=-1 = strict overlap)together: {count} times; average overlap: {ave_overlap_size[subset_size]}")
+
+
+        NP1 = (0, 1)
+        NP2 = (np2_idx, np2_idx+1)
+        # summary = compute_np_significance(all_sync_react_this_subject, NP1, NP2, all_states)
+        # all_subjects_summary.append(summary)
+        
     coactivation_df = pd.DataFrame(all_subjects_summary)
-    return ave_preds_all_subs, behav_df, coactivation_df, sf, sb, sr
+    behav_df = pd.DataFrame(behav_df)
+    return ave_preds_all_subs, behav_df, coactivation_df, all_sync_coactivation_matrices, all_seq_coactivation_matrices
+
 
 
 def make_all_reactivation_plots(behav_df, ave_preds_all_subs, res_dir, add_str, do_rel):
@@ -249,58 +191,77 @@ def make_all_reactivation_plots(behav_df, ave_preds_all_subs, res_dir, add_str, 
     else:
         present = [D["Shape1_present"], D["Colour1_present"], D["Shape2_present"], D["Colour2_present"]]
         absent = [D["Shape1_absent"], D["Colour1_absent"], D["Shape2_absent"], D["Colour2_absent"]]
-    # plot_average_preds(present, absent, out_fn=f"{res_dir}/average_preds_scenes_trained_scenes_tested.png")
     plot_average_preds_seaborn(present, absent, labels=Props, out_fn=f"{res_dir}/average_preds_scenes_trained_scenes_tested_sns_t{add_str}.png")
 
-    behav_df = pd.DataFrame(behav_df)
-
-    ## Not averaged. Meaningless
-    # does_reactivations_predict_behavioral(behav_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_t{add_str}.png")
-    # does_reactivations_predict_behavioral(behav_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_t{add_str}.png")
+    # ## Not averaged. Meaningless. Why?
+    # # does_reactivations_predict_behavioral(behav_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_t{add_str}.png")
+    # does_reactivations_predict_behavioral(behav_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_t{add_str}.png", scatter=False)
     # for prop in Props:
     #     local_df = behav_df.query(f"Property=='{prop}'")
-    #     does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_{prop}_t{add_str}.png")
-    #     does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_{prop}_t{add_str}.png")
-    #     # does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_present_RT_{prop}_t{add_str}.png")
-    #     # does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_diff_RT_{prop}_t{add_str}.png")
+    #     # does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_{prop}_t{add_str}.png")
+    #     does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_{prop}_t{add_str}.png", scatter=False)
+    # #     # does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_present_RT_{prop}_t{add_str}.png")
+    # #     # does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_diff_RT_{prop}_t{add_str}.png")
 
-    # average over trials 
-    ave_df = behav_df.groupby(["Subject", "Condition", "Property"]).mean("Performance").reset_index()
-    # doesn not work, pval=1 in all cases ... 
-    # # does_reactivations_predict_behavioral(ave_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_aveTrials_t{add_str}.png")
-    # does_reactivations_predict_behavioral(ave_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_aveTrials_t{add_str}.png")
-    # does_reactivations_predict_behavioral(ave_df.query("Condition=='Difference'"), y='RT', out_fn=f"{res_dir}/regplot_perf_react_diff_RT_aveTrials_t{add_str}.png")
-    for prop in Props:
-        local_df = ave_df.query(f"Property=='{prop}'")
-        # does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_{prop}_aveTrials_t{add_str}.png")
-        does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_{prop}_aveTrials_t{add_str}.png")
-        # does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_present_RT_{prop}_aveTrials_t{add_str}.png")
-        does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_diff_RT_{prop}_aveTrials_t{add_str}.png")
+    # # average over trials ~ subjects with overall more reactivations are overall better... but no single trial prediction! 
+    # ave_df = behav_df.groupby(["Subject", "Condition", "Property"]).mean("Performance").reset_index()
+    # # doesn not work, pval=1 in all cases ... 
+    # # # does_reactivations_predict_behavioral(ave_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_aveTrials_t{add_str}.png")
+    # # does_reactivations_predict_behavioral(ave_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_aveTrials_t{add_str}.png")
+    # # does_reactivations_predict_behavioral(ave_df.query("Condition=='Difference'"), y='RT', out_fn=f"{res_dir}/regplot_perf_react_diff_RT_aveTrials_t{add_str}.png")
+    # for prop in Props:
+    #     local_df = ave_df.query(f"Property=='{prop}'")
+    #     # does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present_{prop}_aveTrials_t{add_str}.png")
+    #     does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), out_fn=f"{res_dir}/regplot_perf_react_diff_{prop}_aveTrials_t{add_str}.png")
+    #     # does_reactivations_predict_behavioral(local_df.query("Condition=='Present'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_present_RT_{prop}_aveTrials_t{add_str}.png")
+    #     does_reactivations_predict_behavioral(local_df.query("Condition=='Difference'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_diff_RT_{prop}_aveTrials_t{add_str}.png")
 
 
-test_cond = "scenes"
+gen_cond = "scenes"
+subs = df['sub'].unique()
 for label in ["Prop0", "PropAll"]: # , 
     print(f"Doing label {label}")
     df_prop = df[df["label"].str.contains(label, na=False)]
     do_rel = True if label=="PropAll" else False
 
-    for train_cond in ["localizer_two_objects", "two_objects", "two_objects_localizer"]:
+    for train_cond in ["localizer_one_object_two_objects", "localizer_two_objects", "two_objects"]:
         print(f"Doing train condition {train_cond}")
         df_train = df_prop.query(f"train_cond == '{train_cond}'")
 
         for t in ["0.2", "0.3", "0.4", "0.6", "0.8"]:
             add_str = f"{t}_{label}_{train_cond}"
-            # print(f"Doing decoder trained at t = {t} s")
-            # df_t = df.query(f"{t} in label")
             df_t = df_train[df_train["label"].str.contains(t, na=False)] # keep only the current training time
-            mask = df_train["label"].str.contains(t, na=False).to_list()  # get the corresponding binary mask 
             if not len(df_t): 
                 print(f"No data for {label}, traincond={train_cond} t={t} s")
                 continue
-            preds_data_t = [pred for pred, keep in zip(all_preds_data, mask) if keep] # we need to do this because all_preds_data is a list
-            labels = [f"{l}{t}_1" for l in ["S1", "C1", "R", "S2", "C2"]]
-            ave_preds_all_subs, behav_df, coactivation_df, sf, sb, sr = get_preds_and_sequenceness_for_cond(df_t, \
-                                                                        preds_data_t, train_cond, test_cond, labels, do_rel=do_rel)
+            # mask = df_train["label"].str.contains(t, na=False).to_list()  # get the corresponding binary mask - Dont do that. We are using the indices from the df, they match the list. If you change the list then the indices do not match anymore! 
+            # preds_data_t = [pred for pred, keep in zip(all_preds_data, mask) if keep] # we need to do this because all_preds_data is a list
+            # labels = [f"{l}{t}_1" for l in ["S1", "C1", "R", "S2", "C2"]]
+            # ave_preds_all_subs, behav_df, coactivation_df, sf, sb, sr = get_preds_and_sequenceness_for_cond(df_t, \
+            #                                                             preds_data_t, train_cond, gen_cond, labels, do_rel=do_rel)
+            ave_preds_all_subs, behav_df, coactivation_df, sync_coactivation_matrices, seq_coactivation_matrices = get_replays_sophie_style(df_t, all_preds_data, train_cond, gen_cond, do_rel=do_rel)
+
+            # synchronous coactivations
+            ave_coactivation_matrix = average_coactivation_matrices(sync_coactivation_matrices)
+            coact_mat_out_fn = f"{res_dir}/synchronous_coactivation_matrix_{add_str}.png"
+            half_labels = properties if do_rel else properties[0:2] + properties[3:5]
+            # abs_idx = -3 if do_rel else -2
+            abs_idx = -2
+            full_labels = [f"{l}_p" for l in half_labels] + [f"{l}_a" for l in half_labels[0:abs_idx]]
+            plot_coactivation_heatmap(ave_coactivation_matrix, full_labels, coact_mat_out_fn)
+            # for sub, matrix in zip(subs, sync_coactivation_matrices):
+            #     plot_coactivation_heatmap(matrix, full_labels, f"{res_dir}/synchronous_coactivation_matrix_{add_str}_{sub}.png")
+
+            # sequential coactivations
+            ave_coactivation_matrix = average_coactivation_matrices(seq_coactivation_matrices)
+            coact_mat_out_fn = f"{res_dir}/sequential_coactivation_matrix_{add_str}.png"
+            half_labels = properties if do_rel else properties[0:2] + properties[3:5]
+            # from ipdb import set_trace; set_trace()
+            full_labels = [f"{l}_p" for l in half_labels] + [f"{l}_a" for l in half_labels[0:abs_idx]]
+            plot_coactivation_heatmap(ave_coactivation_matrix, full_labels, coact_mat_out_fn)
+            # for sub, matrix in zip(subs, seq_coactivation_matrices):
+            #     plot_coactivation_heatmap(matrix, full_labels, f"{res_dir}/seqential_coactivation_matrix_{add_str}_{sub}.png")
+
 
             # group_stats = coactivation_df.describe().T[['mean', 'std', '50%']]  # 50% is median
             # group_stats.rename(columns={'50%': 'median'}, inplace=True)
@@ -322,7 +283,7 @@ for label in ["Prop0", "PropAll"]: # ,
             make_all_reactivation_plots(behav_df, ave_preds_all_subs, res_dir, add_str, do_rel)
 
 
-from ipdb import set_trace; set_trace()
+# from ipdb import set_trace; set_trace()
 exit()
 
 # does_reactivations_predict_behavioral(behav_df.query("Condition=='Present'"), out_fn=f"{res_dir}/regplot_perf_react_present.png")
@@ -330,651 +291,5 @@ exit()
 
 # does_reactivations_predict_behavioral(behav_df.query("Condition=='Present'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_present_RT.png")
 # does_reactivations_predict_behavioral(behav_df.query("Condition=='Difference'"), y="RT", out_fn=f"{res_dir}/regplot_perf_react_diff_RT.png")
-
-
-# ### 5-words blocks ###
-# n_states = 8
-# T_auto = np.eye(n_states)  # Autotransitions
-# T_const = np.ones((n_states, n_states))  # Uniform transitions
-# # df_5words = df.query("label in ['ImgS_1', 'ImgS_2', 'R_0', 'ImgC_1', 'ImgC_2']") # only the 5-words blocks
-# df_5words = df.query("label in ['ImgS_1', 'ImgS_2', 'R_0', 'ImgC_1', 'ImgC_2']") # only the 5-words blocks
-# sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
-# sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for checking purpose
-# preds_shape_present, preds_color_present, preds_rel_present = [], [], []
-# preds_shape_absent, preds_color_absent, preds_rel_absent = [], [], []
-# for iSub, sub in tqdm(enumerate(subs)):
-#     df_sub = df_5words.query(f"sub=='{sub}'")
-#     trial_ids = df_sub.trial_id.unique()
-#     n_trials = len(trial_ids)
-
-#     for iLag in range(maxLag): # for each lag
-#         if iLag > 0: continue
-
-#         sf_all_trials, sb_all_trials, sr_all_trials = [], [], []
-
-#         for iTrial in range(n_trials):
-#             # s1, c1, rel, s2, c2 = df_5words.iloc[iTrial][["Shape1", "Colour1", "Relation", "Shape2", "Colour2"]]
-#             df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
-#             if len(df_trial) != 5: 
-#                 print(f"Had to skip trial {iTrial} for lag {iLag*10} ms")
-#                 continue
-#                 from ipdb import set_trace; set_trace()
-#             if df_trial.Shape1.nunique() > 1: from ipdb import set_trace; set_trace()
-#             if df_trial.Colour1.nunique() > 1: from ipdb import set_trace; set_trace()
-#             if df_trial.Relation.nunique() > 1: from ipdb import set_trace; set_trace()
-#             if df_trial.Shape2.nunique() > 1: from ipdb import set_trace; set_trace()
-#             if df_trial.Colour2.nunique() > 1: from ipdb import set_trace; set_trace()
-
-#             s1, c1, rel, s2, c2 = df_trial.iloc[0][["Shape1", "Colour1", "Relation", "Shape2", "Colour2"]].values
-#             try:
-#                 TF = get_TF_5words(s1, c1, rel, s2, c2)
-#             except:
-#                 from ipdb import set_trace; set_trace()
-#             TR = TF.T
-#             rand_inds = np.random.permutation(8)
-#             Trand = TF[rand_inds]
-#             templates = [TF, TR, Trand, T_auto, T_const]
-
-#             preds_shape = df_trial.query("label=='ImgS_1'")['preds'].values[0] # ImgS_1 and ImgS_2 are equal because they are based on the same decoder
-#             preds_color = df_trial.query("label=='ImgC_2'")['preds'].values[0]
-#             preds_rel = df_trial.query("label=='R_0'")['preds'].values[0]
-
-#             # save preds for barplot of average predictions
-#             if iLag == 0:
-#                 preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
-#                 # present 
-#                 preds_shape_present.append(preds_shape[:, shapes.index(s1)].mean())
-#                 preds_shape_present.append(preds_shape[:, shapes.index(s2)].mean())
-#                 preds_rel_present.append(preds_rel[:, relations.index(rel)].mean())
-#                 preds_color_present.append(preds_color[:, colors.index(c1)].mean())
-#                 preds_color_present.append(preds_color[:, colors.index(c2)].mean())
-#                 # absent
-#                 shapes_absent = [s for s in shapes if s not in [s1, s2]]
-#                 colors_absent = [c for c in colors if c not in [c1, c2]]
-#                 relation_absent = [r for r in relations if r != rel][0]
-#                 for absent_shape in shapes_absent:
-#                     preds_shape_absent.append(preds_shape[:, shapes.index(absent_shape)].mean())
-#                 for absent_color in colors_absent:
-#                     preds_color_absent.append(preds_color[:, colors.index(absent_color)].mean())
-#                 preds_rel_absent.append(preds_rel[:, relations.index(relation_absent)].mean())
-
-# #             trial_preds = np.concatenate([preds_shape, preds_color, preds_rel], axis=1)
-# #             trm = compute_TRM_single_trial(trial_preds, iLag)
-# #             trm = minmaxScaler.fit_transform(trm) # a priori no used in wimmer
-# #             Z = second_level_analysis(trm, templates)
-
-# #             sf_all_trials.append(Z[0])
-# #             sb_all_trials.append(Z[1])
-# #             sr_all_trials.append(Z[2])
-
-# #         # mean over trials for this subject, lag and condition
-# #         sf[iSub, iLag] = np.nanmean(np.array(sf_all_trials), axis=0)
-# #         sb[iSub, iLag] = np.nanmean(np.array(sb_all_trials), axis=0)
-# #         srand[iSub, iLag] = np.nanmean(np.array(sr_all_trials), axis=0)
-
-# #     sf[iSub] -= np.nanmean(sf[iSub]) # mean correct
-# #     sb[iSub] -= np.nanmean(sb[iSub]) # mean correct
-# #     srand[iSub] -= np.nanmean(srand[iSub]) # mean correct
-  
-# # mean_SF = np.nanmean(sf, 0) # average over subjects
-# # std_SF = sem(sf, 0, nan_policy='omit') # std over subjects
-# # mean_SB = np.nanmean(sb, 0) # average over subjects
-# # std_SB = sem(sb, 0, nan_policy='omit') # std over subjects
-# # mean_SRAND = np.nanmean(srand, 0) # average over subjects
-# # std_SRAND = sem(srand, 0, nan_policy='omit') # std over subjects
-# # plot_f = plt.plot(times, mean_SF, label='forward')[0]
-# # plt.fill_between(times, mean_SF-std_SF, mean_SF+std_SF, alpha=0.2, color=plot_f.get_color(), lw=0)
-# # plot_b = plt.plot(times, mean_SB, label='backward')[0]
-# # plt.fill_between(times, mean_SB-std_SB, mean_SB+std_SB, alpha=0.2, color=plot_b.get_color(), lw=0)
-# # plot_rand = plt.plot(times, mean_SRAND, label='random')[0]
-# # plt.fill_between(times, mean_SRAND-std_SRAND, mean_SRAND+std_SRAND, alpha=0.2, color=plot_rand.get_color(), lw=0)
-# # plt.xlabel("Lag (ms)")
-# # plt.ylabel("Sequenceness")
-# # plt.legend()
-# # plt.savefig(f"{out_dir}/mean_sequenceness_avetrm_scenes_trained_on_ImgLoc.png", dpi=400)
-# # plt.close()
-
-# present = [preds_shape_present, preds_color_present, preds_rel_present]
-# absent = [preds_shape_absent, preds_color_absent, preds_rel_absent]
-# plot_average_preds(present, absent, "scenes_trained_on_ImgLoc")
-
-# ### 5-words blocks WORD ###
-# n_states = 8
-# T_auto = np.eye(n_states)  # Autotransitions
-# T_const = np.ones((n_states, n_states))  # Uniform transitions
-# df_5words = df.query("label in ['WordS_1', 'WordS_2', 'R_0', 'WordC_1', 'WordC_2']") # only the 5-words blocks
-# sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
-# sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for checking purpose
-# preds_shape_present, preds_color_present, preds_rel_present = [], [], []
-# preds_shape_absent, preds_color_absent, preds_rel_absent = [], [], []
-# for iSub, sub in tqdm(enumerate(subs)):
-#     df_sub = df_5words.query(f"sub=='{sub}'")
-#     trial_ids = df_sub.trial_id.unique()
-#     n_trials = len(trial_ids)
-
-#     for iLag in range(maxLag): # for each lag
-#         if iLag > 0: continue
-
-
-
-#         sf_all_trials, sb_all_trials, sr_all_trials = [], [], []
-
-#         for iTrial in range(n_trials):
-#             df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
-#             if len(df_trial) != 5: 
-#                 print(f"Had to skip trial {iTrial} for lag {iLag*10} ms")
-#                 continue
-#             s1, c1, rel, s2, c2 = df_trial.iloc[0][["Shape1", "Colour1", "Relation", "Shape2", "Colour2"]].values
-#             TF = get_TF_5words(s1, c1, rel, s2, c2)    
-#             TR = TF.T
-#             rand_inds = np.random.permutation(8)
-#             Trand = TF[rand_inds]
-#             templates = [TF, TR, Trand, T_auto, T_const]
-#             # trial_preds = preds[:, i_trial, :]
-#             preds_shape = df_trial.query("label=='WordS_1'")['preds'].values[0] # WordS_1 and WordS_2 are equal because they are based on the same decoder
-#             preds_color = df_trial.query("label=='WordC_2'")['preds'].values[0]
-#             preds_rel = df_trial.query("label=='R_0'")['preds'].values[0]
-
-#             # save preds for barplot of average predictions
-#             if iLag == 0:
-#                 preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
-#                 # present 
-#                 preds_shape_present.append(preds_shape[:, shapes.index(s1)].mean())
-#                 preds_shape_present.append(preds_shape[:, shapes.index(s2)].mean())
-#                 preds_rel_present.append(preds_rel[:, relations.index(rel)].mean())
-#                 preds_color_present.append(preds_color[:, colors.index(c1)].mean())
-#                 preds_color_present.append(preds_color[:, colors.index(c2)].mean())
-#                 # absent
-#                 shapes_absent = [s for s in shapes if s not in [s1, s2]]
-#                 colors_absent = [c for c in colors if c not in [c1, c2]]
-#                 relation_absent = [r for r in relations if r != rel][0]
-#                 for absent_shape in shapes_absent:
-#                     preds_shape_absent.append(preds_shape[:, shapes.index(absent_shape)].mean())
-#                 for absent_color in colors_absent:
-#                     preds_color_absent.append(preds_color[:, colors.index(absent_color)].mean())
-#                 preds_rel_absent.append(preds_rel[:, relations.index(relation_absent)].mean())
-
-# #             trial_preds = np.concatenate([preds_shape, preds_color, preds_rel], axis=1)
-# #             trm = compute_TRM_single_trial(trial_preds, iLag)
-# #             trm = minmaxScaler.fit_transform(trm) # a priori no used in wimmer
-# #             Z = second_level_analysis(trm, templates)
-
-# #             sf_all_trials.append(Z[0])
-# #             sb_all_trials.append(Z[1])
-# #             sr_all_trials.append(Z[2])
-
-# #         # mean over trials for this subject, lag and condition
-# #         sf[iSub, iLag] = np.nanmean(np.array(sf_all_trials), axis=0)
-# #         sb[iSub, iLag] = np.nanmean(np.array(sb_all_trials), axis=0)
-# #         srand[iSub, iLag] = np.nanmean(np.array(sr_all_trials), axis=0)
-
-# #     sf[iSub] -= np.nanmean(sf[iSub]) # mean correct
-# #     sb[iSub] -= np.nanmean(sb[iSub]) # mean correct
-# #     srand[iSub] -= np.nanmean(srand[iSub]) # mean correct
-  
-# # mean_SF = np.nanmean(sf, 0) # average over subjects
-# # std_SF = sem(sf, 0, nan_policy='omit') # std over subjects
-# # mean_SB = np.nanmean(sb, 0) # average over subjects
-# # std_SB = sem(sb, 0, nan_policy='omit') # std over subjects
-# # mean_SRAND = np.nanmean(srand, 0) # average over subjects
-# # std_SRAND = sem(srand, 0, nan_policy='omit') # std over subjects
-# # plot_f = plt.plot(times, mean_SF, label='forward')[0]
-# # plt.fill_between(times, mean_SF-std_SF, mean_SF+std_SF, alpha=0.2, color=plot_f.get_color(), lw=0)
-# # plot_b = plt.plot(times, mean_SB, label='backward')[0]
-# # plt.fill_between(times, mean_SB-std_SB, mean_SB+std_SB, alpha=0.2, color=plot_b.get_color(), lw=0)
-# # plot_rand = plt.plot(times, mean_SRAND, label='random')[0]
-# # plt.fill_between(times, mean_SRAND-std_SRAND, mean_SRAND+std_SRAND, alpha=0.2, color=plot_rand.get_color(), lw=0)
-# # plt.xlabel("Lag (ms)")
-# # plt.ylabel("Sequenceness")
-# # plt.legend()
-# # plt.savefig(f"{out_dir}/mean_sequenceness_avetrm_scenes_trained_on_WordLoc.png", dpi=400)
-# # plt.close()
-
-# present = [preds_shape_present, preds_color_present, preds_rel_present]
-# absent = [preds_shape_absent, preds_color_absent, preds_rel_absent]
-# plot_average_preds(present, absent, "scenes_trained_on_WordLoc")
-
-
-# ### trained on 2-words blocks ###
-# n_states = 8
-# T_auto = np.eye(n_states)  # Autotransitions
-# T_const = np.ones((n_states, n_states))  # Uniform transitions
-# df_5words = df.query("label in ['S_0', 'S_1', 'R_0', 'C_0', 'C_1']") # only the 5-words blocks
-# sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
-# sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for checking purpose
-# preds_shape_present, preds_color_present, preds_rel_present = [], [], []
-# preds_shape_absent, preds_color_absent, preds_rel_absent = [], [], []
-# for iSub, sub in tqdm(enumerate(subs)):
-#     df_sub = df_5words.query(f"sub=='{sub}'")
-#     trial_ids = df_sub.trial_id.unique()
-#     n_trials = len(trial_ids)
-
-#     for iLag in range(maxLag): # for each lag
-#         if iLag > 0: continue
-
-
-
-#         sf_all_trials, sb_all_trials, sr_all_trials = [], [], []
-
-#         for iTrial in range(n_trials):
-#             df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
-#             if len(df_trial) != 5: 
-#                 print(f"Had to skip trial {iTrial} for lag {iLag*10} ms")
-#                 continue
-#             s1, c1, rel, s2, c2 = df_trial.iloc[0][["Shape1", "Colour1", "Relation", "Shape2", "Colour2"]].values
-#             TF = get_TF_5words(s1, c1, rel, s2, c2)
-#             TR = TF.T
-#             rand_inds = np.random.permutation(8)
-#             Trand = TF[rand_inds]
-#             templates = [TF, TR, Trand, T_auto, T_const]
-#             preds_shape = df_trial.query("label=='S_0'")['preds'].values[0]
-#             preds_color = df_trial.query("label=='C_0'")['preds'].values[0]
-#             preds_rel = df_trial.query("label=='R_0'")['preds'].values[0]
-
-#             # save preds for barplot of average predictions
-#             if iLag == 0:
-#                 preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
-#                 # present 
-#                 preds_shape_present.append(preds_shape[:, shapes.index(s1)].mean())
-#                 preds_shape_present.append(preds_shape[:, shapes.index(s2)].mean())
-#                 preds_rel_present.append(preds_rel[:, relations.index(rel)].mean())
-#                 preds_color_present.append(preds_color[:, colors.index(c1)].mean())
-#                 preds_color_present.append(preds_color[:, colors.index(c2)].mean())
-#                 # absent
-#                 shapes_absent = [s for s in shapes if s not in [s1, s2]]
-#                 colors_absent = [c for c in colors if c not in [c1, c2]]
-#                 relation_absent = [r for r in relations if r != rel][0]
-#                 for absent_shape in shapes_absent:
-#                     preds_shape_absent.append(preds_shape[:, shapes.index(absent_shape)].mean())
-#                 for absent_color in colors_absent:
-#                     preds_color_absent.append(preds_color[:, colors.index(absent_color)].mean())
-#                 preds_rel_absent.append(preds_rel[:, relations.index(relation_absent)].mean())
-
-
-# #             trial_preds = np.concatenate([preds_shape, preds_color, preds_rel], axis=1)
-# #             trm = compute_TRM_single_trial(trial_preds, iLag)
-# #             trm = minmaxScaler.fit_transform(trm) # a priori no used in wimmer
-# #             Z = second_level_analysis(trm, templates)
-
-# #             sf_all_trials.append(Z[0])
-# #             sb_all_trials.append(Z[1])
-# #             sr_all_trials.append(Z[2])
-
-# #         # mean over trials for this subject, lag and condition
-# #         sf[iSub, iLag] = np.nanmean(np.array(sf_all_trials), axis=0)
-# #         sb[iSub, iLag] = np.nanmean(np.array(sb_all_trials), axis=0)
-# #         srand[iSub, iLag] = np.nanmean(np.array(sr_all_trials), axis=0)
-
-# #     sf[iSub] -= np.nanmean(sf[iSub]) # mean correct
-# #     sb[iSub] -= np.nanmean(sb[iSub]) # mean correct
-# #     srand[iSub] -= np.nanmean(srand[iSub]) # mean correct
-  
-# # mean_SF = np.nanmean(sf, 0) # average over subjects
-# # std_SF = sem(sf, 0, nan_policy='omit') # std over subjects
-# # mean_SB = np.nanmean(sb, 0) # average over subjects
-# # std_SB = sem(sb, 0, nan_policy='omit') # std over subjects
-# # mean_SRAND = np.nanmean(srand, 0) # average over subjects
-# # std_SRAND = sem(srand, 0, nan_policy='omit') # std over subjects
-# # plot_f = plt.plot(times, mean_SF, label='forward')[0]
-# # plt.fill_between(times, mean_SF-std_SF, mean_SF+std_SF, alpha=0.2, color=plot_f.get_color(), lw=0)
-# # plot_b = plt.plot(times, mean_SB, label='backward')[0]
-# # plt.fill_between(times, mean_SB-std_SB, mean_SB+std_SB, alpha=0.2, color=plot_b.get_color(), lw=0)
-# # plot_rand = plt.plot(times, mean_SRAND, label='random')[0]
-# # plt.fill_between(times, mean_SRAND-std_SRAND, mean_SRAND+std_SRAND, alpha=0.2, color=plot_rand.get_color(), lw=0)
-# # plt.xlabel("Lag (ms)")
-# # plt.ylabel("Sequenceness")
-# # plt.legend()
-# # plt.savefig(f"{out_dir}/mean_sequenceness_avetrm_scenes_trained_on_Obj.png", dpi=400)
-# # plt.close()
-
-# present = [preds_shape_present, preds_color_present, preds_rel_present]
-# absent = [preds_shape_absent, preds_color_absent, preds_rel_absent]
-# plot_average_preds(present, absent, "scenes_trained_on_Obj")
-
-
-### trained on 5-words blocks ###
-n_states = 8
-T_auto = np.eye(n_states)  # Autotransitions
-T_const = np.ones((n_states, n_states))  # Uniform transitions
-df_5words = df.query("label in ['S1_0', 'S2_1', 'R_0', 'C1_0', 'C2_1']") # only the 5-words blocks
-sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
-sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for checking purpose
-preds_shape_present, preds_color_present, preds_rel_present = [], [], []
-preds_shape_absent, preds_color_absent, preds_rel_absent = [], [], []
-for iSub, sub in tqdm(enumerate(subs)):
-    df_sub = df_5words.query(f"sub=='{sub}'")
-    trial_ids = df_sub.trial_id.unique()
-    n_trials = len(trial_ids)
-
-    for iLag in range(maxLag): # for each lag
-        if iLag > 0: continue
-
-
-
-        sf_all_trials, sb_all_trials, sr_all_trials = [], [], []
-
-        for iTrial in range(n_trials):
-            df_trial = df_sub.query(f"trial_id=='{trial_ids[iTrial]}'")
-            if len(df_trial) != 5: 
-                print(f"Had to skip trial {iTrial} for lag {iLag*10} ms")
-                continue
-            s1, c1, rel, s2, c2 = df_trial.iloc[0][["Shape1", "Colour1", "Relation", "Shape2", "Colour2"]].values
-            TF = get_TF_5words(s1, c1, rel, s2, c2)
-            TR = TF.T
-            rand_inds = np.random.permutation(8)
-            Trand = TF[rand_inds]
-            templates = [TF, TR, Trand, T_auto, T_const]
-            if iTrial==0: print(f"TODO: Check the trained on scenes / tested in scenes. You nw have 2 different decoders for the shape and for the colour.")
-            # preds_shape = df_trial.query("label=='S1_0'")['preds'].values[0] # now 'S1_0', 'S2_1' are different because based on different decoders.
-            # preds_color = df_trial.query("label=='C1_0'")['preds'].values[0]
-            preds_shape = df_trial.query("label=='S2_1'")['preds'].values[0] # now 'S1_0', 'S2_1' are different because based on different decoders.
-            preds_color = df_trial.query("label=='C2_1'")['preds'].values[0]
-            preds_rel = df_trial.query("label=='R_0'")['preds'].values[0]
-
-            # save preds for barplot of average predictions
-            if iLag == 0:
-                preds_shape, preds_color, preds_rel = np.array(preds_shape), np.array(preds_color), np.array(preds_rel)
-                # present 
-                preds_shape_present.append(preds_shape[:, shapes.index(s1)].mean())
-                preds_shape_present.append(preds_shape[:, shapes.index(s2)].mean())
-                preds_rel_present.append(preds_rel[:, relations.index(rel)].mean())
-                preds_color_present.append(preds_color[:, colors.index(c1)].mean())
-                preds_color_present.append(preds_color[:, colors.index(c2)].mean())
-                # absent
-                shapes_absent = [s for s in shapes if s not in [s1, s2]]
-                colors_absent = [c for c in colors if c not in [c1, c2]]
-                relation_absent = [r for r in relations if r != rel][0]
-                for absent_shape in shapes_absent:
-                    preds_shape_absent.append(preds_shape[:, shapes.index(absent_shape)].mean())
-                for absent_color in colors_absent:
-                    preds_color_absent.append(preds_color[:, colors.index(absent_color)].mean())
-                preds_rel_absent.append(preds_rel[:, relations.index(relation_absent)].mean())
-
-
-#             trial_preds = np.concatenate([preds_shape, preds_color, preds_rel], axis=1)
-#             trm = compute_TRM_single_trial(trial_preds, iLag)
-#             trm = minmaxScaler.fit_transform(trm) # a priori no used in wimmer
-#             Z = second_level_analysis(trm, templates)
-
-#             sf_all_trials.append(Z[0])
-#             sb_all_trials.append(Z[1])
-#             sr_all_trials.append(Z[2])
-
-#         # mean over trials for this subject, lag and condition
-#         sf[iSub, iLag] = np.nanmean(np.array(sf_all_trials), axis=0)
-#         sb[iSub, iLag] = np.nanmean(np.array(sb_all_trials), axis=0)
-#         srand[iSub, iLag] = np.nanmean(np.array(sr_all_trials), axis=0)
-
-#     sf[iSub] -= np.nanmean(sf[iSub]) # mean correct
-#     sb[iSub] -= np.nanmean(sb[iSub]) # mean correct
-#     srand[iSub] -= np.nanmean(srand[iSub]) # mean correct
-  
-# mean_SF = np.nanmean(sf, 0) # average over subjects
-# std_SF = sem(sf, 0, nan_policy='omit') # std over subjects
-# mean_SB = np.nanmean(sb, 0) # average over subjects
-# std_SB = sem(sb, 0, nan_policy='omit') # std over subjects
-# mean_SRAND = np.nanmean(srand, 0) # average over subjects
-# std_SRAND = sem(srand, 0, nan_policy='omit') # std over subjects
-# plot_f = plt.plot(times, mean_SF, label='forward')[0]
-# plt.fill_between(times, mean_SF-std_SF, mean_SF+std_SF, alpha=0.2, color=plot_f.get_color(), lw=0)
-# plot_b = plt.plot(times, mean_SB, label='backward')[0]
-# plt.fill_between(times, mean_SB-std_SB, mean_SB+std_SB, alpha=0.2, color=plot_b.get_color(), lw=0)
-# plot_rand = plt.plot(times, mean_SRAND, label='random')[0]
-# plt.fill_between(times, mean_SRAND-std_SRAND, mean_SRAND+std_SRAND, alpha=0.2, color=plot_rand.get_color(), lw=0)
-# plt.xlabel("Lag (ms)")
-# plt.ylabel("Sequenceness")
-# plt.legend()
-# plt.savefig(f"{out_dir}/mean_sequenceness_avetrm_scenes_trained_on_Scenes.png", dpi=400)
-# plt.close()
-
-present = [preds_shape_present, preds_color_present, preds_rel_present]
-absent = [preds_shape_absent, preds_color_absent, preds_rel_absent]
-plot_average_preds(present, absent, "scenes_trained_on_scenes")
-
-
-# ### 2-words blocks ###
-# n_states = 6
-# T_auto = np.eye(n_states)  # Autotransitions
-# T_const = np.ones((n_states, n_states))  # Uniform transitions
-# conds = [f'{s} {c}' for s in shapes for c in colors] # all conditions for the 2-words blocks
-# sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
-# sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for checking purpose
-# for iSub, sub in tqdm(enumerate(subs)):
-
-#     for iLag in range(maxLag): # for each lag
-#         sf_all_trials, sb_all_trials, sr_all_trials = [], [], []
-
-#         for cond in conds: # for each single set of words
-#             shape, color = cond.split()
-#             TF = get_TF_2words(shape, color)
-#             TR = TF.T
-#             rand_inds = np.random.randint(0, 2, 2) # maybe make this better, choose indices that are not the one that are evaluated and that are valid transitions
-#             # , random_state=iSub
-#             Trand = np.ones((n_states, n_states))
-#             Trand[rand_inds[0], rand_inds[1]] = 1
-#             templates = [TF, TR, Trand, T_auto, T_const]
-
-#             preds_shape = df.query(f"Shape1=='{shape}' and Colour1=='{color}' and sub=='{sub}' and label=='ImgS_0'")['preds'].values
-#             preds_color = df.query(f"Shape1=='{shape}' and Colour1=='{color}' and sub=='{sub}' and label=='ImgC_0'")['preds'].values
-#             preds = np.concatenate([np.stack(preds_shape), np.stack(preds_color)], axis=2)
-#             n_times, n_trials, n_classes = preds.shape
-
-#             for i_trial in range(n_trials):
-#                 trial_preds = preds[:, i_trial, :]
-#                 trm = compute_TRM_single_trial(trial_preds, iLag)
-#                 trm = minmaxScaler.fit_transform(trm) # a priori no used in wimmer
-#                 Z = second_level_analysis(trm, templates)
-
-#                 sf_all_trials.append(Z[0])
-#                 sb_all_trials.append(Z[1])
-#                 sr_all_trials.append(Z[2])
-
-#                 # if null: 
-#                 #     null_distributions_f[iSub, epi-1, :, iLag], null_distributions_b[iSub, epi-1, :, iLag] = \
-#                 #         compute_null_distribution(preds, templates, lag=iLag, n_permutations=n_permutations)
-
-#         # mean over trials for this subject, lag and condition
-#         sf[iSub, iLag] = np.nanmean(np.array(sf_all_trials), axis=0)
-#         sb[iSub, iLag] = np.nanmean(np.array(sb_all_trials), axis=0)
-#         srand[iSub, iLag] = np.nanmean(np.array(sr_all_trials), axis=0)
-
-#     sf[iSub] -= np.nanmean(sf[iSub]) # mean correct
-#     sb[iSub] -= np.nanmean(sb[iSub]) # mean correct
-#     srand[iSub] -= np.nanmean(srand[iSub]) # mean correct
-
-
-# mean_SF = np.nanmean(sf, 0) # average over subjects
-# std_SF = sem(sf, 0, nan_policy='omit') # std over subjects
-# mean_SB = np.nanmean(sb, 0) # average over subjects
-# std_SB = sem(sb, 0, nan_policy='omit') # std over subjects
-# mean_SRAND = np.nanmean(srand, 0) # average over subjects
-# std_SRAND = sem(srand, 0, nan_policy='omit') # std over subjects
-
-# plot_f = plt.plot(times, mean_SF, label='forward')[0]
-# plt.fill_between(times, mean_SF-std_SF, mean_SF+std_SF, alpha=0.2, color=plot_f.get_color(), lw=0)
-# plot_b = plt.plot(times, mean_SB, label='backward')[0]
-# plt.fill_between(times, mean_SB-std_SB, mean_SB+std_SB, alpha=0.2, color=plot_b.get_color(), lw=0)
-# plot_rand = plt.plot(times, mean_SRAND, label='random')[0]
-# plt.fill_between(times, mean_SRAND-std_SRAND, mean_SRAND+std_SRAND, alpha=0.2, color=plot_rand.get_color(), lw=0)
-# plt.xlabel("Lag (ms)")
-# plt.ylabel("Sequenceness")
-# plt.legend()
-# plt.savefig(f"{out_dir}/mean_sequenceness_avetrm_obj_trained_on_ImgLoc.png", dpi=400)
-# plt.close()
-
-
-
-
-
-# from my wimmer script. Not sure about it.   
-# if null:
-#     # Compute z-scores and p-values
-#     z_scores_f, p_values_f = combine_null_distributions_and_test(null_distributions_f, sf)
-#     print("Z-scores for forward:", z_scores_f)
-#     print("P-values for forward:", p_values_f)
-
-#     z_scores_b, p_values_b = combine_null_distributions_and_test(null_distributions_b, sb)
-#     print("Z-scores for backward:", z_scores_b)
-#     print("P-values back forward:", p_values_b)
-### PLOT ### 
-# if null:
-#     yval_f = np.max(mean_SF) + (np.max(mean_SF) * 0.1)
-#     sig_times_f = times[np.where(p_values_f < pval_th)]
-#     plt.plot(sig_times_f, np.full(len(sig_times_f), yval_f), 'D', markersize=3, color=plot_f.get_color())
-#     yval_b = np.max(mean_SF) + (np.max(mean_SF) * 0.2)
-#     sig_times_b = times[np.where(p_values_b < pval_th)]
-#     plt.plot(sig_times_b, np.full(len(sig_times_b), yval_b), 'D', markersize=3, color=plot_b.get_color())
-
-
-# plot = plt.plot(times, mean_SF - mean_SB, label='forward - backward')[0]
-# # not sure how to go about this ... 
-# # plt.fill_between(times, (mean_SF-mean_SB)-(std_SF, mean_SF+std_SF, alpha=0.2, color=plot.get_color(), lw=0)
-# plt.xlabel("Lag (ms)")
-# plt.ylabel("Sequenceness")
-# plt.legend()
-# plt.savefig(f"{out_dir}/mean_difference_sequenceness_obj_difference_last.png", dpi=400)
-# plt.close()
-
-
-# sdiff = sf - sb
-# mean_SDIFF = np.nanmean(sdiff, 0) # average over subjects
-# std_SDIFF = sem(sdiff, 0, nan_policy='omit') # std over subjects
-# plot = plt.plot(times, mean_SDIFF, label='forward - backward')[0]
-# plt.fill_between(times, mean_SDIFF-std_SDIFF, mean_SDIFF+std_SDIFF, alpha=0.2, color=plot.get_color(), lw=0)
-# plt.xlabel("Lag (ms)")
-# plt.ylabel("Sequenceness")
-# plt.legend()
-# plt.savefig(f"{out_dir}/mean_difference_sequenceness_difference_first.png", dpi=400)
-# plt.close()
-
-print(f"ALL FINISHED, elpased time: {(time.time()-start_time)/60:.2f}min")
-
-from ipdb import set_trace; set_trace()
-
-
-
-
-
-
-maxLag = 60
-# theoretical_peak = 11 # in the paper the peak lag is at 110ms
-n_states = 6
-pval_th = 0.05 / maxLag
-
-T_auto = np.eye(n_states)  # Autotransitions
-T_const = np.ones((n_states, n_states))  # Uniform transitions
-subs = df['sub'].unique()
-n_subs = len(subs)
-
-conds = [f'{s} {c}' for s in shapes for c in colors] # all conditions for the 2-words blocks
-sf = np.full((n_subs, maxLag), np.nan) # to store the average of all trials for each subject and lag
-sb, srand = np.copy(sf), np.copy(sf) # also a random matrix, for checking purpose
-for iSub, sub in tqdm(enumerate(subs)):
-
-    for iLag in range(maxLag): # for each lag
-        sf_all_trials, sb_all_trials, sr_all_trials = [], [], []
-
-        for cond in conds: # for each single set of words
-            shape, color = cond.split()
-            TF = get_TF_2words(shape, color)
-            TR = TF.T
-            rand_inds = np.random.randint(0, 2, 2) # maybe make this better, choose indices that are not the one that are evaluated and that are valid transitions
-            # , random_state=iSub
-            Trand = np.ones((n_states, n_states))
-            Trand[rand_inds[0], rand_inds[1]] = 1
-            templates = [TF, TR, Trand, T_auto, T_const]
-
-            preds_shape = df.query(f"Shape1=='{shape}' and Colour1=='{color}' and sub=={sub} and label=='ImgS_0'")['preds'].values
-            preds_color = df.query(f"Shape1=='{shape}' and Colour1=='{color}' and sub=={sub} and label=='ImgC_0'")['preds'].values
-            from ipdb import set_trace; set_trace()
-            preds = np.concatenate([np.stack(preds_shape), np.stack(preds_color)], axis=2)
-            n_times, n_trials, n_classes = preds.shape
-
-            for i_trial in range(n_trials):
-                trial_preds = preds[:, i_trial, :]
-                trm = compute_TRM_single_trial(trial_preds, iLag)
-                # trm = minmaxScaler.fit_transform(trm) # a priori no used in wimmer
-                Z = second_level_analysis(trm, templates)
-
-                sf_all_trials.append(Z[0])
-                sb_all_trials.append(Z[1])
-                sr_all_trials.append(Z[2])
-
-                # if null: 
-                #     null_distributions_f[iSub, epi-1, :, iLag], null_distributions_b[iSub, epi-1, :, iLag] = \
-                #         compute_null_distribution(preds, templates, lag=iLag, n_permutations=n_permutations)
-
-        # mean over trials for this subject, lag and condition
-        sf[iSub, iLag] = np.nanmean(np.array(sf_all_trials), axis=0)
-        sb[iSub, iLag] = np.nanmean(np.array(sb_all_trials), axis=0)
-        srand[iSub, iLag] = np.nanmean(np.array(sr_all_trials), axis=0)
-
-    sf[iSub] -= np.nanmean(sf[iSub]) # mean correct
-    sb[iSub] -= np.nanmean(sb[iSub]) # mean correct
-    srand[iSub] -= np.nanmean(srand[iSub]) # mean correct
-  
-# from my wimmer script. Not sure about it.   
-# if null:
-#     # Compute z-scores and p-values
-#     z_scores_f, p_values_f = combine_null_distributions_and_test(null_distributions_f, sf)
-#     print("Z-scores for forward:", z_scores_f)
-#     print("P-values for forward:", p_values_f)
-
-#     z_scores_b, p_values_b = combine_null_distributions_and_test(null_distributions_b, sb)
-#     print("Z-scores for backward:", z_scores_b)
-#     print("P-values back forward:", p_values_b)
-
-mean_SF = np.nanmean(sf, 0) # average over subjects
-std_SF = sem(sf, 0, nan_policy='omit') # std over subjects
-mean_SB = np.nanmean(sb, 0) # average over subjects
-std_SB = sem(sb, 0, nan_policy='omit') # std over subjects
-mean_SRAND = np.nanmean(srand, 0) # average over subjects
-std_SRAND = sem(srand, 0, nan_policy='omit') # std over subjects
-
-from ipdb import set_trace; set_trace()
-
-
-times = np.arange(maxLag)*10
-
-plot_f = plt.plot(times, mean_SF, label='forward')[0]
-plt.fill_between(times, mean_SF-std_SF, mean_SF+std_SF, alpha=0.2, color=plot_f.get_color(), lw=0)
-plot_b = plt.plot(times, mean_SB, label='backward')[0]
-plt.fill_between(times, mean_SB-std_SB, mean_SB+std_SB, alpha=0.2, color=plot_b.get_color(), lw=0)
-plot_rand = plt.plot(times, mean_SRAND, label='random')[0]
-plt.fill_between(times, mean_SRAND-std_SRAND, mean_SRAND+std_SRAND, alpha=0.2, color=plot_rand.get_color(), lw=0)
-# if null:
-#     yval_f = np.max(mean_SF) + (np.max(mean_SF) * 0.1)
-#     sig_times_f = times[np.where(p_values_f < pval_th)]
-#     plt.plot(sig_times_f, np.full(len(sig_times_f), yval_f), 'D', markersize=3, color=plot_f.get_color())
-#     yval_b = np.max(mean_SF) + (np.max(mean_SF) * 0.2)
-#     sig_times_b = times[np.where(p_values_b < pval_th)]
-#     plt.plot(sig_times_b, np.full(len(sig_times_b), yval_b), 'D', markersize=3, color=plot_b.get_color())
-plt.xlabel("Lag (ms)")
-plt.ylabel("Sequenceness")
-plt.legend()
-plt.savefig(f"{res_dir}/mean_sequenceness_obj.png", dpi=400)
-plt.close()
-
-plot = plt.plot(times, mean_SF - mean_SB, label='forward - backward')[0]
-# not sure how to go about this ... 
-# plt.fill_between(times, (mean_SF-mean_SB)-(std_SF, mean_SF+std_SF, alpha=0.2, color=plot.get_color(), lw=0)
-plt.xlabel("Lag (ms)")
-plt.ylabel("Sequenceness")
-plt.legend()
-plt.savefig(f"{res_dir}/mean_difference_sequenceness_obj_difference_last.png", dpi=400)
-plt.close()
-
-
-sdiff = sf - sb
-mean_SDIFF = np.nanmean(sdiff, 0) # average over subjects
-std_SDIFF = sem(sdiff, 0, nan_policy='omit') # std over subjects
-plot = plt.plot(times, mean_SDIFF, label='forward - backward')[0]
-plt.fill_between(times, mean_SDIFF-std_SDIFF, mean_SDIFF+std_SDIFF, alpha=0.2, color=plot.get_color(), lw=0)
-plt.xlabel("Lag (ms)")
-plt.ylabel("Sequenceness")
-plt.legend()
-plt.savefig(f"{res_dir}/mean_difference_sequenceness_difference_first.png", dpi=400)
-plt.close()
-
 
 print(f"ALL FINISHED, elpased time: {(time.time()-start_time)/60:.2f}min")
