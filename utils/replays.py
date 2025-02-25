@@ -588,6 +588,7 @@ def count_synchronous_coactivations(all_synchronous_episodes, state_set):
     Returns:
         dict: Keys are the subset sizes (1-5), values are occurrence counts.
     """
+    from ipdb import set_trace; set_trace()
     coactivation_counts = {i: 0 for i in range(1, len(state_set) + 1)}
     coactivation_overlaps = {i: [] for i in range(1, len(state_set) + 1)}
     coactivation_matrix = {state: {other_state: 0. for other_state in state_set} for state in state_set}
