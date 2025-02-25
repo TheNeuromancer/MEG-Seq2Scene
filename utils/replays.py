@@ -32,299 +32,318 @@ def get_trial_preds_from_data(df_trial, all_preds_data):
     preds = all_preds_data[preds_idx]
     return preds
 
-
-# def get_trial_preds_from_data_OLD(df_trial, all_preds_data, labels):
-#     """ get the predictions for a given trial 
-#     df_trial might have more than 5 entries, but we filter according to the list of labels
-#     OLD VERSION, FOR BEFORE FITTING A SINGLE DECODER FOR ALL PROPERTIES
-#     """
-#     preds_shape1_idx = df_trial.query(f"label=='{labels[0]}'").index.values
-#     assert len(preds_shape1_idx) == 1, f"len(preds_shape1_idx)={len(preds_shape1_idx)} for {labels[0]}"
-#     preds_shape1 = all_preds_data[preds_shape1_idx[0]]
-
-#     preds_color1_idx = df_trial.query(f"label=='{labels[1]}'").index.values
-#     assert len(preds_color1_idx) == 1, f"len(preds_color1_idx)={len(preds_color1_idx)} for {labels[1]}"
-#     preds_color1 = all_preds_data[preds_color1_idx[0]]
-
-#     preds_rel_idx = df_trial.query(f"label=='{labels[2]}'").index.values
-#     assert len(preds_rel_idx) == 1, f"len(preds_rel_idx)={len(preds_rel_idx)} for {labels[2]}"
-#     preds_rel = all_preds_data[preds_rel_idx[0]]
-
-#     preds_shape2_idx = df_trial.query(f"label=='{labels[3]}'").index.values
-#     assert len(preds_shape2_idx) == 1, f"len(preds_shape2_idx)={len(preds_shape2_idx)} for {labels[3]}"
-#     preds_shape2 = all_preds_data[preds_shape2_idx[0]]
-
-#     preds_color2_idx = df_trial.query(f"label=='{labels[4]}'").index.values
-#     assert len(preds_color2_idx) == 1, f"len(preds_color2_idx)={len(preds_color2_idx)} for {labels[4]}"
-#     preds_color2 = all_preds_data[preds_color2_idx[0]]
-
-#     return [preds_shape1, preds_color1, preds_rel, preds_shape2, preds_color2]
-
-
-# def add_present_or_absent_preds_one_trial(preds, props, preds_sub_by_presence, do_rel):
-#     """ take the predictions for a single trial
-#     and put them in the dict that stores all MEAN preds
-#     with this subjects, as a function of the property
-#     and whether it was present or absent in the sentence.
-#     """ 
-#     # preds of shape n_samples, n_properties: shape (0:3), then colors (3:6), then Relation (6:8).
-#     s1, c1, rel, s2, c2 = props
-#     preds_sub_by_presence["Shape1_present"].append(preds[:, 0:3][:, shapes.index(s1)].mean())
-#     preds_sub_by_presence["Colour1_present"].append(preds[:, 3:6][:, colors.index(c1)].mean())
-#     if do_rel:
-#         preds_sub_by_presence["Relation_present"].append(preds[:, 6::][:, relations.index(rel)].mean())
-#     preds_sub_by_presence["Shape2_present"].append(preds[:, 0:3][:, shapes.index(s2)].mean())
-#     preds_sub_by_presence["Colour2_present"].append(preds[:, 3:6][:, colors.index(c2)].mean())
-
-#     shapes_absent = [s for s in shapes if s not in [s1, s2]]
-#     colors_absent = [c for c in colors if c not in [c1, c2]]
-#     relation_absent = [r for r in relations if r != rel][0]
-#     for absent_shape in shapes_absent:
-#         preds_sub_by_presence["Shape1_absent"].append(preds[:, 0:3][:, shapes.index(absent_shape)].mean())
-#         preds_sub_by_presence["Shape2_absent"].append(preds[:, 0:3][:, shapes.index(absent_shape)].mean())
-#     for absent_color in colors_absent:
-#         preds_sub_by_presence["Colour1_absent"].append(preds[:, 3:6][:, colors.index(absent_color)].mean())
-#         preds_sub_by_presence["Colour2_absent"].append(preds[:, 3:6][:, colors.index(absent_color)].mean())
-#     if do_rel:
-#         preds_sub_by_presence['Relation_absent'].append(preds[:, 6::][:, relations.index(relation_absent)].mean())
-
-#     from ipdb import set_trace; set_trace()
-#     return preds_sub_by_presence
-
-
-# def add_present_or_absent_preds_one_trial_OLD(preds, props, preds_sub_by_presence):
-#     """ take the predictions for a single trial
-#     and put them in the dict that stores all MEAN preds
-#     with this subjects, as a function of the property
-#     and whether it was present or absent in the sentence.
-#     """ 
-#     s1, c1, rel, s2, c2 = props
-#     preds_sub_by_presence["Shape1_present"].append(preds[0][:, shapes.index(s1)].mean())
-#     preds_sub_by_presence["Colour1_present"].append(preds[1][:, colors.index(c1)].mean())
-#     preds_sub_by_presence["Relation_present"].append(preds[2][:, relations.index(rel)].mean())
-#     preds_sub_by_presence["Shape2_present"].append(preds[3][:, shapes.index(s2)].mean())
-#     preds_sub_by_presence["Colour2_present"].append(preds[4][:, colors.index(c2)].mean())
-
-#     shapes_absent = [s for s in shapes if s not in [s1, s2]]
-#     colors_absent = [c for c in colors if c not in [c1, c2]]
-#     relation_absent = [r for r in relations if r != rel][0]
-#     for absent_shape in shapes_absent:
-#         preds_sub_by_presence["Shape1_absent"].append(preds[0][:, shapes.index(absent_shape)].mean())
-#         preds_sub_by_presence["Shape2_absent"].append(preds[3][:, shapes.index(absent_shape)].mean())
-#     for absent_color in colors_absent:
-#         preds_sub_by_presence["Colour1_absent"].append(preds[1][:, colors.index(absent_color)].mean())
-#         preds_sub_by_presence["Colour2_absent"].append(preds[4][:, colors.index(absent_color)].mean())
-#     preds_sub_by_presence['Relation_absent'].append(preds[2][:, relations.index(relation_absent)].mean())
-
-#     return preds_sub_by_presence
-
-
-def get_present_or_absent_preds_one_trial(preds, props, do_rel):
-    """ take the predictions for a single trial
-    and returns them as 2 list of the 5 Properties
-    (Present and Absent), not averaged
-    """ 
-    # preds or shapes (0:3), then colors (3:6), then Relation (6:8).
-    s1, c1, rel, s2, c2 = props
-    Shape1_present = preds[:, 0:3][:, shapes.index(s1)]
-    Colour1_present = preds[:, 3:6][:, colors.index(c1)]
-    if do_rel:
-        Relation_present = preds[:, 6::][:, relations.index(rel)]
-    Shape2_present = preds[:, 0:3][:, shapes.index(s2)]
-    Colour2_present = preds[:, 3:6][:, colors.index(c2)]
-
-    shapes_absent = [s for s in shapes if s not in [s1, s2]]
-    colors_absent = [c for c in colors if c not in [c1, c2]]
-    relation_absent = [r for r in relations if r != rel][0]
-    Shape1_absent, Shape2_absent, Colour1_absent, Colour2_absent = [], [], [], []
-    for absent_shape in shapes_absent:
-        Shape1_absent.append(preds[:, 0:3][:, shapes.index(absent_shape)])
-        Shape2_absent.append(preds[:, 0:3][:, shapes.index(absent_shape)])
-    for absent_color in colors_absent:
-        Colour1_absent.append(preds[:, 3:6][:, colors.index(absent_color)])
-        Colour2_absent.append(preds[:, 3:6][:, colors.index(absent_color)])
-    if do_rel:
-        Relation_absent = [preds[:, 6::][:, relations.index(relation_absent)]] # cast to list, for consistency with other absents
-        return [Shape1_present, Colour1_present, Relation_present, Shape2_present, Colour2_present], [Shape1_absent, Colour1_absent, Relation_absent, Shape2_absent, Colour2_absent]
-    else:
-        return [Shape1_present, Colour1_present, Shape2_present, Colour2_present], [Shape1_absent, Colour1_absent, Shape2_absent, Colour2_absent]
-
-# def get_present_or_absent_preds_one_trial_OLD(preds, props):
+# def get_present_or_absent_preds_one_trial(preds, props, do_rel):
 #     """ take the predictions for a single trial
 #     and returns them as 2 list of the 5 Properties
 #     (Present and Absent), not averaged
 #     """ 
+#     # preds or shapes (0:3), then colors (3:6), then Relation (6:8).
 #     s1, c1, rel, s2, c2 = props
-#     Shape1_present = preds[0][:, shapes.index(s1)] #.mean()
-#     Colour1_present = preds[1][:, colors.index(c1)] #.mean()
-#     Relation_present = preds[2][:, relations.index(rel)] #.mean()
-#     Shape2_present = preds[3][:, shapes.index(s2)] #.mean()
-#     Colour2_present = preds[4][:, colors.index(c2)] #.mean()
+#     Shape1_present = preds[:, 0:3][:, shapes.index(s1)]
+#     Colour1_present = preds[:, 3:6][:, colors.index(c1)]
+#     if do_rel:
+#         Relation_present = preds[:, 6::][:, relations.index(rel)]
+#     Shape2_present = preds[:, 0:3][:, shapes.index(s2)]
+#     Colour2_present = preds[:, 3:6][:, colors.index(c2)]
 
 #     shapes_absent = [s for s in shapes if s not in [s1, s2]]
 #     colors_absent = [c for c in colors if c not in [c1, c2]]
 #     relation_absent = [r for r in relations if r != rel][0]
 #     Shape1_absent, Shape2_absent, Colour1_absent, Colour2_absent = [], [], [], []
 #     for absent_shape in shapes_absent:
-#         Shape1_absent.append(preds[0][:, shapes.index(absent_shape)]) #.mean())
-#         Shape2_absent.append(preds[3][:, shapes.index(absent_shape)]) #.mean())
+#         Shape1_absent.append(preds[:, 0:3][:, shapes.index(absent_shape)])
+#         Shape2_absent.append(preds[:, 0:3][:, shapes.index(absent_shape)])
 #     for absent_color in colors_absent:
-#         Colour1_absent.append(preds[1][:, colors.index(absent_color)]) #.mean())
-#         Colour2_absent.append(preds[4][:, colors.index(absent_color)]) #.mean())
-#     Relation_absent = [preds[2][:, relations.index(relation_absent)]] #.mean() # cast to list, for consistency with other absents
+#         Colour1_absent.append(preds[:, 3:6][:, colors.index(absent_color)])
+#         Colour2_absent.append(preds[:, 3:6][:, colors.index(absent_color)])
+#     if do_rel:
+#         Relation_absent = [preds[:, 6::][:, relations.index(relation_absent)]] # cast to list, for consistency with other absents
+#         return [Shape1_present, Colour1_present, Relation_present, Shape2_present, Colour2_present], [Shape1_absent, Colour1_absent, Relation_absent, Shape2_absent, Colour2_absent]
+#     else:
+#         return [Shape1_present, Colour1_present, Shape2_present, Colour2_present], [Shape1_absent, Colour1_absent, Shape2_absent, Colour2_absent]
 
-#     return [Shape1_present, Colour1_present, Relation_present, Shape2_present, Colour2_present], [Shape1_absent, Colour1_absent, Relation_absent, Shape2_absent, Colour2_absent]
+def words2props(words):
+    """ go from words ("triangle")
+    to properties ("Shape")
+    Keeping the number, if present 
+    ("triangle1" -> "Shape1")
+    """
+    properties = []
+    for word in words:
+        if word in shapes:
+            properties.append("Shape")
+        elif word in colors:
+            properties.append("Colour")
+        elif word[0:-1] in shapes:
+            properties.append("Shape" + word[-1])
+        elif word[0:-1] in colors:
+            properties.append("Colour" + word[-1])
+        elif word in relations:
+            properties.append("Relation")
+    return properties
 
-def update_present_or_absent_preds_one_trial(preds_sub_by_presence, present, absent, do_rel):
+
+def get_present_or_absent_preds_one_trial_v2(preds, props, do_rel):
+    """ take the predictions for a single trial
+    and returns them as 2 lists of arrays of shape (n_samples, n_states)
+    the length of the list depends on how many words were present or absent in this trial
+    Also return a list that says what is in the list of lists
+    order will always be S1, C1, R, S2, C2 BUT if S2 is absent (repeated S), then the 4th item will be C2 ... 
+    preds or shapes (0:3), then colors (3:6), then Relation (6:8).
+    """ 
+    s1, c1, rel, s2, c2 = props
+    present, absent = [], [] # probabilities
+    present_words, absent_words = [], [] # corresponding properties
+    present.append(preds[:, 0:3][:, shapes.index(s1)])
+    present_words.append(f"{s1}1")
+    present.append(preds[:, 3:6][:, colors.index(c1)])
+    present_words.append(f"{c1}1")
+    if do_rel:
+        present.append(preds[:, 6::][:, relations.index(rel)])
+        present_words.append(rel)
+    if s1 != s2:
+        present.append(preds[:, 0:3][:, shapes.index(s2)])
+        present_words.append(f"{s2}2")
+    if c1 != c2:
+        present.append(preds[:, 3:6][:, colors.index(c2)])
+        present_words.append(f"{c2}2")
+
+    absent_shapes = [s for s in shapes if s not in [s1, s2]]
+    absent_colors = [c for c in colors if c not in [c1, c2]]
+    relation_absent = [r for r in relations if r != rel][0]
+    absent.append(preds[:, 0:3][:, shapes.index(absent_shapes[0])])
+    absent_words.append(absent_shapes[0])
+    absent.append(preds[:, 3:6][:, colors.index(absent_colors[0])])
+    absent_words.append(absent_colors[0])
+    if do_rel:
+        absent.append(preds[:, 6::][:, relations.index(relation_absent)])
+        absent_words.append(relation_absent)
+    if len(absent_shapes) == 2:
+        absent.append(preds[:, 0:3][:, shapes.index(absent_shapes[1])])
+        absent_words.append(absent_shapes[1])
+    if len(absent_colors) == 2:
+        absent.append(preds[:, 3:6][:, colors.index(absent_colors[1])])
+        absent_words.append(absent_colors[1])
+
+    return present, absent, present_words, absent_words
+
+
+# def update_present_or_absent_preds_one_trial(preds_sub_by_presence, present, absent, do_rel):
+#     """ update the dict with preselected present
+#     and absent probabilities averaged over the window.
+#     """ 
+#     # preds of shape n_samples, n_properties: shape (0:3), then colors (3:6), then Relation (6:8).
+#     if do_rel:
+#         Shape1_present, Colour1_present, Relation_present, Shape2_present, Colour2_present = present
+#         # Shape1_absent, Colour1_absent, Relation_absent, Shape2_absent, Colour2_absent = absent
+#         Shape1_absent, Colour1_absent, Relation_absent = absent
+#     else:
+#         Shape1_present, Colour1_present, Shape2_present, Colour2_present = present
+#         # Shape1_absent, Colour1_absent, Shape2_absent, Colour2_absent = absent
+#         Shape1_absent, Colour1_absent = absent
+
+#     preds_sub_by_presence["Shape1_present"].append(Shape1_present)
+#     preds_sub_by_presence["Colour1_present"].append(Colour1_present)
+#     if do_rel:
+#         preds_sub_by_presence["Relation_present"].append(Relation_present)
+#     preds_sub_by_presence["Shape2_present"].append(Shape2_present)
+#     preds_sub_by_presence["Colour2_present"].append(Colour2_present)
+
+#     # for absent_shape in shapes_absent:
+#     preds_sub_by_presence["Shape1_absent"].append(Shape1_absent)
+#     # preds_sub_by_presence["Shape2_absent"].append(Shape2_absent)
+#     preds_sub_by_presence["Colour1_absent"].append(Colour1_absent)
+#     # preds_sub_by_presence["Colour2_absent"].append(Colour2_absent)
+#     if do_rel:
+#         preds_sub_by_presence['Relation_absent'].append(Relation_absent)
+#     return preds_sub_by_presence
+
+
+def update_present_or_absent_preds_one_trial_v2(ave_preds_sub_by_presence, present, absent, present_props, absent_props):
     """ update the dict with preselected present
     and absent probabilities averaged over the window.
     """ 
-    # preds of shape n_samples, n_properties: shape (0:3), then colors (3:6), then Relation (6:8).
-    if do_rel:
-        Shape1_present, Colour1_present, Relation_present, Shape2_present, Colour2_present = present
-        # Shape1_absent, Colour1_absent, Relation_absent, Shape2_absent, Colour2_absent = absent
-        Shape1_absent, Colour1_absent, Relation_absent = absent
-    else:
-        Shape1_present, Colour1_present, Shape2_present, Colour2_present = present
-        # Shape1_absent, Colour1_absent, Shape2_absent, Colour2_absent = absent
-        Shape1_absent, Colour1_absent = absent
-
-    preds_sub_by_presence["Shape1_present"].append(Shape1_present)
-    preds_sub_by_presence["Colour1_present"].append(Colour1_present)
-    if do_rel:
-        preds_sub_by_presence["Relation_present"].append(Relation_present)
-    preds_sub_by_presence["Shape2_present"].append(Shape2_present)
-    preds_sub_by_presence["Colour2_present"].append(Colour2_present)
-
-    # for absent_shape in shapes_absent:
-    preds_sub_by_presence["Shape1_absent"].append(Shape1_absent)
-    # preds_sub_by_presence["Shape2_absent"].append(Shape2_absent)
-    preds_sub_by_presence["Colour1_absent"].append(Colour1_absent)
-    # preds_sub_by_presence["Colour2_absent"].append(Colour2_absent)
-    if do_rel:
-        preds_sub_by_presence['Relation_absent'].append(Relation_absent)
-    return preds_sub_by_presence
+    for pres_prob, pres_prop in zip(present, present_props):
+        ave_preds_sub_by_presence[f"{pres_prop}_present"].append(pres_prob)
+    for abs_prob, abs_prop in zip(absent, absent_props):
+        ave_preds_sub_by_presence[f"{abs_prop}_absent"].append(abs_prob)
+    return ave_preds_sub_by_presence
 
 
-def update_behav_df(behav_df, sub, perf, RT, ave_present, ave_absent, props, do_rel):
+# def update_behav_df(behav_df, sub, perf, RT, ave_present, ave_absent, props):
+#     """ Update the longform df with all behavioral results
+#     """    
+#     for pres_prop, preds in zip(props, ave_present):
+#         behav_df["Subject"].append(sub)
+#         behav_df["Condition"].append("Present")
+#         behav_df["Property"].append(pres_prop)
+#         behav_df["Reactivation"].append(preds.mean())
+#         behav_df["Performance"].append(perf)
+#         behav_df["RT"].append(RT)
+#     for abs_prop, preds in zip(props, ave_absent):
+#         behav_df["Subject"].append(sub)
+#         behav_df["Condition"].append("Absent")
+#         behav_df["Property"].append(abs_prop)
+#         behav_df["Reactivation"].append(np.mean(preds))
+#         behav_df["Performance"].append(perf)
+#         behav_df["RT"].append(RT)
+#     for i, (prop, _) in enumerate(zip(props, ave_absent)): # fancy trick to iterate only to the length of ave_absent, which is shorter than present and props (no 2nd item)
+#         behav_df["Subject"].append(sub)
+#         behav_df["Condition"].append("Difference")
+#         behav_df["Property"].append(prop)
+#         behav_df["Reactivation"].append(np.mean(ave_present[i]) - np.mean(ave_absent[i]))
+#         behav_df["Performance"].append(perf)
+#         behav_df["RT"].append(RT)
+#     return behav_df
+
+
+def update_behav_df_v2(behav_df, sub, perf, RT, ave_present, ave_absent, present_props, absent_props):
     """ Update the longform df with all behavioral results
     """    
-    for pres_prop, preds in zip(props, ave_present):
+    for pres_prop, preds in zip(present_props, ave_present):
         behav_df["Subject"].append(sub)
         behav_df["Condition"].append("Present")
         behav_df["Property"].append(pres_prop)
         behav_df["Reactivation"].append(preds.mean())
         behav_df["Performance"].append(perf)
         behav_df["RT"].append(RT)
-    for abs_prop, preds in zip(props, ave_absent):
+    for abs_prop, preds in zip(absent_props, ave_absent):
         behav_df["Subject"].append(sub)
         behav_df["Condition"].append("Absent")
         behav_df["Property"].append(abs_prop)
         behav_df["Reactivation"].append(np.mean(preds))
         behav_df["Performance"].append(perf)
         behav_df["RT"].append(RT)
-    for i, (prop, _) in enumerate(zip(props, ave_absent)): # fancy trick to iterate only to the length of ave_absent, which is shorter than present and props (no 2nd item)
+    # # overall reactivation for behavioral prediction (single per trial) - meaningless with the relation
+    # behav_df["Subject"].append(sub)
+    # behav_df["Condition"].append("Overall Difference (with Relation)")
+    # behav_df["Property"].append("All with Rel")
+    # behav_df["Reactivation"].append(np.mean(ave_present) - np.mean(ave_absent))
+    # behav_df["Performance"].append(perf)
+    # behav_df["RT"].append(RT)
+    # overall but without the relation because chance level is different
+    if "Relation" in present_props:
+        ave_present.pop(present_props.index("Relation"))
+        ave_absent.pop(absent_props.index("Relation"))
         behav_df["Subject"].append(sub)
-        behav_df["Condition"].append("Difference")
-        behav_df["Property"].append(prop)
-        behav_df["Reactivation"].append(np.mean(ave_present[i]) - np.mean(ave_absent[i]))
+        behav_df["Condition"].append("Overall Difference")
+        behav_df["Property"].append("All")
+        behav_df["Reactivation"].append(np.mean(ave_present) - np.mean(ave_absent))
         behav_df["Performance"].append(perf)
         behav_df["RT"].append(RT)
+    # Cant do Difference because the number of present and absent do not always match (actually never matches: n_absent = 8 - n_present)
+    # for i, prop in enumerate(props):
+    #     behav_df["Subject"].append(sub)
+    #     behav_df["Condition"].append("Difference")
+    #     behav_df["Property"].append(prop)
+    #     behav_df["Reactivation"].append(np.mean(ave_present[i]) - np.mean(ave_absent[i]))
+    #     behav_df["Performance"].append(perf)
+    #     behav_df["RT"].append(RT)
     return behav_df
 
 
-def get_subj_ave_preds(preds_by_presence, ave_preds, props):
+# def get_subj_ave_preds(preds_by_presence_this_sub, ave_preds_all_subs, props):
+#     """ Updates the across subjects dict with the values
+#     for this subject
+#     """
+#     for prop in props:
+#         for presence in ['present', 'absent']:
+#             preds = preds_by_presence_this_sub[f"{prop}_{presence}"]
+#             ave_preds_all_subs[f"{prop}_{presence}"].append(np.nanmean(preds))
+#             if not len(preds): print(prop, presence)
+#     return ave_preds_all_subs
+
+def get_subj_ave_preds(preds_by_presence_this_sub, ave_preds_all_subs):
     """ Updates the across subjects dict with the values
     for this subject
     """
-    for prop in props:
-        for presence in ['present', 'absent']:
-            preds = preds_by_presence[f"{prop}_{presence}"]
-            ave_preds[f"{prop}_{presence}"].append(np.nanmean(preds))
-            if not len(preds): print(prop, presence)
-    return ave_preds
+    for prop in preds_by_presence_this_sub.keys():
+        preds = preds_by_presence_this_sub[prop]
+        ave_preds_all_subs[prop].append(np.nanmean(preds))
+        if not len(preds): print(prop, presence)
+    return ave_preds_all_subs
+
+# def restructure_data(present, absent, do_rel=True):
+#     """Converts present and absent lists into a single list of arrays with corresponding labels.
+#     NOT USED AFTER RESTRUCTURATION
+#     Args:
+#         present (list): List of (4 or) 5 arrays (n_samples, n_states) for present properties.
+#         absent (list): List of lists of 1 or 2 arrays (n_samples, n_states) for absent properties.
+#     Returns:
+#         all_arrays (list of np.ndarray): Flattened list of (n_samples, n_states) arrays.
+#         all_labels (list of tuples): Labels with (trial_idx, property, 'present'/'absent').
+#     """
+#     Props = Properties if do_rel else Properties[0:2] + Properties[3:5]
+#     all_arrays, all_labels = [], []
+#     for prop, arr in zip(Props, present): # Add present properties
+#         all_arrays.append(arr)
+#         all_labels.append((prop, "present"))
+#     for prop, sublist in zip(Props, absent): # Add absent properties (list of lists)
+#         for abs_idx, arr in enumerate(sublist):
+#             all_arrays.append(arr)
+#             all_labels.append((prop, "absent"))
+#     return all_arrays, all_labels
 
 
-def restructure_data(present, absent, do_rel=True):
-    """Converts present and absent lists into a single list of arrays with corresponding labels.
-    Args:
-        present (list): List of (4 or) 5 arrays (n_samples, n_states) for present properties.
-        absent (list): List of lists of 1 or 2 arrays (n_samples, n_states) for absent properties.
-    Returns:
-        all_arrays (list of np.ndarray): Flattened list of (n_samples, n_states) arrays.
-        all_labels (list of tuples): Labels with (trial_idx, property, 'present'/'absent').
-    """
-    Props = Properties if do_rel else Properties[0:2] + Properties[3:5]
-    all_arrays, all_labels = [], []
-    for prop, arr in zip(Props, present): # Add present properties
-        all_arrays.append(arr)
-        all_labels.append((prop, "present"))
-    for prop, sublist in zip(Props, absent): # Add absent properties (list of lists)
-        for abs_idx, arr in enumerate(sublist):
-            all_arrays.append(arr)
-            all_labels.append((prop, "absent"))
-    return all_arrays, all_labels
+# def remove_label_duplicates(preds, labels):
+#     """
+#     Removes one random occurrence of each duplicate entry in `labels`, 
+#     ensuring the same elements are removed from `preds`.
+
+#     Parameters:
+#     - labels (list of tuples): List containing (feature, state) pairs.
+#     - preds (list of numpy arrays): Corresponding prediction arrays.
+
+#     Returns:
+#     - filtered_labels (list of tuples): Labels with duplicates removed.
+#     - filtered_preds (list of numpy arrays): Corresponding predictions.
+#     """
+
+#     # Dictionary to track first occurrence of each label
+#     seen = {}
+#     # List to store duplicate index pairs
+#     duplicates = []
+
+#     # Identify duplicates
+#     for i, label in enumerate(labels):
+#         if label in seen:
+#             duplicates.append((seen[label], i))  # Store both indices of duplicate
+#         else:
+#             seen[label] = i  # Store first occurrence index
+
+#     # Randomly select one occurrence to remove for each duplicate pair
+#     indices_to_remove = set(choice(pair) for pair in duplicates)
+
+#     # Filter out the selected indices
+#     filtered_labels = [lbl for i, lbl in enumerate(labels) if i not in indices_to_remove]
+#     filtered_preds = [pred for i, pred in enumerate(preds) if i not in indices_to_remove]
+
+#     return filtered_preds, filtered_labels
 
 
-def remove_label_duplicates(preds, labels):
-    """
-    Removes one random occurrence of each duplicate entry in `labels`, 
-    ensuring the same elements are removed from `preds`.
+# def average_label_duplicates(preds, labels):
+#     """
+#     Merges duplicate entries in `labels` by averaging their corresponding `preds` values.
 
-    Parameters:
-    - labels (list of tuples): List containing (feature, state) pairs.
-    - preds (list of numpy arrays): Corresponding prediction arrays.
+#     Parameters:
+#     - labels (list of tuples): List containing (feature, state) pairs.
+#     - preds (list of numpy arrays): Corresponding prediction arrays.
 
-    Returns:
-    - filtered_labels (list of tuples): Labels with duplicates removed.
-    - filtered_preds (list of numpy arrays): Corresponding predictions.
-    """
+#     Returns:
+#     - merged_labels (list of tuples): Labels with duplicates merged.
+#     - merged_preds (list of numpy arrays): Predictions averaged for duplicate entries.
+#     """
 
-    # Dictionary to track first occurrence of each label
-    seen = {}
-    # List to store duplicate index pairs
-    duplicates = []
+#     label_dict = defaultdict(list)  # Dictionary to store predictions for each unique label
 
-    # Identify duplicates
-    for i, label in enumerate(labels):
-        if label in seen:
-            duplicates.append((seen[label], i))  # Store both indices of duplicate
-        else:
-            seen[label] = i  # Store first occurrence index
+#     # Group predictions by label
+#     for label, pred in zip(labels, preds):
+#         label_dict[label].append(pred)
 
-    # Randomly select one occurrence to remove for each duplicate pair
-    indices_to_remove = set(choice(pair) for pair in duplicates)
-
-    # Filter out the selected indices
-    filtered_labels = [lbl for i, lbl in enumerate(labels) if i not in indices_to_remove]
-    filtered_preds = [pred for i, pred in enumerate(preds) if i not in indices_to_remove]
-
-    return filtered_preds, filtered_labels
-
-
-def average_label_duplicates(preds, labels):
-    """
-    Merges duplicate entries in `labels` by averaging their corresponding `preds` values.
-
-    Parameters:
-    - labels (list of tuples): List containing (feature, state) pairs.
-    - preds (list of numpy arrays): Corresponding prediction arrays.
-
-    Returns:
-    - merged_labels (list of tuples): Labels with duplicates merged.
-    - merged_preds (list of numpy arrays): Predictions averaged for duplicate entries.
-    """
-
-    label_dict = defaultdict(list)  # Dictionary to store predictions for each unique label
-
-    # Group predictions by label
-    for label, pred in zip(labels, preds):
-        label_dict[label].append(pred)
-
-    # Compute the average prediction for each unique label
-    merged_labels = list(label_dict.keys())
-    merged_preds = [np.mean(np.stack(pred_list), axis=0) for pred_list in label_dict.values()]
-    return merged_preds, merged_labels
+#     # Compute the average prediction for each unique label
+#     merged_labels = list(label_dict.keys())
+#     merged_preds = [np.mean(np.stack(pred_list), axis=0) for pred_list in label_dict.values()]
+#     return merged_preds, merged_labels
 
 
 # This one or the next? zscore or just percentile? 
@@ -758,7 +777,42 @@ def compute_np_significance(all_sync_react_this_subject, NP1, NP2, all_states):
     return summary_metrics
 
 
-def plot_average_preds_seaborn(all_present, all_absent, out_fn, labels=["S1", "C1", "R", "S2", "C2"]):
+# def plot_average_preds_seaborn(all_present, all_absent, out_fn, labels=["S1", "C1", "R", "S2", "C2"]):
+#     """
+#     Bar plot of average predictions during the delay using Seaborn and statannotations.
+#     """
+#     # Prepare data for seaborn
+#     data = []
+#     for i, label in enumerate(labels):
+#         for val in all_present[i]:
+#             data.append([label, val, 'Present'])
+#         for val in all_absent[i]:
+#             data.append([label, val, 'Absent'])
+    
+#     df = pd.DataFrame(data, columns=['Category', 'Prediction', 'Condition'])
+    
+#     # Create plot
+#     plt.figure(figsize=(10, 6))
+#     ax = sns.barplot(data=df, x='Category', y='Prediction', hue='Condition', errorbar=('se', 1),
+#                      palette={'Present': 'skyblue', 'Absent': 'orange'})
+    
+#     # Perform statistical tests and annotate
+#     # pairs = [(label, label) for label in labels]
+#     pairs = [((label, 'Present'), (label, 'Absent')) for label in labels]
+#     annotator = Annotator(ax, pairs, data=df, x='Category', y='Prediction', hue='Condition')
+#     annotator.configure(test='t-test_ind', text_format='star', loc='outside', verbose=1)
+#     annotator.apply_and_annotate()
+    
+#     # Labels and legend
+#     plt.ylabel('Average Predictions')
+#     plt.legend(title='Condition')
+#     plt.tight_layout()
+    
+#     # Save and close
+#     plt.savefig(out_fn, dpi=400)
+#     plt.close()
+
+def plot_average_preds_seaborn(all_present, all_absent, labels, out_fn):
     """
     Bar plot of average predictions during the delay using Seaborn and statannotations.
     """
@@ -773,22 +827,20 @@ def plot_average_preds_seaborn(all_present, all_absent, out_fn, labels=["S1", "C
     df = pd.DataFrame(data, columns=['Category', 'Prediction', 'Condition'])
     
     # Create plot
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(10, 10))
     ax = sns.barplot(data=df, x='Category', y='Prediction', hue='Condition', errorbar=('se', 1),
                      palette={'Present': 'skyblue', 'Absent': 'orange'})
     
     # Perform statistical tests and annotate
     # pairs = [(label, label) for label in labels]
     pairs = [((label, 'Present'), (label, 'Absent')) for label in labels]
-    # p_values = [ttest_ind(all_present[i], all_absent[i], nan_policy='omit').pvalue for i in range(len(labels))]
     annotator = Annotator(ax, pairs, data=df, x='Category', y='Prediction', hue='Condition')
     annotator.configure(test='t-test_ind', text_format='star', loc='outside', verbose=1)
-    # annotator.set_pvalues(p_values)
-    # annotator.annotate()
     annotator.apply_and_annotate()
     
     # Labels and legend
     plt.ylabel('Average Predictions')
+    plt.xlabel('') # remove xlabel
     plt.legend(title='Condition')
     plt.tight_layout()
     
