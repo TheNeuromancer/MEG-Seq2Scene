@@ -6,6 +6,7 @@ do
 add() { n="$@"; bc <<< "${n// /+}"; }
 
 # for t in 0.17 0.2 0.3 0.4 0.5 0.6 0.8
+# for t in 0.2 0.4 0.6 0.8
 for t in 0.4
 do
 	c1t=$(add $t 0.6)
@@ -51,14 +52,23 @@ do
 # --test-cond 'two_objects' \
 # --test-query 'PropertyAll' --windows '3, 5' "
 
-echo "python 04_decoding_multiblock_ovr.py -w -s $sub --null_prop 0.1 --equalize_events --split_props --label PropAll$t \
+echo "python 04_decoding_multiblock_ovr.py -w -s $sub --split_props --null_prop 0.1 --label Prop$t \
+--train-conds 'two_objects' --train-conds 'localizer' --train-conds 'one_object' \
+--train-query 'Property' --windows '$t,$t' \
+--test-cond 'two_objects' \
+--test-query 'Property' --windows '3, 5' "
+
+echo "python 04_decoding_multiblock_ovr.py -w -s $sub --split_props --null_prop 0.1 --label PropAll$t \
 --train-conds 'two_objects' --train-conds 'localizer' --train-conds 'one_object' \
 --train-query 'PropertyAll' --windows '$t,$t' \
 --test-cond 'two_objects' \
 --test-query 'PropertyAll' --windows '3, 5' "
-# --train-conds 'one_object' 
-# --test-cond 'one_object' \
-# --test-query 'PropertyAll' --windows '1.5, 2.2' \
+
+echo "python 04_decoding_multiblock_ovr.py -w -s $sub --null_prop 0.1 --label WordPos$t \
+--train-conds 'two_objects' \
+--train-query 'WordPos' --windows '$t,$t' \
+--test-cond 'two_objects' \
+--test-query 'WordPos' --windows '3, 5' "
 
 done
 done

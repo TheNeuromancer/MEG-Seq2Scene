@@ -7,7 +7,7 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "43"
+    version: str = "41"
     # root_path: str = "/home/users/d/desborde/scratch/s2s"
     root_path: str = "/home/desborde/Documents/s2s/" if os.path.exists("/home/desborde/Documents/s2s/") \
                     else "/Users/polo/Documents/MEG-Seq2Scene/" if platform.system() == "Darwin" \
@@ -56,7 +56,7 @@ class Config:
     autoreject: bool = False
     xdawn: bool = False
     quality_th: float = 0 # .75
-    filter: str = "Perf==1" #"Perf==1"
+    filter: str = "" #"Perf==1"
     equalize_events: bool = False # True
     micro_ave: int = 0
     max_trials: int = 0 # maximum number of trials (after micro-averaging)

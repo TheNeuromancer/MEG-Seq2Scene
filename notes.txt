@@ -262,3 +262,35 @@ try looking for SL-SR (left-right) instead of first-second! If there is a specif
 
 
 Change the structure of the code? Have 2 lists, present and absent, of various length each, to take into account trials of all complexities. Then you need to find a way to keep only the trial with no bias for the coactivations. If there is a repeated word, then it should not count as coactivation with itself.
+-> works with a solve that gets the label of each props for each trial, not just the state nb. 
+-> seems good for the first NP, but near nothing for the second.
+Shapes never co-activate with other shapes. S1 can coactivate with C2, but not S2...
+Keeping the 2s is never good.
+
+v36: null_prop=0.1, LR = [100, 'l1', 'saga', 'balanced']
+v37: same with 500hz
+
+HUUUUGE problem with the way significant reactivation is computed. With the zscore or percentile per trial, we get THE EXACT SAME NUMBER OF REACTIVATION FOR EACH TRIAL. Trying with raw probs. Fixed threshold for all subject (or per subject?)
+
+Going back to Prop (not PropAll) because it makes the selection of significant probabilities for all trials (maybe all subjects) easier. 
+in v38
+Not great. Not off-diagonal coactivations. maybe one issue is that when shape is repeated, it is assigned to shape1, so there are much more of those.
+
+v39: filter with Perf=1: not better
+v40: cat5 (nofilter): slightly better
+v41: no cat, no filter, no_null, all subjects, multi times. PropAll but forgot to change the query. 
+v42: proper PropAll no cat, no filter, no_null, all subjects, multi times.
+
+Now, with the threshold, the reactivations are dominated by Relation. Make threshold separate for each prop? 
+Should the threshold be in common for shapes, or separate for each?
+
+Why zeros in subdiagonals in synchrnous ? We force diag to be zeros, but that should be it.
+
+Trying to normalize each property before running the whole analysis pipeline.
+
+add back the null trials because its weird to have no coactivations for the same prop. Ever. 
+
+v43: allsubs, null_prop=0.1, PropAll and WordPos, filter=1Perf. Woops. Overwrote 42.
+Run test on one_obj as well? 
+
+sub 23 et 27: flat predictions

@@ -170,6 +170,8 @@ def shorten_filename(fn):
     fn = fn.replace('Matching=nonmatch', 'nonmatch')
     fn = fn.replace('Flash=0', 'noflash')
     fn = fn.replace('Flash=1', 'flash')
+    fn = fn.replace('present', 'p')
+    fn = fn.replace('absent', 'a')
     
     # if fn is still too long, make some ugly changes
     if len(fn) > 255:

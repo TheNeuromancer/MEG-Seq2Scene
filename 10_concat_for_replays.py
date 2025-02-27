@@ -24,6 +24,7 @@ import warnings
 
 from utils.decod import *
 from utils.params import *
+from utils.replays import plot_reactivations
 
 matplotlib.rcParams.update({'font.size': 19})
 matplotlib.rcParams.update({'lines.linewidth': 2})
@@ -38,6 +39,7 @@ parser.add_argument('-o', '--out-dir', default='agg', help='output directory')
 parser.add_argument('-w', '--overwrite', action='store_true',  default=False, help='Whether to overwrite the output directory')
 parser.add_argument('-d', '--dont_recompute', action='store_true',  default=False, help='Whether to skip the aggregation phase, only works if we already saved the preds')
 parser.add_argument('-v', '--verbose', action='store_true',  default=False, help='Print more stuff')
+parser.add_argument('-p', '--plot', action='store_true',  default=False, help='Plot reactivations (takes longer)')
 parser.add_argument('--smooth_plot', default=0, type=int, help='Smoothing preds before plotting')
 args = parser.parse_args()
 
@@ -56,8 +58,10 @@ if args.subject in ["all", "v1", "v2",  "goods"]: # for v1 and v2 we filter late
 else:
     in_dir = f"{args.root_path}/Results/{decoding_dir}/{args.epochs_dir}/{args.subject}/"
 out_dir = f"{args.root_path}/Results/{decoding_dir}/{args.epochs_dir}/{args.subject}/{args.out_dir}/"
+out_dir_plots = f"{args.root_path}/Results/{decoding_dir}/{args.epochs_dir}/{args.subject}/plots/"
 print('\noutput files will be in: ' + out_dir)
 create_folder(out_dir, args.overwrite)
+create_folder(out_dir_plots, args.overwrite)
 
 dummy_class_enc = LabelEncoder()
 dummy_labbin = LabelBinarizer()
@@ -86,7 +90,7 @@ all_preds_data = []
 all_df = []
 for label in all_labels:
     if args.verbose: print(f"Doing {label}")
-    for train_cond in ["two_objects_localizer", "localizer", "obj", "scenes", "localizer_one_object_two_objects", "localizer_two_objects", "two_objects"]:
+    for train_cond in ["localizer_one_object_two_objects"]: # "two_objects_localizer", "localizer", "obj", "scenes", , "localizer_two_objects", "two_objects"
         for split_query in [False]: # no split query in replay decoding so far (but migh wanna include it later)
             for gen_cond in ["obj", "scenes"]: # "localizer", 
                 for train_time in train_times:
@@ -132,6 +136,24 @@ for label in all_labels:
                             all_preds_data.extend(preds.transpose(1,0,2))
 
                             all_df.append(md)
+
+                            # if "PropAll" in label and not preds.shape[2] > 6: # forget to change the query and the label together
+                            #     from ipdb import set_trace; set_trace()
+
+                            if args.plot and "Prop" in label: # plot random activations, last second only
+                                times = np.arange(0, 1.0001, 1/100)
+                                # threshold = 0.58
+                                if "PropAll" in label:
+                                    preds = preds[:,:,0:7]
+                                # do_rel = True if "PropAll" in label else False
+                                # do_rel = True if preds.shape[2] > 6 else False
+                                do_rel = False
+                                for i_trial in range(n_trials):
+                                    if np.random.rand() < 0.1:
+                                    # if np.any(preds[100::, i_trial] > threshold_per_subject[int(sub)]):
+                                        out_fn = f"{out_dir_plots}/{label}-{train_cond}-{train_time.replace('.', '')}-{gen_cond}-sub-{sub}-trial-{i_trial}_{'-'.join(md.loc[0, ['Shape1', 'Colour1', 'Shape2', 'Colour2']].values)}_activations.png"
+                                        plot_reactivations(times, preds[100::, i_trial].T, out_fn, threshold=np.mean(threshold_per_subject[int(sub)]), markevery=5, do_rel=do_rel)
+
 
 
                         if not len(all_preds_data): 

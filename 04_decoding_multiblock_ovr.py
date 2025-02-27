@@ -141,6 +141,12 @@ for cond in args.train_conds:
         epoC2.metadata["Property"] = epoC2.metadata["Colour2"]
         epoS2 = epoS2.shift_time(-1.8, relative=True)
         epoC2 = epoC2.shift_time(-2.4, relative=True)
+        if "WordPos" in args.label: # add word position
+            epoS1.metadata["WordPos"] = '1'
+            epoC1.metadata["WordPos"] = '2'
+            epoR.metadata["WordPos"] = '3'
+            epoS2.metadata["WordPos"] = '4'
+            epoC2.metadata["WordPos"] = '5'
         block_epo = [epoS1, epoC1, epoR, epoS2, epoC2]
     else:
         raise RuntimeError(f"Condition {cond} not recognized")
@@ -157,7 +163,10 @@ for cond in args.train_conds:
     
     for epo in block_epo: # print event counts
         print(f"\nLoaded {len(epo)} trials from {cond}") # Print trial count
-        trial_counts = epo.metadata["Property"].value_counts().to_dict()
+        if args.label == "WordPos":
+            trial_counts = epo.metadata["WordPos"].value_counts().to_dict()
+        else:
+            trial_counts = epo.metadata["Property"].value_counts().to_dict()
         print(trial_counts) 
 
 epochs = mne.concatenate_epochs(all_epochs)  # Merge all epochs
@@ -194,8 +203,9 @@ if args.dummy:
 else:
     # clf = LogisticRegression(C=1/0.006, solver='saga', class_weight='balanced', multi_class='auto', max_iter=1000000)
     # hyperparam optim found: [0.1, 'l1', 'liblinear', 'balanced']
-    clf = LogisticRegression(C=0.1, penalty='l1', solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000)
+    clf = LogisticRegression(C=100, penalty='l1', solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000)
     # clf = SVC(kernel='rbf', class_weight='balanced', max_iter=-1, C=1, gamma=0.001, probability=True, random_state=42)
+    print(clf)
 clf = OneVsRestClassifier(clf, n_jobs=1)
 
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')

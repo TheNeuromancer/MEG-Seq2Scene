@@ -7,20 +7,20 @@ class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "43"
+    version: str = "39"
     # root_path: str = "/home/users/d/desborde/scratch/s2s"
     root_path: str = "/home/desborde/Documents/s2s/" if os.path.exists("/home/desborde/Documents/s2s/") \
                     else "/Users/polo/Documents/MEG-Seq2Scene/" if platform.system() == "Darwin" \
                     else "/home/users/d/desborde/scratch/s2s/" # path for labpc, then macbook, then yggdrasil cluster 
     epochs_dir: str = "Epochs_100hz_nofilter"
-    # all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
-    #                        '08_ch180036', '09_jl190711', '10_ma200371', '12_mb160165', '13_lg170436', '14_eb180237', \
-    #                        '15_ar160084', '16_er123987', '17', '19', '21', '22', '24', '26', '28', '29', '30')
-                           # remove '23' because it is at chance on the hyperparam optim localizer + 25, 27, 11, 20 that are bad
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
-                           '08_ch180036', '09_jl190711', '10_ma200371', '11_rb210035', '12_mb160165', '13_lg170436', '14_eb180237', \
-                           '15_ar160084', '16_er123987', '17', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30') 
-                           # removed '18' because of missing data (it was there but Lorenzo couln't upload it)
+                           '08_ch180036', '09_jl190711', '10_ma200371', '12_mb160165', '13_lg170436', '14_eb180237', \
+                           '15_ar160084', '16_er123987', '17', '19', '21', '22', '24', '26', '28', '29', '30')
+                           # remove '23' because it is at chance on the hyperparam optim localizer + 25, 27, 11, 20 that are bad
+    # all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
+    #                        '08_ch180036', '09_jl190711', '10_ma200371', '11_rb210035', '12_mb160165', '13_lg170436', '14_eb180237', \
+    #                        '15_ar160084', '16_er123987', '17', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30') 
+    #                        # removed '18' because of missing data (it was there but Lorenzo couln't upload it)
 
     # Epochs preprocessing parameters
     baseline: bool = True # apply baseline correction if True
@@ -48,7 +48,7 @@ class Config:
     reduc_dim_sing: float = 0 # dimensionality reduction
     ## General analysis parameters
     cat: int = 0 # number of timepoints to concatenate
-    mean: bool = False # Wether to average instead of concatenate if using the "cat" argument
+    mean: bool = True # Wether to average instead of concatenate if using the "cat" argument
     smooth: int = 0 # hanning smoothing window, in timesample,
     clip: bool = True # Whether to clip to the 5th and 95th percentile for each channel
     subtract_evoked: bool = False # Whether to subtract the evoked signal from the epochs
