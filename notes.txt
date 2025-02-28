@@ -291,6 +291,12 @@ Trying to normalize each property before running the whole analysis pipeline.
 add back the null trials because its weird to have no coactivations for the same prop. Ever. 
 
 v43: allsubs, null_prop=0.1, PropAll and WordPos, filter=1Perf. Woops. Overwrote 42.
-Run test on one_obj as well? 
 
-sub 23 et 27: flat predictions
+Run test on one_obj as well? 
+make the function polyvalent, work for one word as well? 
+
+Removing '23' '27' '11_rb210035' that have super weird activations (LR failed to converge probably)
+
+v44: mean5 to get smoother reactivations. Removed bad subs. Filter Perf=1.
+Smooth is good. 
+Correlation between position and property? 

@@ -24,7 +24,7 @@ import warnings
 
 from utils.decod import *
 from utils.params import *
-from utils.replays import plot_reactivations
+from utils.replays import plot_reactivations, plot_word_position_reactivations
 
 matplotlib.rcParams.update({'font.size': 19})
 matplotlib.rcParams.update({'lines.linewidth': 2})
@@ -86,11 +86,12 @@ print(f"Found {len(all_fns)} preds files")
 preds_fn = f"{op.dirname(op.dirname(out_dir))}/all_preds.p"
 metadata_fn = f"{op.dirname(op.dirname(out_dir))}/all_metadata.p"
 all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns])
+print(f"Found labels {all_labels}")
 all_preds_data = []
 all_df = []
 for label in all_labels:
     if args.verbose: print(f"Doing {label}")
-    for train_cond in ["localizer_one_object_two_objects"]: # "two_objects_localizer", "localizer", "obj", "scenes", , "localizer_two_objects", "two_objects"
+    for train_cond in ["localizer_one_object_two_objects", "two_objects"]: # "two_objects_localizer", "localizer", "obj", "scenes", , "localizer_two_objects"
         for split_query in [False]: # no split query in replay decoding so far (but migh wanna include it later)
             for gen_cond in ["obj", "scenes"]: # "localizer", 
                 for train_time in train_times:
@@ -137,22 +138,31 @@ for label in all_labels:
 
                             all_df.append(md)
 
-                            # if "PropAll" in label and not preds.shape[2] > 6: # forget to change the query and the label together
-                            #     from ipdb import set_trace; set_trace()
-
-                            if args.plot and "Prop" in label: # plot random activations, last second only
-                                times = np.arange(0, 1.0001, 1/100)
-                                # threshold = 0.58
+                            
+                            np.random.seed(42) # same state to get the same trial number, that way we have the same Prop and WordPos 
+                            if args.plot: # plot random activations, last second only
+                                n_sec = 2 # number of second to plot (usually only the last one)
+                                times = np.arange(0, n_sec + 0.0001, 1/100)
+                                n_times_delay = 200 - (n_sec * 100) # when to start. 0 or 100 normally. 
                                 if "PropAll" in label:
                                     preds = preds[:,:,0:7]
                                 # do_rel = True if "PropAll" in label else False
                                 # do_rel = True if preds.shape[2] > 6 else False
                                 do_rel = False
                                 for i_trial in range(n_trials):
-                                    if np.random.rand() < 0.1:
-                                    # if np.any(preds[100::, i_trial] > threshold_per_subject[int(sub)]):
-                                        out_fn = f"{out_dir_plots}/{label}-{train_cond}-{train_time.replace('.', '')}-{gen_cond}-sub-{sub}-trial-{i_trial}_{'-'.join(md.loc[0, ['Shape1', 'Colour1', 'Shape2', 'Colour2']].values)}_activations.png"
-                                        plot_reactivations(times, preds[100::, i_trial].T, out_fn, threshold=np.mean(threshold_per_subject[int(sub)]), markevery=5, do_rel=do_rel)
+                                    if np.random.rand() < 0.05:
+                                        if md.loc[i_trial, "Perf"] == 0: continue # skip if there was an error 
+                                        if "Prop" in md.loc[i_trial, "label"]:
+                                            # if np.any(preds[100::, i_trial] > threshold_per_subject[int(sub)]):
+                                            title = ' '.join(md.loc[i_trial, ['Shape1', 'Colour1', 'Shape2', 'Colour2']].values)
+                                            out_fn = f"{out_dir_plots}/{label}-{train_cond}-{train_time.replace('.', '')}-{gen_cond}-sub-{sub}-trial-{i_trial}_activations.png"
+                                            plot_reactivations(times, preds[n_times_delay::, i_trial].T, out_fn, threshold=np.mean(threshold_per_subject[int(sub)]), title=title, markevery=5, do_rel=do_rel)
+                                                
+                                        elif "WordPos" in label:
+                                            out_fn = f"{out_dir_plots}/{label}-{train_cond}-{train_time.replace('.', '')}-{gen_cond}-sub-{sub}-trial-{i_trial}_activations_WordPos.png"
+                                            plot_word_position_reactivations(times, preds[n_times_delay::, i_trial].T, out_fn, threshold=0.4, markevery=5, title='')
+                                        else:
+                                            raise pwet
 
 
 
@@ -177,6 +187,6 @@ df.to_csv(f"{out_dir}/all_preds_data.csv", index=False)
 pickle.dump(all_preds_data, open(f"{out_dir}/all_preds_data.pkl", 'wb'))
 
 print(f"Used {df['sub'].nunique()} subjects)")
-
+print(f"Found {len(all_labels)} labels. Successfully loaded {df.label.nunique()} labels: {df.label.unique()}")
 
 print(f"ALL FINISHED, elpased time: {(time.time()-start_time)/60:.2f}min")

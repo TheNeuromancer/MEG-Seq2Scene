@@ -87,6 +87,9 @@ def words2props(words):
             properties.append("Colour" + word[-1])
         elif word in relations:
             properties.append("Relation")
+        else:
+            print(f"Unknown word: {word}")
+            from ipdb import set_trace; set_trace()
     return properties
 
 
@@ -170,6 +173,8 @@ def update_present_or_absent_preds_one_trial_v2(ave_preds_sub_by_presence, prese
     """ update the dict with preselected present
     and absent probabilities averaged over the window.
     """ 
+    assert len(present) == len(present_props), f"len(present)={len(present)}, len(present_props)={len(present_props)}"
+    assert len(absent) == len(absent_props), f"len(absent)={len(absent)}, len(absent_props)={len(absent_props)}"
     for pres_prob, pres_prop in zip(present, present_props):
         ave_preds_sub_by_presence[f"{pres_prop}_present"].append(pres_prob)
     for abs_prob, abs_prop in zip(absent, absent_props):
@@ -1651,12 +1656,16 @@ def combine_null_distributions_and_test(null_distributions, observed_values):
 
 
 
+# Reactivation plots
+def split_segments(indices):
+    """Helper function to split continuous segments."""
+    if len(indices) == 0:
+        return []
+    split_points = np.where(np.diff(indices) > 1)[0] + 1
+    return np.split(indices, split_points)
 
 
-
-
-
-def plot_reactivations(times, activations, out_fn, threshold=.58, markevery=10, do_rel=True):
+def plot_reactivations(times, activations, out_fn, threshold=.58, markevery=10, do_rel=True, title=''):
     """
     Generate the reactivation plot with the given activations and parameters.
     thin line below threshold, that become thicker or have markers above.
@@ -1675,13 +1684,6 @@ def plot_reactivations(times, activations, out_fn, threshold=.58, markevery=10, 
 
     font = {'size': 22}
     matplotlib.rc('font', **font)
-    
-    def split_segments(indices):
-        """Helper function to split continuous segments."""
-        if len(indices) == 0:
-            return []
-        split_points = np.where(np.diff(indices) > 1)[0] + 1
-        return np.split(indices, split_points)
     
     fig, ax = plt.subplots(figsize=(10, 6))
     
@@ -1737,11 +1739,55 @@ def plot_reactivations(times, activations, out_fn, threshold=.58, markevery=10, 
     ax.axhline(threshold, color="black", linestyle="dotted", alpha=0.5)
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Reactivations")
+    if title:
+        ax.set_title(title)
     plt.tight_layout()
-    plt.savefig(out_fn, dpi=600)
+    plt.savefig(out_fn, dpi=400)
     # plt.show()
     plt.close()
 
 
+def plot_word_position_reactivations(times, activations, out_fn, threshold=0.58, markevery=10, title=''):
+    """
+    Generate a reactivation plot with word position activations.
+    Thin line below threshold, thicker or marked line above.
+    
+    times: array of time points
+    activations: array of activations for each word position, n_positions * n_times
+    out_fn: output filename for saving the plot
+    threshold: activation threshold for highlighting reactivations
+    markevery: step size for marking above-threshold points
+    title: optional title for the plot
+    """
+    
+    # Word positions 1 to 5
+    word_positions = ["1st", "2nd", "3rd", "4th", "5th"]
+    position_markers = ["o", "s", "^", "D", "p"]  # Matching number of sides to position
+    position_markers = ["$1$", "$2$", "$3$", "$4$", "$5$"]  # Matching number of sides to position
+    position_colors = ["blue", "red", "green", "purple", "orange"]  # Different colors
+    
+    font = {'size': 22}
+    matplotlib.rc('font', **font)
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    for i in range(5):
+        ax.plot(times, activations[i], color=position_colors[i], linewidth=1.5, alpha=0.7)
+        
+        # Highlight points above the threshold
+        above_threshold_idx = np.where(activations[i] > threshold)[0]
+        ax.scatter(times[above_threshold_idx][::markevery], activations[i, above_threshold_idx][::markevery],
+                   color=position_colors[i], edgecolor='black', s=90, 
+                   marker=position_markers[i], label=f"{word_positions[i]} position")
+    
+    ax.axhline(threshold, color="black", linestyle="dotted", alpha=0.5)
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Reactivations")
+    # ax.legend(loc='upper left', bbox_to_anchor=(1, 1))
+    if title:
+        ax.set_title(title)
+    plt.tight_layout()
+    plt.savefig(out_fn, dpi=400)
+    plt.close()
 
 

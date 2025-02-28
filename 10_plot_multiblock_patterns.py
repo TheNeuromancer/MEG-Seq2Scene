@@ -130,7 +130,7 @@ def get_correlation_across_subjects(all_patterns):
     return correlation_matrix    
 
 
-def plot_correlation(correlations, out_fn, labels, vmin, vmax, vcenter=0):
+def plot_correlation(correlations, out_fn, labels, vmin, vmax, vcenter=0, x_rota=45):
     fig, ax = plt.subplots()
     # if vmin is None: vmin = np.min(correlations)
     # if vmax is None: vmax = np.max(correlations)
@@ -141,7 +141,7 @@ def plot_correlation(correlations, out_fn, labels, vmin, vmax, vcenter=0):
     ax.set_yticks(np.arange(len(correlations)))
     ax.set_xticklabels(labels)
     ax.set_yticklabels(labels)
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+    plt.setp(ax.get_xticklabels(), rotation=x_rota, ha="right", rotation_mode="anchor")
     plt.colorbar(im, label="Correlation")
     plt.tight_layout()
     plt.savefig(f'{out_fn}_correlations.png')
@@ -151,6 +151,8 @@ def get_labels(label):
         return shapes + colors + ["Rel"] #+ relations 
     elif "Prop" in label:
         return shapes + colors
+    elif "WordPos" in label:
+        return ["1", "2", "3", "4", "5"]
     else:
         raise ValueError(f"Unknown label {label}, should be Property")
 
@@ -164,7 +166,7 @@ if not args.already_saved:
     all_df = []
     for label in all_labels:
         if args.verbose: print(f"Doing {label}")
-        for train_cond in ["localizer_one_object_two_objects"]:
+        for train_cond in ["localizer_one_object_two_objects", "two_objects"]:
             for train_time in train_times:
                 if args.verbose: print(train_time)
                 all_patterns, all_filters = [], []
@@ -243,7 +245,7 @@ else: # if already saved, just load the data
     # df = pd.read_csv(f"{out_dir}/all_patterns.csv")
     raise NotImplementedError("Not implemented yet -- saving np.arrays in the df will not work, it fails at loading time")
 
-
+unique_labels = df.label.unique()
 for t in ["0.2", "0.3", "0.4", "0.6"]:
 
     # t_df = df.query(f"label=='Prop{t}'")
@@ -287,5 +289,22 @@ for t in ["0.2", "0.3", "0.4", "0.6"]:
         corr_mat_grad = get_correlation_across_subjects(concat_patterns[:,:,indices['grad']])
         out_fn_grad = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_PropAll_t{t}_grad"
         plot_correlation(corr_mat_grad, out_fn_grad, labels, vmin=vmin, vmax=vmax)
+
+
+        # Word positions
+        if f'WordPos{t}' in unique_labels:
+            grouped_patterns = np.stack(df.query(f"label=='WordPos{t}'")[patOrFilt].values) # already of shape n_subs * total n_classes * n_sensors
+            concat_patterns = grouped_patterns
+            n_subs = len(concat_patterns)
+            labels = get_labels("WordPos")
+            corr_mat_all = get_correlation_across_subjects(concat_patterns[:,:,indices['all']])
+            out_fn_all = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_WordPos_t{t}_all_ch"
+            plot_correlation(corr_mat_all, out_fn_all, labels, vmin=vmin, vmax=vmax, x_rota=0)
+            corr_mat_mag = get_correlation_across_subjects(concat_patterns[:,:,indices['mag']])
+            out_fn_mag = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_WordPos_t{t}_mag"
+            plot_correlation(corr_mat_mag, out_fn_mag, labels, vmin=vmin, vmax=vmax, x_rota=0)
+            corr_mat_grad = get_correlation_across_subjects(concat_patterns[:,:,indices['grad']])
+            out_fn_grad = f"{out_dir}/{patOrFilt}_{n_subs}ave_over_subjects_WordPos_t{t}_grad"
+            plot_correlation(corr_mat_grad, out_fn_grad, labels, vmin=vmin, vmax=vmax, x_rota=0)
 
 print(f"ALL FINISHED, elpased time: {(time.time()-start_time)/60:.2f}min")
