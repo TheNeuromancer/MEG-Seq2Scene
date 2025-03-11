@@ -17,7 +17,7 @@ from sklearn.preprocessing import StandardScaler, RobustScaler, label_binarize, 
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.linear_model import RidgeClassifier, RidgeClassifierCV, LogisticRegression, LogisticRegressionCV, LinearRegression, Ridge, RidgeCV
 from sklearn.svm import SVC, LinearSVC
-from sklearn.metrics import roc_auc_score, accuracy_score, confusion_matrix
+from sklearn.metrics import roc_auc_score, accuracy_score
 from sklearn.model_selection import KFold, StratifiedKFold, StratifiedShuffleSplit, permutation_test_score, GridSearchCV # StratifiedGroupKFold, 
 from sklearn.utils.extmath import softmax
 from sklearn.decomposition import PCA
@@ -28,8 +28,8 @@ from autoreject import AutoReject
 from mne.stats import permutation_cluster_1samp_test, fdr_correction
 from mne.decoding import UnsupervisedSpatialFilter
 
-# from pyriemann.estimation import Covariances, XdawnCovariances
-# from pyriemann.tangentspace import TangentSpace
+from pyriemann.estimation import Covariances, XdawnCovariances
+from pyriemann.tangentspace import TangentSpace
 
 
 # local import
@@ -224,13 +224,7 @@ def load_data(args, fn, query_1='', query_2='', crop_final=True):
     
 
 def get_class_queries(query):
-    if query == "WordPos":
-        class_queries = [f"WordPos=='{p}'" for p in [1,2,3,4,5]]
-    elif query == "Property": # any property, implemented last, for replay analysis
-        class_queries = [f"Property=='{s}'" for s in shapes] + [f"Property=='{c}'" for c in colors] # + [f"Property==\"{r}\"" for r in relations]
-    elif query == "PropertyAll": # any property, implemented last, for replay analysis
-        class_queries = [f"Property=='{s}'" for s in shapes] + [f"Property=='{c}'" for c in colors] + [f"Property==\"{r}\"" for r in relations]
-    elif query == "Colour1": 
+    if query == "Colour1": 
         class_queries = [f"Colour1=='{c}'" for c in colors]
     elif query == "Shape1":
         class_queries = [f"Shape1=='{s}'" for s in shapes]
@@ -244,22 +238,8 @@ def get_class_queries(query):
         class_queries = [f"Loc_word=='{c}'" for c in colors]
     elif query == "Loc_word":
         class_queries = [f"Loc_word=='{c}'" for c in colors] + [f"Loc_word=='{s}'" for s in shapes]
-    elif query == "Loc_image":
-        class_queries = [f"Loc_word=='img_{c}'" for c in colors] + [f"Loc_word=='img_{s}'" for s in shapes]
-    elif query == "Loc_Cat_word":
-        class_queries = [f"Loc_word in {colors}", f"Loc_word in {shapes}"]
-    elif query == "Loc_Cat_image":
-        class_queries = [f"Loc_word in {img_colors}", f"Loc_word in {img_shapes}"]
-    elif query == "Loc_crossColour":
-        class_queries = [f"Loc_word=='{c}' or Loc_word=='img_{c}'" for c in colors]
-    elif query == "Loc_crossShape":
-        class_queries = [f"Loc_word=='{s}' or  Loc_word=='img_{s}'" for s in shapes]
     elif query == "Loc_all":
         class_queries = [f"Loc_word=='{c}' or Loc_word=='img_{c}'" for c in colors] + [f"Loc_word=='{s}' or  Loc_word=='img_{s}'" for s in shapes]
-    elif query == "Loc_image_shape":
-        class_queries = [f"Loc_word=='img_{s}'" for s in shapes]
-    elif query == "Loc_image_colour":
-        class_queries = [f"Loc_word=='img_{c}'" for c in colors]
     # elif query == "XColour1": 
     #     class_queries = [f"Colour1=='{c}' and Colour2!='{c}'" for c in colors]
     # elif query == "XShape1":
@@ -556,7 +536,7 @@ def decode_window(args, clf, epochs, class_queries, trials_per_sub=None):
     """ train single decoder for the whole time of the epochs
         class_queries: list of strings, pandas queries to get each class
     """
-    X, y, groups, test_split_query_indices, _ = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     n_trials = len(X)
     if not args.riemann: # pyriemann.Covariances takes same shape as epochs.get_data()
         X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
@@ -577,7 +557,7 @@ def decode_window(args, clf, epochs, class_queries, trials_per_sub=None):
         cv = get_cv(args.train_cond, args.crossval_win, args.n_folds_win)
     n_folds = 2 if args.dummy else args.n_folds_win
     
-    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     print(X.shape)
@@ -632,7 +612,7 @@ def test_decode_window(args, epochs, class_queries, trained_models, trials_per_s
         class_queries: list of strings, pandas queries to get each class
         trained_models: list of sklearn estimators, one for each class
     """
-    X, y, groups, test_split_query_indices, _ = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     n_trials = len(X)
     if not args.riemann:
         X = X.reshape((n_trials,-1)) # concatenate timepoint of the window
@@ -643,7 +623,7 @@ def test_decode_window(args, epochs, class_queries, trained_models, trials_per_s
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
     
-    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     if args.micro_ave_win:
@@ -669,7 +649,7 @@ def test_decode_window(args, epochs, class_queries, trained_models, trials_per_s
         accuracy += accuracy_score(y, preds.argmax(1)) / n_folds
     # ## AVERAGE PREDICTIONS OR PERFORMANCE? usually perf is better (for training at least)
     # all_folds_preds.append(y_pred)
-    # mean_fold_pred = np.nanmean(all_folds_preds, 0)
+    # mean_fold_pred = np.mean(all_folds_preds, 0)
     # AUC[t, tgen] = roc_auc_score(y_true=y, y_score=mean_fold_pred, multi_class='ovr')                
 
     print(f'test AUC: {AUC:.3f}')
@@ -683,14 +663,14 @@ def test_decode_sliding_window(args, epochs, class_queries, trained_models, nb_c
         class_queries: list of strings, pandas queries to get each class
         trained_models: list of sklearn estimators, one for each class
     """
-    X, y, groups, test_split_query_indices, _ = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     n_times = X.shape[2]
     X = win_ave_smooth(X, nb_cat, mean=False)[0]
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
     
-    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     if args.micro_ave_win:
@@ -730,7 +710,7 @@ def decode_ovr(args, clf, epochs, class_queries):
     n_times = len(epochs.times)
     if args.equalize_events:
         epochs = equalize_events_single_epo(epochs, class_queries)
-    X, y, groups, test_split_query_indices, _ = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    X, y, groups, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
@@ -752,7 +732,7 @@ def decode_ovr(args, clf, epochs, class_queries):
         cv = get_cv(args.train_cond, args.crossval, args.n_folds)
     n_folds = 2 if args.dummy else args.n_folds
 
-    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     if args.reduc_dim:
@@ -766,8 +746,7 @@ def decode_ovr(args, clf, epochs, class_queries):
     all_models = []
     if args.timegen:
         AUC = np.zeros((n_times, n_times))
-        all_confusions = np.zeros((n_times, n_times, n_classes, n_classes)) # full confusion matrix
-        all_preds = np.zeros((n_times, len(y), n_classes)) # raw predictions (for within-time only)
+        all_confusions = []
         for t in trange(n_times):
             all_models.append([])
             for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
@@ -787,14 +766,11 @@ def decode_ovr(args, clf, epochs, class_queries):
                 all_models[-1].append(deepcopy(pipeline))
                 for tgen in range(n_times):
                     preds = predict(pipeline, X_test[:,:,tgen], multiclass=True)
+                    preds = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
+                    if n_classes == 2: preds = preds[:,1] # not a proper OVR object, needs different method
                     if np.any(np.isnan(preds)):
                         print(f"nan in preds, probably due to lack of convergence of classifier, moving to next fold")
                         continue
-                    preds = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
-                    # the confusion needs a shape (n_trials * n_classes), always, but the AUC needs only n_trials in case of 2 classes, so we put the reshaping afterwards
-                    all_confusions[t, tgen] += confusion_matrix(y_test, preds.argmax(1), normalize='all') / n_folds
-                    if t == tgen: all_preds[t, test] = preds # within-time
-                    if n_classes == 2: preds = preds[:,1] # not a proper OVR object, needs different method
                     AUC[t, tgen] += roc_auc_score(y_true=y_test, y_score=preds, multi_class='ovr', average='weighted') / n_folds
                     # if not n_classes == 2: # then single set of probabilities...
                     #     accuracy[t, tgen] += accuracy_score(y[test], preds.argmax(1)) / n_folds
@@ -829,8 +805,6 @@ def decode_ovr(args, clf, epochs, class_queries):
         if test_split_query_indices: AUC_test_query_split = AUC_test_query_split / AUC_test_query_counts # replace division by n_folds because for many cases we don't have correct test indices in each fold.
     else:
         AUC = np.zeros(n_times)
-        all_confusions = np.zeros((n_times, n_classes, n_classes)) # full confusion matrix
-        all_preds = np.zeros((n_times, len(y), n_classes)) # raw predictions
         for t in trange(n_times):
             all_models.append([])
             for train, test in cv.split(X, y, groups=groups): # groups is ignored for non-groupedKFold
@@ -839,9 +813,7 @@ def decode_ovr(args, clf, epochs, class_queries):
                 preds = predict(pipeline, X[test, :, t], multiclass=True)
                 preds = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
                 if n_classes == 2: preds = preds[:,1] # not a proper OVR object, needs different method
-                all_confusions[t] += confusion_matrix(y[test], preds.argmax(1), normalize='all') / n_folds
                 AUC[t] += roc_auc_score(y_true=y[test], y_score=preds, multi_class='ovr', average='weighted') / args.n_folds
-                all_preds[t, test] = preds
 
     # put the pipeline object in an array without unpacking them
     all_models_array = np.empty((len(all_models), len(all_models[0])), dtype=object)
@@ -849,20 +821,20 @@ def decode_ovr(args, clf, epochs, class_queries):
 
     print(f'mean training AUC: {AUC.mean():.3f}')
     print(f'max training AUC: {AUC.max():.3f}')
-    return AUC, accuracy, all_preds, all_confusions, all_models_array, AUC_test_query_split
+    return AUC, accuracy, all_models_array, AUC_test_query_split
 
 
 def test_decode_ovr(args, epochs, class_queries, all_models):
     n_times_test = len(epochs.times)
     n_times_train, n_folds = all_models.shape
 
-    X, y, _, test_split_query_indices, mds = get_X_y_from_queries(epochs, class_queries, args.split_queries)
+    X, y, _, test_split_query_indices = get_X_y_from_queries(epochs, class_queries, args.split_queries)
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     if n_classes < 2:
         raise RuntimeError(f"did not find enough classes for queries {class_queries} and subjects {args.subject}")
 
-    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     if args.micro_ave:
@@ -879,11 +851,7 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
     if args.timegen:
         AUC_test_query_split = np.full((n_times_train, n_times_test, len(test_split_query_indices)), np.nan) if test_split_query_indices else None    
         AUC = np.zeros((n_times_train, n_times_test))
-        # accuracy = np.zeros((n_times_train, n_times_test))
-        accuracy = None
-        all_confusions = np.zeros((n_times_train, n_times_test, n_classes, n_classes)) # full confusion matrix
-        # all_preds = np.zeros((n_times_train, n_times_test, len(y), n_classes))
-        all_preds = None # Not saving pred for timegen. Takes too much memory and probabky not usefull
+        accuracy = np.zeros((n_times_train, n_times_test))
         for tgen in trange(n_times_test):
             t_data = X_test[:, :, tgen]
             for t in range(n_times_train):
@@ -893,9 +861,7 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                     preds = predict(pipeline, t_data, multiclass=True)
                     y_pred = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
                     all_folds_preds.append(y_pred)
-                mean_fold_pred = np.nanmean(all_folds_preds, 0)
-                all_confusions[t, tgen] += confusion_matrix(y_test, mean_fold_pred.argmax(1), normalize='all')
-                # all_preds[t, tgen] = mean_fold_pred
+                mean_fold_pred = np.mean(all_folds_preds, 0)
                 if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
                 AUC[t, tgen] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
                 # accuracy[t, tgen] = accuracy_score(y, mean_fold_pred.argmax(1)) # dim error when n_classes = 2
@@ -916,140 +882,12 @@ def test_decode_ovr(args, epochs, class_queries, all_models):
                         mean_folds_preds_query = np.mean(all_folds_preds_query, 0)
                         AUC_test_query_split[t, tgen, i_query] = roc_auc_score(y_true=y_test_query, y_score=mean_folds_preds_query, multi_class='ovr')
     else:
-        if (n_times_test == n_times_train) or (n_times_train == 1): # diagonal generalization needs same time window, or a single trained decoder
-            AUC_test_query_split = None
-            AUC = np.zeros(n_times_test)
-            # accuracy = np.zeros(n_times_test)
-            accuracy = None
-            all_confusions = np.zeros((n_times_test, n_classes, n_classes))
-            all_preds = np.zeros((n_times_test, len(y), n_classes))
-            for t in trange(n_times_test):
-                t_data = X_test[:, :, t]
-                t_model = 0 if n_times_train == 1 else t # in case of single tp 
-                all_folds_preds = []
-                for i_fold in range(n_folds):
-                    pipeline = all_models[t_model][i_fold]
-                    preds = predict(pipeline, t_data, multiclass=True)
-                    y_pred = preds if preds.ndim == 2 else onehotenc.transform(preds.reshape((-1,1)))
-                    all_folds_preds.append(y_pred)
-                mean_fold_pred = np.nanmean(all_folds_preds, 0)
-                if np.sum(np.isnan(mean_fold_pred)) > 0:
-                    print(f"nan in preds (averaged over folds, or from the single clf if single tp decoding). Replaceing nans with equal probabilities, but it's weird.")
-                    mean_fold_pred[np.isnan(mean_fold_pred)] = 1/n_classes
-                all_confusions[t] += confusion_matrix(y_test, mean_fold_pred.argmax(1), normalize='all')
-                all_preds[t] = mean_fold_pred
-                if n_classes == 2: mean_fold_pred = mean_fold_pred[:,1] # not a proper OVR object, needs different method
-                AUC[t] = roc_auc_score(y_true=y_test, y_score=mean_fold_pred, multi_class='ovr')
-                # accuracy[t] = accuracy_score(y, mean_fold_pred.argmax(1)) # dim error when n_classes = 2
-        else:
-            raise NotImplementedError("Diagonal generalization is ill-defined for different n_times_train and n_times_test")
+        raise NotImplementedError
     print(f'mean test AUC: {AUC.mean():.3f}')
     print(f'max test AUC: {AUC.max():.3f}')
 
-    return AUC, accuracy, all_preds, all_confusions, AUC_test_query_split, mds
+    return AUC, accuracy, AUC_test_query_split
 
-
-def decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null):
-    """ X: n_trials, n_sensors, n_times=1
-        y: n_trials
-        class_queries: list of strings, pandas queries to get each class
-        dat_null: array of null data to add to the training as negative classes
-    """
-    n_times = len(epochs.times)
-    assert n_times == 1
-    if args.equalize_events:
-        epochs = equalize_events_single_epo(epochs, class_queries)
-    X, y, groups, test_split_query_indices, mds = get_X_y_from_queries(epochs, class_queries, args.split_queries)
-    X = X.squeeze()
-    classes, counts = np.unique(y, return_counts=True)
-    n_classes = len(classes)
-    print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
-    if args.null_prop: 
-        n_null = int(len(X) * 2 * args.null_prop)
-        print(f"Adding fixation period negative trials, {2*args.null_prop*100}% compared to normal trials, ie: {n_null}")
-        if n_null > len(dat_null):
-            print(f"not enough null trials ({len(dat_null)}) to match the null proportion ({args.null_prop}), using {len(dat_null)}")
-            n_null = len(dat_null)
-        dat_null = dat_null[np.random.choice(len(dat_null), n_null, replace=False)]
-        X = np.concatenate([X, dat_null])
-        y = np.concatenate([y, n_classes * np.ones(n_null)]) # assign a new class for null trials
-
-    for split_indices, split_query in zip(test_split_query_indices, args.split_queries):
-        print(f"Split query {split_query}, {len(split_indices)} trials")
-    if n_classes < 2:
-        raise RuntimeError(f"did not find enough classes for queries {class_queries} and subjects {args.subject}")
-    if args.micro_ave: 
-        print(f"Using extensive trial micro-averaging. Expecting {int(np.sum([c*(c-1)/2 for c in counts]))} trials instead of {counts.sum()}")
-        if args.max_trials: print(f"Also keeping a maximum of {args.max_trials} after micro-averaging")
-
-    if args.reduc_dim:
-        pipeline = make_pipeline(RobustScaler(), PCA(args.reduc_dim), clf)
-    else:
-        pipeline = make_pipeline(RobustScaler(), clf)
-
-    pipeline.fit(X, y)
-
-    if args.null_prop > 0: # remove the null trial classifier from the OVR object
-        null_idx = np.where(pipeline[-1].classes_ == n_classes)[0][0] # Identify the null class index
-        # Remove the null class classifier and update the classes
-        pipeline[-1].estimators_ = [clf for i, clf in enumerate(pipeline[-1].estimators_) if i != null_idx]
-        pipeline[-1].classes_ = np.delete(pipeline[-1].classes_, null_idx)
-    
-    patterns, filters = [], [] # final shape: n_classes * n_sensors
-    if hasattr(pipeline[-1].estimators_[0], "coef_"): # SVC-rbf does not have linear weights
-        if n_classes > 2:
-            for i in range(n_classes):
-                filters.append(pipeline[-1].estimators_[i].coef_)
-                patterns.append(filters2patterns(filters[-1], X, y))
-        else: # 2 classes, not a true OVR then there is a single pattern
-            filters.append(pipeline[-1].estimators_[0].coef_)
-            patterns.append(filters2patterns(filters[-1], X, y))
-    patterns, filters = np.array(patterns).squeeze(), np.array(filters).squeeze()
-
-    # put the pipeline object in an array without unpacking them
-    all_models_array = np.empty((1, 1), dtype=object)
-    all_models_array[:] = [[pipeline]] # n_times=1, n_folds=1
-
-    return all_models_array, patterns, filters, mds
-
-
-def test_decode_ovr_single_tp(args, epochs, all_models):
-    n_times_test = len(epochs.times)
-    n_times_train, n_folds = all_models.shape # 1 and 1 
-    assert n_times_train==1 and n_folds==1, "Single timepoint decoding should have only one model"
-
-    mds = epochs.metadata
-    X = epochs.get_data()
-    print(f"Using {len(X)} test trials")
-
-    if args.micro_ave:
-        # raise NotImplementedError("Micro-averaging not implemented for single timepoint decoding - it would average out the reactivations!")
-        print("Micro-averaging not implemented for single timepoint decoding - it would average out the reactivations! Doing test without micro averaging")
-    pipeline = all_models[0][0] # first training tp, first fold (only one in each case)
-    n_classes = len(pipeline.classes_)
-    all_preds = np.zeros((n_times_test, len(X), n_classes))
-    for t in trange(n_times_test):
-        t_data = X[:, :, t]
-        preds = predict(pipeline, t_data, multiclass=True)
-        if np.sum(np.isnan(preds)) > 0:
-            print(f"nan in preds (averaged over folds, or from the single clf if single tp decoding). Replaceing nans with equal probabilities, but it's weird.")
-            preds[np.isnan(preds)] = 1/n_classes
-        all_preds[t] = preds
-    
-    return all_preds, mds
-
-
-def filters2patterns(filters, X, y):
-    """ Goes from a decoder's filters to patterns, 
-    ie by multipyling with the data covariance matrix. 
-    """
-    # Computes patterns using Haufe's trick: A = Cov_X . W . Precision_Y
-    inv_Y = 1.0
-    X = X - X.mean(0, keepdims=True)
-    if y.ndim == 2 and y.shape[1] != 1:
-        y = y - y.mean(0, keepdims=True)
-        inv_Y = np.linalg.pinv(np.cov(y.T))
-    return np.cov(X.T).dot(filters.T.dot(inv_Y)).T
 
 
 def decode_single_ch_ovr(args, clf, epochs, class_queries):
@@ -1075,7 +913,7 @@ def decode_single_ch_ovr(args, clf, epochs, class_queries):
     else:
         cv = get_cv(args.train_cond, args.crossval, args.n_folds)
 
-    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     if args.reduc_dim_sing:
@@ -1113,7 +951,7 @@ def test_decode_single_ch_ovr(args, epochs, class_queries, all_models):
     classes, counts = np.unique(y, return_counts=True)
     n_classes = len(classes)
     print(f"n_classes: {n_classes}, classes: {classes}, counts: {counts}")
-    onehotenc = OneHotEncoder(sparse_output=False, categories='auto')
+    onehotenc = OneHotEncoder(sparse=False, categories='auto')
     onehotenc = onehotenc.fit(np.arange(n_classes).reshape(-1,1))
 
     AUC = np.zeros(nchan)
@@ -1129,7 +967,7 @@ def test_decode_single_ch_ovr(args, epochs, class_queries, all_models):
             else:
                 preds = onehotenc.transform(preds.reshape((-1,1)))
             all_folds_preds.append(preds)
-        mean_fold_pred = np.nanmean(all_folds_preds, 0)
+        mean_fold_pred = np.mean(all_folds_preds, 0)
         AUC[ch] = roc_auc_score(y_true=y, y_score=mean_fold_pred, multi_class='ovr')
         accuracy[ch] = accuracy_score(y, mean_fold_pred.argmax(1))
     print(f'mean AUC: {AUC.mean():.3f}')
@@ -1194,6 +1032,7 @@ def regression_decode(args, epochs, class_queries, clf):
                             R_test_query_split[t, tgen, i_query] += pearsonr(pred, y[test_query])[0]
                             R_test_query_counts[t, tgen, i_query] += 1 # keep track of the number of AUC computed (should = n_folds)
         if test_split_query_indices: R_test_query_split = R_test_query_split / R_test_query_counts # replace division by n_folds because for many cases we don't have correct test indices in each fold.
+                    # from ipdb import set_trace; set_trace()
     print(f'mean trainning R: {R.mean():.3f}')
     print(f'max trainning R: {R.max():.3f}')
     # put the pipeline object in an array without unpacking them
@@ -1284,17 +1123,15 @@ def regression_decode(args, epochs, class_queries, clf):
 # ///////////////////////////////////////////////////////// #
 
 
-def save_results(out_fn, results, time=True, all_models=None, mds=None, fn_end="AUC"):
+def save_results(out_fn, results, time=True, all_models=None, fn_end="AUC"):
     """ Generic results saving to .npy func """
-    print(f'Saving {fn_end} results')
+    print('Saving results')
     if results.ndim > 1 or not time:
         np.save(f"{out_fn}_{fn_end}.npy", results)
     else:
         np.save(f"{out_fn}_{fn_end}_diag.npy", results)
     if all_models:
         pickle.dump(all_models, open(out_fn + '_all_models.p', 'wb'))
-    if mds is not None:
-        mds.to_csv(out_fn + '_metadata.csv')
     return
 
 def save_best_pattern(out_fn, AUC, all_models):
@@ -1692,7 +1529,7 @@ def add_sent_on_top(ax, word_onsets, image_onset, sent_type='scenes', fontsize=2
     secax_x = ax.secondary_xaxis('top', functions=(lambda x: x, lambda x: x))
     secax_x.set_xticks(word_onsets + image_onset)
     xtickslabels = sentence_examples[sent_type][0] # corresponding ticks
-    secax_x.set_xticklabels(xtickslabels, fontdict={'fontsize': fontsize}, rotation="vertical", ha="left", va="baseline")  # , rotation="45"
+    secax_x.set_xticklabels(xtickslabels, fontdict={'fontsize': fontsize}, rotation="45", ha="left", va="baseline")  
     ## Image
     img_caracs = sentence_examples[sent_type][1]
     ax_img_onset = ax.transLimits.transform((image_onset[0], 0))[0] # self.transLimits is the transformation that takes you from data to axes coordinates
@@ -1822,6 +1659,8 @@ def joyplot_with_stats(data_dict, times, out_fn, tmin=-.5, tmax=8, labels=['S1',
         axes[i].text(-0.02, .55, back2fullname(k.split("_")[0]), ha='center', va='center', transform=axes[i].transAxes, fontsize=title_fsz)
         # back2fullname(k.split("_")[0])
         # axes[i].set_title(back2fullname(k.split("_")[0]), loc='left')
+        
+        # from ipdb import set_trace; set_trace()
 
         # cosmetics
         axes[i].set_xlim(tmin, tmax)
@@ -2024,7 +1863,6 @@ def get_X_y_from_queries(epochs, class_queries, split_queries):
     """ get X and y for decoding based on 
     an epochs object and a list of queries (for OVR)
     also returns split queries indices
-    groups will be None except when there is a split query
     """
     md = epochs.metadata
     X, y, groups = [], [], []
@@ -2033,7 +1871,7 @@ def get_X_y_from_queries(epochs, class_queries, split_queries):
         if not len(md.query(class_query)):
             print(f"!! did not find any trial for query {class_query} !!")
         X.extend(epochs[class_query].get_data())
-        y.extend([i for _ in range(len(md.query(class_query)))])
+        y.extend([i for qwe in range(len(md.query(class_query)))])
         mds_for_split.append(md.query(class_query))
         # rely on the indices in the metadata to get groups. Only useful to split scene trials 
         groups.extend(md.query(class_query).index.values)
@@ -2042,8 +1880,7 @@ def get_X_y_from_queries(epochs, class_queries, split_queries):
     for split_query in split_queries:
         test_split_query_indices.append(md_for_split.query(split_query).index.values)
     X, y = np.array(X), np.array(y)
-    if not split_queries: groups = None # otherwise we get an annoying warning
-    return X, y, groups, test_split_query_indices, md_for_split
+    return X, y, groups, test_split_query_indices
 
 
 def get_X_y_for_correlation(args, epochs, subsample_nonmatched):

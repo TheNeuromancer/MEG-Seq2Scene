@@ -38,8 +38,6 @@ parser.add_argument('--split-queries', action='append', default=[], help='Metada
 parser.add_argument('--equalize_split_events', action='store_true', default=None, help='subsample majority event classes IN EACH SPLIT QUERY to get same number of trials as the minority class')
 parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
 parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
-# parser.add_argument('--add_null', action='store_true',  default=False, help='Whether to add fixation period "null" trials')
-parser.add_argument('--null_prop', type=float,  default=0, help='Proportion of fixation period "null" trials')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')
@@ -70,10 +68,6 @@ version = "v1" if int(args.subject[0:2]) < 8 else "v2"
 
 if len(args.test_cond) != len(args.test_query):
     raise RuntimeError("Test conditions and test-queries should have the same length")
-if args.null_prop > 0 and args.equalize_events:
-    raise RuntimeError("Cannot add null trials AND equalize events.")
-if args.null_prop > 0 and not (len(args.windows) == 0 or args.windows[0][0] != args.windows[0][1]):
-    raise RuntimeError("Cannot add null trials for multiple timepoints decoding. Only for a single decoder. Then you would have to add these trials inside the decoding loop.")
 
 np.random.seed(args.seed)
 start_time = time.time()
@@ -89,36 +83,21 @@ train_fn, test_fns, out_fn, test_out_fns = get_paths(args, out_dir_name)
 if args.windows:
     args.windows = [w.replace(" ", "") for w in args.windows] # remove spaces
     wins = [f"#{'#'.join([args.windows[0], w])}#" for w in args.windows] # string to add to the out fns
-    for i, win in enumerate(wins): # fix the string, we need zeros before and after commas if only one digit
-            wins[i] = wins[i].replace(",.", ",0.")
-            wins[i] = wins[i].replace("#.", "#0.")
-            wins[i] = wins[i].replace(".,", ".0,")
     out_fn += wins[0]
     for i in range(len(test_out_fns)): test_out_fns[i] += wins[i+1]
+
+# if not args.overwrite:
 
 print('\nStarting training')
 ### LOAD EPOCHS ###
 if args.response_lock:
-    epochs_orig = load_data(args, train_fn, crop_final=False)[0]
-    epochs = to_response_lock_epochs(epochs_orig, args.train_cond)
+    epochs = load_data(args, train_fn, crop_final=False)[0]
+    epochs = to_response_lock_epochs(epochs, args.train_cond)
 else:
-    epochs_orig = load_data(args, train_fn)[0]
-    epochs = epochs_orig # hack but works
+    epochs = load_data(args, train_fn)[0]
 windows = [tuple([float(x) for x in win.split(",")]) for win in args.windows]
-if windows: 
-    print(f"Using training time window: {windows[0]}s")
-    epochs = epochs_orig.crop(*windows[0])
+if windows: epochs = epochs.crop(*windows[0])
 train_tmin, train_tmax = epochs.tmin, epochs.tmax
-print(train_tmin, train_tmax)
-
-### GET DATA FROM THE FIXATION PERIOD
-if args.null_prop > 0: 
-    epochs_null = epochs_orig.crop(epochs.times[0], epochs.times[0]) # very first time point. TODO: add some flexibility, maybe random for each trial?
-    dat_null = epochs_null.get_data(picks='meg').squeeze() # get as much as possibly needed
-    out_fn += f"_null{args.null_prop}"
-else:
-    dat_null = None
-del epochs_orig
 
 ## GET QUERIES
 class_queries = get_class_queries(args.train_query)
@@ -127,62 +106,55 @@ n_times = len(epochs.times)
 if args.dummy: # speed everything up for a dummy run
     clf = LinearRegression(n_jobs=-1)
     setattr(args, 'n_folds', 2)
-else: # args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
-    clf = LogisticRegression(C=1/0.006, solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000) # , n_jobs=-1->no effect when solver is linlinear
-# else:
-#     clf_cv = StratifiedShuffleSplit(args.n_folds, random_state=42) # help avoid warnings when there are very few trials in one class
-#     clf = LogisticRegressionCV(Cs=args.n_folds, penalty=args.penalty, solver='saga', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
+else:
+    clf_cv = StratifiedShuffleSplit(10, random_state=42) # help avoid warnings when there are very few trials in one class
+    clf = LogisticRegressionCV(Cs=10, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=clf_cv, max_iter=10000)
     # clf = RidgeClassifierCV(alphas=np.logspace(-4, 4, 9), cv=clf_cv, class_weight='balanced')
     # clf = RidgeClassifierCVwithProba(alphas=np.logspace(-4, 4, 9), cv=5, class_weight='balanced')
     # clf = GridSearchCV(clf, {"kernel":('linear', 'rbf', 'poly'), "C":np.logspace(-2, 4, 7)})
 clf = OneVsRestClassifier(clf, n_jobs=1)
-# clf = mne.decoding.LinearModel(clf) # returns an Error now ... save the patterns "by hand", with filters2patterns
+clf = mne.decoding.LinearModel(clf)
 
 ### DECODE ###
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
-if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
-    all_models, patterns, filters, mds = decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null)
-    save_results(out_fn, patterns, fn_end="patterns", time=False, mds=mds)
-    save_results(out_fn, filters, fn_end="filters", time=False)
-else:
-    AUC, _, preds, confusions, all_models, AUC_query = decode_ovr(args, clf, epochs, class_queries)
-    if args.test_quality: # save explicit score values, then exit
-        quality_dir = f"{op.dirname(op.dirname(op.dirname(out_fn)))}/Quality_test"
-        if not op.exists(quality_dir):
-            os.makedirs(quality_dir)
-        mean_AUC = AUC.mean()
-        max_AUC = AUC.max()
-        min_AUC = AUC.min()
-        std_AUC = AUC.std()
-        quality_fn = f"{op.basename(op.dirname(out_fn))}_{op.basename(out_fn)}_min{min_AUC:.3f}_mean{mean_AUC:.3f}_std{std_AUC:.3f}_max{max_AUC:.3f}.txt"
-        with open(f"{quality_dir}/{quality_fn}", 'w') as f: # also save it the file just in case
-            f.write(f"mean = {mean_AUC:3f}")
-            f.write(f"max = {max_AUC:3f}")
-            f.write(f"min = {min_AUC:3f}")
-            f.write(f"std = {std_AUC:3f}")
-        exit()
+AUC, _, all_models, AUC_query = decode_ovr(args, clf, epochs, class_queries)
+print(f'Finished training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min\n')
 
-    ### SAVE RESULTS ###
-    save_results(out_fn, AUC) #, all_models)
-    save_results(out_fn, confusions, fn_end="confusions") #, all_models)
-    # save_results(out_fn, preds, fn_end="preds")
-    # save_results(out_fn, accuracy, fn_end="acc")
-    # save_patterns(args, out_fn, all_models) # 
-    # save_best_pattern(out_fn, AUC, all_models) ## Save best model's pattern
-    ### PLOT PERFORMANCE ###
-    plot_perf(args, out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, \
-              test_tmin=train_tmin, test_tmax=train_tmax, version=version)
-    if AUC_query is not None: # save the results for all the splits
-        for i_query, query in enumerate(args.split_queries):
-            if np.all(np.isnan(AUC_query[:,:,i_query])): continue # do not save if we only have nans (happens when the split query doesn't work for this subject, eg flash for the first subjects)
-            query = '_'.join(query.split()) # replace spaces by underscores
-            query = shorten_filename(query) # shorten string by removing unnecessary stuff
-            save_results(out_fn+f'_for_{query}', AUC_query[:,:,i_query])
-            plot_perf(args, out_fn+f'_for_{query}', AUC_query[:,:,i_query], args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
-            # save_preds(args, out_fn+f'_for_{query}', mean_preds_query[:,:,i_query])
+if args.test_quality: # save explicit score values, then exit
+    quality_dir = f"{op.dirname(op.dirname(op.dirname(out_fn)))}/Quality_test"
+    if not op.exists(quality_dir):
+        os.makedirs(quality_dir)
+    mean_AUC = AUC.mean()
+    max_AUC = AUC.max()
+    min_AUC = AUC.min()
+    std_AUC = AUC.std()
+    quality_fn = f"{op.basename(op.dirname(out_fn))}_{op.basename(out_fn)}_min{min_AUC:.3f}_mean{mean_AUC:.3f}_std{std_AUC:.3f}_max{max_AUC:.3f}.txt"
+    with open(f"{quality_dir}/{quality_fn}", 'w') as f: # also save it the file just in case
+        f.write(f"mean = {mean_AUC:3f}")
+        f.write(f"max = {max_AUC:3f}")
+        f.write(f"min = {min_AUC:3f}")
+        f.write(f"std = {std_AUC:3f}")
+    exit()
 
-print(f'Done with training. Elasped time since the script began: {(time.time()-start_time)/60:.2f}min')
-# print(f'Done with saving training plots and data. Elasped time since the script began: {(time.time()-start_time)/60:.2f}min')
+### SAVE RESULTS ###
+save_results(out_fn, AUC) #, all_models)
+# save_results(out_fn, accuracy, fn_end="acc")
+# save_patterns(args, out_fn, all_models)
+save_best_pattern(out_fn, AUC, all_models) ## Save best model's pattern
+### PLOT PERFORMANCE ###
+plot_perf(args, out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, \
+          test_tmin=train_tmin, test_tmax=train_tmax, version=version)
+if AUC_query is not None: # save the results for all the splits
+    for i_query, query in enumerate(args.split_queries):
+        if np.all(np.isnan(AUC_query[:,:,i_query])): continue # do not save if we only have nans (happens when the split query doesn't work for this subject, eg flash for the first subjects)
+        query = '_'.join(query.split()) # replace spaces by underscores
+        query = shorten_filename(query) # shorten string by removing unnecessary stuff
+        save_results(out_fn+f'_for_{query}', AUC_query[:,:,i_query])
+        plot_perf(args, out_fn+f'_for_{query}', AUC_query[:,:,i_query], args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, test_tmin=train_tmin, test_tmax=train_tmax, version=version)
+        # save_preds(args, out_fn+f'_for_{query}', mean_preds_query[:,:,i_query])
+
+# from ipdb import set_trace; set_trace()
+print(f'Done with saving training plots and data. Elasped time since the script began: {(time.time()-start_time)/60:.2f}min')
 
 
 ###########################
@@ -197,22 +169,15 @@ for i_test, (cond, query, test_fn, test_out_fn) in enumerate(zip(args.test_cond,
 
     ### LOAD EPOCHS ###
     epochs = load_data(args, test_fn)[0]
-    if windows: 
-        print(f"Using test time window: {windows[i_test+1]}s")
-        epochs = epochs.crop(*windows[i_test+1]) # first window is for training
+    if windows: epochs = epochs.crop(*windows[i_test+1]) # first window is for training
     test_tmin, test_tmax = epochs.tmin, epochs.tmax
 
     class_queries = get_class_queries(query)
 
-    AUC, _, preds, confusions, AUC_query, mds = test_decode_ovr(args, epochs, class_queries, all_models)
+    AUC, _, AUC_query = test_decode_ovr(args, epochs, class_queries, all_models)
 
     ### SAVE RESULTS ###
     save_results(test_out_fn, AUC)
-    save_results(test_out_fn, confusions, fn_end="confusions") #, all_models)
-    if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
-        # add a trial id to the md to help identification later on.
-        mds['trial_id'] = mds['run_nb'].astype(str) + "_" + mds.index.astype(str)
-        save_results(test_out_fn, preds, fn_end="preds", mds=mds)
     # save_results(test_out_fn, accuracy, fn_end="acc")
     ### PLOT PERFORMANCE ###
     plot_perf(args, test_out_fn, AUC, args.train_cond, train_tmin=train_tmin, train_tmax=train_tmax, \

@@ -12,7 +12,7 @@ from itertools import combinations
 
 from utils.params import TRIG_DICT, tmin_tmax_dict
 
-path2loc = "/home/users/d/desborde/scratch/s2s/Results/Localizer/Loc_all_trained_on_localizer.p" # AllObj_trained_on_obj.p
+path2loc = "/neurospin/unicog/protocols/MEG/Seq2Scene/Results/Localizer/Loc_all_trained_on_localizer.p" # AllObj_trained_on_obj.p
 
 short_to_long_cond = {"loc": "localizer", "one_obj": "one_object", "two_obj": "two_objects",
                       "localizer": "localizer", "one_object":"one_object"}
@@ -47,13 +47,7 @@ def get_paths(args, dirname='Decoding', mkdir=True, verbose=True):
         train_fn = [natsorted(glob(in_dir + f'/{cond}*-epo.fif'))[0] for cond in args.train_cond]
     else:
         if verbose: print(in_dir + f'/{args.train_cond}*-epo.fif')
-        train_fn = natsorted(glob(in_dir + f'/{args.train_cond}*-epo.fif'))
-        if not len(train_fn):
-            raise RuntimeError(f"No epochs file found at {in_dir + f'/{args.train_cond}*-epo.fif'}")
-        elif len(train_fn) > 1:
-            raise RuntimeError(f"Found multiple epochs file at {in_dir + f'/{args.train_cond}*-epo.fif'}")
-        else:
-            train_fn = train_fn[0]
+        train_fn = natsorted(glob(in_dir + f'/{args.train_cond}*-epo.fif'))[0]
         # assert len(train_fn) == 1
     if verbose: print(train_fn)
     if verbose: print("\nGetting test filenames:")
@@ -64,7 +58,18 @@ def get_paths(args, dirname='Decoding', mkdir=True, verbose=True):
     out_fn = get_out_fn(args, dirname=dirname)
     if verbose: print(f"out fn: {out_fn}")
 
-    test_out_fns = get_test_out_fns(args, out_fn)
+    test_out_fns = []
+    if hasattr(args, "test_query_1") and hasattr(args, "test_query_2"): # typically for classical decoding
+        for i_fn, (test_cond, test_query1, test_query2) in enumerate(zip(args.test_cond, args.test_query_1, args.test_query_2)):
+            test_query_str = f"{'_'.join(test_query1.split())}_vs_{'_'.join(test_query2.split())}"
+            # add an int to the label to split the different tests
+            new_out_fn = f"{out_fn.split('-')[0]}_{i_fn}-{'-'.join(out_fn.split('-')[1::])}"
+            test_out_fns.append(shorten_filename(f"{new_out_fn}_tested_on_{test_cond}_{test_query_str}"))
+    elif hasattr(args, "test_query"): # typically for OVR and window decoding
+        for i_fn, (test_cond, test_query) in enumerate(zip(args.test_cond, args.test_query)):
+            test_query_str = '_'.join(test_query.split())
+            new_out_fn = f"{out_fn.split('-')[0]}_{i_fn}-{'-'.join(out_fn.split('-')[1::])}" # add an int to the label to split the different tests
+            test_out_fns.append(shorten_filename(f"{new_out_fn}_tested_on_{test_cond}_{test_query_str}"))
 
     # wait for a random time in order to avoid conflit (parallel jobs that try to construct the same directory)
     rand_time = float(str(abs(hash(str(args))))[0:8]) / 100000000
@@ -89,6 +94,7 @@ def get_paths(args, dirname='Decoding', mkdir=True, verbose=True):
                     print('overwrite is set to False ... exiting smoothly')
                 exit()
     return train_fn, test_fns, out_fn, test_out_fns
+
 
 def get_out_fn(args, dirname='Decoding'):
     if args.dummy: # temporary directory
@@ -128,20 +134,6 @@ def get_out_fn(args, dirname='Decoding'):
     print('eg:' + out_fn + '_AUC_diag.npy\n')
     return out_fn
 
-def get_test_out_fns(args, out_fn):
-    test_out_fns = []
-    if hasattr(args, "test_query_1") and hasattr(args, "test_query_2"): # typically for classical decoding
-        for i_fn, (test_cond, test_query1, test_query2) in enumerate(zip(args.test_cond, args.test_query_1, args.test_query_2)):
-            test_query_str = f"{'_'.join(test_query1.split())}_vs_{'_'.join(test_query2.split())}"
-            # add an int to the label to split the different tests
-            new_out_fn = f"{out_fn.split('-')[0]}_{i_fn}-{'-'.join(out_fn.split('-')[1::])}"
-            test_out_fns.append(shorten_filename(f"{new_out_fn}_tested_on_{test_cond}_{test_query_str}"))
-    elif hasattr(args, "test_query"): # typically for OVR and window decoding
-        for i_fn, (test_cond, test_query) in enumerate(zip(args.test_cond, args.test_query)):
-            test_query_str = '_'.join(test_query.split())
-            new_out_fn = f"{out_fn.split('-')[0]}_{i_fn}-{'-'.join(out_fn.split('-')[1::])}" # add an int to the label to split the different tests
-            test_out_fns.append(shorten_filename(f"{new_out_fn}_tested_on_{test_cond}_{test_query_str}"))
-    return test_out_fns
 
 def shorten_filename(fn):
     # shorten the output fn because we sometimes go over the 255-characters limit imposed by ubuntu
@@ -170,8 +162,6 @@ def shorten_filename(fn):
     fn = fn.replace('Matching=nonmatch', 'nonmatch')
     fn = fn.replace('Flash=0', 'noflash')
     fn = fn.replace('Flash=1', 'flash')
-    fn = fn.replace('present', 'p')
-    fn = fn.replace('absent', 'a')
     
     # if fn is still too long, make some ugly changes
     if len(fn) > 255:
@@ -231,19 +221,6 @@ def get_onsets(cond, version="v1"):
         image_onset.append((i_w+1) * SOA + delay)
 
     return word_onsets, image_onset
-
-
-def create_folder(fn, overwrite):
-    if op.exists(fn): # warn and stop if args.overwrite is set to False
-        print('output file already exists...')
-        if overwrite:
-            print('overwrite is set to True ... overwriting')
-        else:
-            print('overwrite is set to False ... exiting')
-            exit()
-    else:
-        print('Constructing output dirtectory: ', fn)
-        os.makedirs(fn)
 
 
 def Xdawn(epochs4xdawn, epochs2transform, factor, n_comp=10):
@@ -367,9 +344,9 @@ def complement_md(md):
             right_shape.append(f"{line.Shape2}")
             left_color.append(f"{line.Colour1}")
             right_color.append(f"{line.Colour2}")
-            if 'colour1' in str(line.Change) or 'shape1' in str(line.Change):
+            if 'colour1' in line.Change or 'shape1' in line.Change:
                 mismatch_side.append("left")
-            elif 'colour2' in str(line.Change) or 'shape2' in str(line.Change):
+            elif 'colour2' in line.Change or 'shape2' in line.Change:
                 mismatch_side.append("right")
             else:
                 mismatch_side.append("None")
@@ -380,9 +357,9 @@ def complement_md(md):
             left_shape.append(f"{line.Shape2}")
             right_color.append(f"{line.Colour1}")
             left_color.append(f"{line.Colour2}")
-            if 'colour1' in str(line.Change) or 'shape1' in str(line.Change):
+            if 'colour1' in line.Change or 'shape1' in line.Change:
                 mismatch_side.append("right")
-            elif 'colour2' in str(line.Change) or 'shape2' in str(line.Change):
+            elif 'colour2' in line.Change or 'shape2' in line.Change:
                 mismatch_side.append("left")
             else:
                 mismatch_side.append("None")

@@ -1,26 +1,16 @@
 from dataclasses import dataclass
-import platform
-import os
 
 @dataclass
 class Config:
     """Class for keeping all parameters."""
 
     # paths and names
-    version: str = "44"
-    # root_path: str = "/home/users/d/desborde/scratch/s2s"
-    root_path: str = "/home/desborde/Documents/s2s/" if os.path.exists("/home/desborde/Documents/s2s/") \
-                    else "/Users/polo/Documents/MEG-Seq2Scene/" if platform.system() == "Darwin" \
-                    else "/home/users/d/desborde/scratch/s2s/" # path for labpc, then macbook, then yggdrasil cluster 
+    version: str = "26"
+    root_path: str = "/neurospin/unicog/protocols/MEG/Seq2Scene/"
     epochs_dir: str = "Epochs_100hz_nofilter"
-    # all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
-    #                        '08_ch180036', '09_jl190711', '10_ma200371', '12_mb160165', '13_lg170436', '14_eb180237', \
-    #                        '15_ar160084', '16_er123987', '17', '19', '21', '22', '24', '26', '28', '29', '30')
-                           # remove '23' because it is at chance on the hyperparam optim localizer + 25, 27, 11, 20 that are bad
     all_subjects: tuple = ('01_js180232', '02_jm100042', '03_cr170417', '04_ag170045', '05_mb140004', '06_ll180197', '07_jv200206', \
-                           '08_ch180036', '09_jl190711', '10_ma200371', '12_mb160165', '13_lg170436', '14_eb180237', \
-                           '15_ar160084', '16_er123987', '17', '19', '20', '21', '22', '24', '25', '26', '28', '29', '30') 
-                           # removed '18' because of missing data (it was there but Lorenzo couln't upload it) , + '23' '27' '11_rb210035' that have probs super weird 
+                           '08_ch180036', '09_jl190711', '10_ma200371', '11_rb210035', '12_mb160165', '13_lg170436', '14_eb180237', \
+                           '15_ar160084', '16_er123987', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30')
 
     # Epochs preprocessing parameters
     baseline: bool = True # apply baseline correction if True
@@ -33,10 +23,9 @@ class Config:
     sfreq: int = 100 # final sampling frequency
 
     ## Decoding parameters
-    n_folds: int = 5 # number of splits
+    n_folds: int = 5 # number of shuffle splits
     crossval: str = "kfold" # cross-validation scheme. "kfold" or "sufflesplit"
     reduc_dim: float = 0 # dimensionality reduction
-    penalty: str = "l1" # penalty for the logistic regression
     ## Decoding window parameters
     n_folds_win: int = 10 # number of shuffle splits for the window decoding analysis 
     crossval_win: str = "kfold" # cross-validation scheme for the window decoding analysis 
@@ -49,18 +38,17 @@ class Config:
     ## General analysis parameters
     cat: int = 5 # number of timepoints to concatenate
     mean: bool = True # Wether to average instead of concatenate if using the "cat" argument
-    smooth: int = 0 # hanning smoothing window, in timesample,
+    smooth: int = 21 # hanning smoothing window, in timesample,
     clip: bool = True # Whether to clip to the 5th and 95th percentile for each channel
     subtract_evoked: bool = False # Whether to subtract the evoked signal from the epochs
     avg_clf: bool = False # Whether to average classifiers across cval folds
     autoreject: bool = False
     xdawn: bool = False
     quality_th: float = 0 # .75
-    filter: str = "Perf==1" #"Perf==1"
-    equalize_events: bool = False # True
-    micro_ave: int = 0
+    filter: str = "Perf==1"
+    equalize_events: bool = True # True
+    micro_ave: int = 2
     max_trials: int = 0 # maximum number of trials (after micro-averaging)
-    localizer: bool = False
 
     riemann: bool = False # apply riemannian tranformation before fitting decoder
 

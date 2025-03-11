@@ -1,10 +1,6 @@
-Results
-.DS_Store
-cluster_job_files/
-cluster_logs/
 commands.txt
 old/
-tmp
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
