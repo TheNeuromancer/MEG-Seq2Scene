@@ -56,11 +56,11 @@ df = pd.read_csv(df_fn)
 all_preds_data = pickle.load(open(f"{res_dir}/all_preds_data.pkl", 'rb'))
 
 print(f"\nOnly keeping the last second of the delay\n")
-# all_preds_data = [p[int(args.sfreq * 1)::] for p in all_preds_data]
-# all_preds_data = [p[100::] for p in all_preds_data]
+all_preds_data = [p[int(args.sfreq * 1)::] for p in all_preds_data]
+all_preds_data = [p[100::] for p in all_preds_data]
 
-# print(F"Only keeping Complexity==2 trials, because else the repeated states fucks up the replays analyses")
-# df = df.query(f"Complexity==2")
+print(F"Only keeping Complexity==2 trials, because else the repeated states fucks up the replays analyses")
+df = df.query(f"Complexity==2")
 
 
 # def get_replays_word_and_position(df, all_preds_data, train_cond, gen_cond, do_rel=True, min_len=10):
@@ -223,6 +223,8 @@ def get_replays_sophie_style(df, all_preds_data, train_cond, gen_cond, labels, m
     all_sync_coactivation_matrices, all_seq_coactivation_matrices = [], []
     all_ind_seq_coactivation_matrices = []
     all_sync_overlap_size = []
+    all_jaccard_matrices = []
+    # matrix_labels = ['Shape1_present', 'Colour1_present', 'Relation_present', 'Shape2_present', 'Colour2_present', 'Shape_absent', 'Colour_absent', 'Relation_absent']
     
     threshold_per_sub = {}
 
@@ -236,9 +238,10 @@ def get_replays_sophie_style(df, all_preds_data, train_cond, gen_cond, labels, m
         thresholds = [np.percentile(preds[:,:,i], 95) for i in range(preds.shape[2])]
         threshold_per_sub[sub] = thresholds
 
-        all_sync_react_this_subject = []
-        all_seq_react_this_subject = []
-
+        all_sync_react_this_subject, all_seq_react_this_subject = [], []
+        # iou_this_sub = 
+        jaccard_matrix_this_sub = {l1: {l2: [] for l2 in labels} for l1 in labels}
+        
         ave_preds_this_sub_by_presence = {label: [] for label in labels}
         
         for iTrial in range(n_trials):
@@ -275,6 +278,16 @@ def get_replays_sophie_style(df, all_preds_data, train_cond, gen_cond, labels, m
             sequential_episodes = [episode for episode in sequential_episodes if len(set(state for state, _, _ in episode)) > 1]
             all_seq_react_this_subject.extend(sequential_episodes)
 
+            # jaccard_probability
+            for i, (label1, probs1) in enumerate(zip(labels_this_trial, preds_this_trial)):
+                for j, (label2, probs2) in enumerate(zip(labels_this_trial, preds_this_trial)):
+                    if j >= i:  # Compute only upper triangle (symmetric matrix)
+                        jac = jaccard_probability(probs1, probs2)
+                        jaccard_matrix_this_sub[label1][label2].append(jac)
+                        jaccard_matrix_this_sub[label2][label1].append(jac)  # Mirror for symmetry
+
+
+
         ave_preds_all_subs = get_subj_ave_preds(ave_preds_this_sub_by_presence, ave_preds_all_subs)
         all_states = ave_preds_all_subs.keys()
         subset_counts, ave_overlap_size, coactivation_matrix = count_synchronous_coactivations(all_sync_react_this_subject, all_states)
@@ -286,10 +299,14 @@ def get_replays_sophie_style(df, all_preds_data, train_cond, gen_cond, labels, m
         
         ind_coactivation_counts, ind_ave_durations, ind_ave_gaps, ind_coactivation_matrix = count_indirect_sequential_coactivations(all_seq_react_this_subject, all_states)
         all_ind_seq_coactivation_matrices.append(ind_coactivation_matrix)
+
+        jaccard_avg = {l1: {l2: sum(values) / len(values) if values else 0 for l2, values in l2_dict.items()}
+                                                          for l1, l2_dict in jaccard_matrix_this_sub.items()}
+        all_jaccard_matrices.append(jaccard_avg)
     
     coactivation_df = pd.DataFrame(all_subjects_summary)
     behav_df = pd.DataFrame(behav_df)
-    return ave_preds_all_subs, behav_df, coactivation_df, all_sync_coactivation_matrices, all_seq_coactivation_matrices, all_ind_seq_coactivation_matrices
+    return ave_preds_all_subs, behav_df, coactivation_df, all_sync_coactivation_matrices, all_seq_coactivation_matrices, all_ind_seq_coactivation_matrices, all_jaccard_matrices
 
 
 def make_all_reactivation_plots(behav_df, ave_preds_all_subs, res_dir, add_str, do_rel):
@@ -339,17 +356,17 @@ def make_all_reactivation_plots(behav_df, ave_preds_all_subs, res_dir, add_str, 
 
 gen_cond = "scenes"
 subs = df['sub'].unique()
-for label in ["PropAll", "Prop0"]: 
+for label in ["PropAll", "Prop0", "CrossAll"]: 
     print(f"Doing label {label}")
     df_prop = df[df["label"].str.contains(label, na=False)]
     do_rel = True if label=="PropAll" else False
 
-    for train_cond in ["localizer_one_object_two_objects"]: #, "localizer_two_objects", "two_objects"]:
+    for train_cond in ["localizer_one_object_two_objects", "localizer"]: #, "localizer_two_objects", "two_objects"]:
         print(f"Doing train condition {train_cond}")
         df_train = df_prop.query(f"train_cond == '{train_cond}'")
         df_wordpos = df[df["label"].str.contains("WordPos", na=False) & (df["train_cond"] == train_cond)]
 
-        for t in ["0.2", "0.3", "0.4", "0.6", "0.8"]:
+        for t in ["0.18", "0.26", "0.36", "0.2", "0.3", "0.4", "0.6", "0.8"]:
             add_str = f"{t}_{label}_{train_cond}"
             df_t = df_train[df_train["label"].str.contains(t, na=False)] # keep only the current training time
             if not len(df_t): 
@@ -360,7 +377,28 @@ for label in ["PropAll", "Prop0"]:
             props = Properties if do_rel else Properties[0:2] + Properties[3:5]
             labels = [f"{prop}_present" for prop in props] + [f"{prop.rstrip('1')}_absent" for prop in props[0:-2]]
             results = get_replays_sophie_style(df_t, all_preds_data, train_cond, gen_cond, labels)
-            ave_preds_all_subs, behav_df, coactivation_df, sync_coactivation_matrices, seq_coactivation_matrices, ind_seq_coactivation_matrices = results
+            ave_preds_all_subs, behav_df, coactivation_df, sync_coactivation_matrices, seq_coactivation_matrices, ind_seq_coactivation_matrices, all_jaccard_matrices = results
+
+
+            # jaccard probabilities
+            ave_jaccard_matrix = average_coactivation_matrices(all_jaccard_matrices)
+            jac_mat_out_fn = f"{res_dir}/jaccard_probability_matrix_{add_str}.png"
+            half_labels = properties if do_rel else properties[0:2] + properties[3:5]
+            abs_idx = 3 if do_rel else 2
+            red_cross_idx = 5 if do_rel else 4
+            full_labels = [f"{l}_p" for l in half_labels] + [f"{l}_a" for l in half_labels[0:abs_idx]]
+            plot_coactivation_heatmap(ave_jaccard_matrix, full_labels, jac_mat_out_fn, red_cross_idx=red_cross_idx, xy_labels=False)
+
+            # jaccard probabilities without absent properties
+            filtered_keys = [state for state in ave_jaccard_matrix if "absent" not in state] # Identify states to keep
+            # Create a new dictionary with only the filtered keys
+            ave_jaccard_matrix_no_abs = {state: {other_state: value for other_state, value in ave_jaccard_matrix[state].items() 
+                                       if "absent" not in other_state} for state in filtered_keys}
+            jac_mat_out_fn_no_abs = f"{res_dir}/jaccard_probability_matrix_no_abs_{add_str}.png"
+            full_labels_no_abs = [f"{l}_p" for l in half_labels]
+            plot_coactivation_heatmap(ave_jaccard_matrix_no_abs, full_labels_no_abs, jac_mat_out_fn_no_abs, xy_labels=False)
+
+
 
             # synchronous coactivations
             ave_coactivation_matrix = average_coactivation_matrices(sync_coactivation_matrices)
@@ -369,7 +407,7 @@ for label in ["PropAll", "Prop0"]:
             abs_idx = 3 if do_rel else 2
             red_cross_idx = 5 if do_rel else 4
             full_labels = [f"{l}_p" for l in half_labels] + [f"{l}_a" for l in half_labels[0:abs_idx]]
-            plot_coactivation_heatmap(ave_coactivation_matrix, full_labels, coact_mat_out_fn, red_cross_idx=red_cross_idx)
+            plot_coactivation_heatmap(ave_coactivation_matrix, full_labels, coact_mat_out_fn, red_cross_idx=red_cross_idx, xy_labels=False)
 
             # synchronous coactivations without absent properties
             filtered_keys = [state for state in ave_coactivation_matrix if "absent" not in state] # Identify states to keep
@@ -378,7 +416,7 @@ for label in ["PropAll", "Prop0"]:
                                        if "absent" not in other_state} for state in filtered_keys}
             coact_mat_out_fn_no_abs = f"{res_dir}/synchronous_coactivation_matrix_no_abs_{add_str}.png"
             full_labels_no_abs = [f"{l}_p" for l in half_labels]
-            plot_coactivation_heatmap(ave_coactivation_matrix_no_abs, full_labels_no_abs, coact_mat_out_fn_no_abs)
+            plot_coactivation_heatmap(ave_coactivation_matrix_no_abs, full_labels_no_abs, coact_mat_out_fn_no_abs, xy_labels=False)
 
             # for sub, matrix in zip(subs, sync_coactivation_matrices):
             #     plot_coactivation_heatmap(matrix, full_labels, f"{res_dir}/synchronous_coactivation_matrix_{add_str}_{sub}.png")
@@ -451,6 +489,12 @@ for label in ["PropAll", "Prop0"]:
                 plot_coactivation_comparison(df_pairs, f"{res_dir}/synchronous_coactivation_pairs_comparison_two-sided_{add_str}_{i}.png")
                 df_pairs_one_sided = compare_pairs(sync_coactivation_matrices, [pair], alternative='greater')
                 plot_coactivation_comparison(df_pairs_one_sided, f"{res_dir}/synchronous_coactivation_pairs_comparison_greater_{add_str}_{i}.png")
+
+                df_pairs = compare_pairs(all_jaccard_matrices, [pair], alternative='two-sided')
+                plot_coactivation_comparison(df_pairs, f"{res_dir}/jaccard_probability_pairs_comparison_two-sided_{add_str}_{i}.png")
+                df_pairs_one_sided = compare_pairs(all_jaccard_matrices, [pair], alternative='greater')
+                plot_coactivation_comparison(df_pairs_one_sided, f"{res_dir}/jaccard_probability_pairs_comparison_greater_{add_str}_{i}.png")
+
 
 
             # print(df_pairs)

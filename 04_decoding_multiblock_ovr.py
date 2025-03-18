@@ -116,7 +116,7 @@ for cond in args.train_conds:
     train_fn, _, _, _ = get_paths(args, out_dir_name)  # Get file paths
     
     epochs = load_data(args, train_fn)[0]
-
+    epochs_orig = None
     # Complement the md to get query-compatibility
     if cond == "localizer":
         epochs.metadata["Property"] = epochs.metadata["Loc_word"].str.replace(r"^img_", "", regex=True)
@@ -203,7 +203,8 @@ if args.dummy:
 else:
     # clf = LogisticRegression(C=1/0.006, solver='saga', class_weight='balanced', multi_class='auto', max_iter=1000000)
     # hyperparam optim found: [0.1, 'l1', 'liblinear', 'balanced']
-    clf = LogisticRegression(C=100, penalty='l1', solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000)
+    # clf = LogisticRegression(C=100, penalty='l1', solver='saga', class_weight='balanced', multi_class='auto', max_iter=10000)
+    clf = LogisticRegressionCV(Cs=10, solver='liblinear', class_weight='balanced', multi_class='auto', n_jobs=-1, cv=5, max_iter=1000)
     # clf = SVC(kernel='rbf', class_weight='balanced', max_iter=-1, C=1, gamma=0.001, probability=True, random_state=42)
     print(clf)
 clf = OneVsRestClassifier(clf, n_jobs=1)

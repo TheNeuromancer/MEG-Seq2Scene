@@ -71,8 +71,9 @@ minmaxScaler = MinMaxScaler()
 
 ## All possible training time (depends on the property that is decoded).
 # train_times = ['0.8', '2.6', '0.2', '1.4', '2.0']
-train_times = ["0.17", "0.2", "0.3", "0.4", "0.5", "0.6", "0.8"] + ["0.77", "0.9", "1.0", "1.1", "1.2", "1.4"] + ["1.37", "1.5", "1.6", "1.7", "1.8", "2.0"]
-train_times = train_times + ["1.97", "2.1", "2.2", "2.3", "2.4", "2.6"] + ["2.57", "2.7", "2.8", "2.9", "3.0", "3.2"]
+# train_times = ["0.17", "0.2", "0.3", "0.4", "0.5", "0.6", "0.8"] + ["0.77", "0.9", "1.0", "1.1", "1.2", "1.4"] + ["1.37", "1.5", "1.6", "1.7", "1.8", "2.0"]
+# train_times = train_times + ["1.97", "2.1", "2.2", "2.3", "2.4", "2.6"] + ["2.57", "2.7", "2.8", "2.9", "3.0", "3.2"]
+train_times = ["0.18", "0.26", "0.36"]
 ## Generalization window for objects and scenes
 gen_windows = [(3, 5)] #, (1.5, 2.2)]
 
@@ -91,7 +92,7 @@ all_preds_data = []
 all_df = []
 for label in all_labels:
     if args.verbose: print(f"Doing {label}")
-    for train_cond in ["localizer_one_object_two_objects", "two_objects"]: # "two_objects_localizer", "localizer", "obj", "scenes", , "localizer_two_objects"
+    for train_cond in ["localizer_one_object_two_objects", "two_objects", "localizer"]: # "two_objects_localizer", "localizer", "obj", "scenes", , "localizer_two_objects"
         for split_query in [False]: # no split query in replay decoding so far (but migh wanna include it later)
             for gen_cond in ["obj", "scenes"]: # "localizer", 
                 for train_time in train_times:

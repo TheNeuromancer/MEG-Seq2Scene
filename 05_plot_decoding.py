@@ -316,26 +316,26 @@ else:
                             is_resplock = False
                         times = np.arange(train_tmin, train_tmax+1e-10, 1./args.sfreq)
 
-                        # ## plotting confusion matrices
-                        if len(all_confusions):
-                            # fig, axes = plt.subplots(len(all_confusions), figsize=(6, len(all_confusions)/2))
-                            # for i_p, patt in enumerate(all_confusions):
-                            #     try:
-                            #         mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
-                            #     except:
-                            #         set_trace()
-                            # plt.savefig(f'{out_fn}_{label}_{train_cond}_confusionS_mag.png')
-                            ## ave confusion
-                            fig, ax = plt.subplots()
-                            # mne.viz.plot_topomap(np.squeeze(np.mean(all_confusions, 0))[mag_idx], mag_info, axes=ax)
-                            for t in t_confusion:
-                                t_idx = np.where(np.isclose(times, t))[0][0]
-                                # from ipdb import set_trace; set_trace()
-                                # t_idx = np.where (times == t)[0][0]
-                                plt.imshow(confusion[t_idx, t_idx], cmap='viridis', origin='lower')
-                                plt.colorbar()
-                                plt.savefig(f'{out_fn}_{label}_{train_cond}_ave_confusion_{t}s.png')
-                                plt.close()
+                        # # ## plotting confusion matrices
+                        # if len(all_confusions):
+                        #     # fig, axes = plt.subplots(len(all_confusions), figsize=(6, len(all_confusions)/2))
+                        #     # for i_p, patt in enumerate(all_confusions):
+                        #     #     try:
+                        #     #         mne.viz.plot_topomap(np.squeeze(patt)[mag_idx], mag_info, axes=axes[i_p])
+                        #     #     except:
+                        #     #         set_trace()
+                        #     # plt.savefig(f'{out_fn}_{label}_{train_cond}_confusionS_mag.png')
+                        #     ## ave confusion
+                        #     fig, ax = plt.subplots()
+                        #     # mne.viz.plot_topomap(np.squeeze(np.mean(all_confusions, 0))[mag_idx], mag_info, axes=ax)
+                        #     for t in t_confusion:
+                        #         t_idx = np.where(np.isclose(times, t))[0][0]
+                        #         # from ipdb import set_trace; set_trace()
+                        #         # t_idx = np.where (times == t)[0][0]
+                        #         plt.imshow(confusion[t_idx, t_idx], cmap='viridis', origin='lower')
+                        #         plt.colorbar()
+                        #         plt.savefig(f'{out_fn}_{label}_{train_cond}_ave_confusion_{t}s.png')
+                        #         plt.close()
 
                         is_contrast = True if (np.min(np.array(all_AUC)) < 0) or (np.max(np.array(all_AUC)) < .4) else False
 
@@ -343,6 +343,13 @@ else:
                         if train_tmax==test_tmax or "win" in label: # square time window, necessary for getting a diagonal
                             plot_diag(data_mean=AUC_mean, data_std=AUC_std, out_fn=out_fn, train_cond=train_cond, ybar=ybar, resplock=is_resplock,
                                 train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, window=window, smooth_plot=args.smooth_plot)
+                            
+                            # with peaks highlighted
+                            plot_diag(data_mean=AUC_mean, data_std=AUC_std, out_fn=out_fn+"_peaks", train_cond=train_cond, ybar=ybar, resplock=is_resplock,
+                                train_tmin=train_tmin, train_tmax=train_tmax, ylabel=ylabel, contrast=is_contrast, version=version, window=window, 
+                                smooth_plot=args.smooth_plot, show_peaks=True)
+
+                            plot_multi_diag(all_AUC, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", contrast=False, version=version, cmap_name='hsv', cmap_groups=[], labels=[])
                             
                             # ## plot diags for all subjects
                             # # plot_multi_diag(data=all_AUC, data_std=None, out_fn=out_fn, train_cond=train_cond, train_tmin=train_tmin, 

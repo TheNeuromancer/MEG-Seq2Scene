@@ -805,7 +805,7 @@ def average_coactivation_matrices(coactivation_matrices):
     return avg_matrix
 
 
-def plot_coactivation_heatmap(coactivation_matrix, labels, out_fn, red_cross_idx=None):
+def plot_coactivation_heatmap(coactivation_matrix, labels, out_fn, red_cross_idx=None, xy_labels=True):
     """Plots a heatmap of state pair coactivations."""
     states = list(coactivation_matrix.keys())
     if len(labels) != len(states):
@@ -822,9 +822,10 @@ def plot_coactivation_heatmap(coactivation_matrix, labels, out_fn, red_cross_idx
     ax = sns.heatmap(matrix, xticklabels=labels, yticklabels=labels, cmap="viridis") #, annot=True)
     # plt.xticks(rotation=45, ha='right')  # Rotate x-axis labels at 45 degrees
     # plt.yticks(rotation=45, va='top')    # Rotate y-axis labels at 45 degrees
-    plt.xlabel("Destination State")
-    plt.ylabel("Origin State")
-    plt.yticks(rotation=0, va='top')    # Rotate y-axis labels at 45 degrees
+    if xy_labels:
+        plt.xlabel("Destination State")
+        plt.ylabel("Origin State")
+    plt.yticks(rotation=0, va='top')    # Rotate y-axis labels horizontal
     
     ax.invert_yaxis() # Reverse y-axis
 
@@ -1190,6 +1191,28 @@ def plot_coactivation_comparison(results_df, out_fn):
     plt.tight_layout()
     plt.savefig(out_fn, dpi=400)
     plt.close()
+
+
+
+def jaccard_probability(y1, y2):
+    """
+    Computes the Jaccard index for probability predictions.
+
+    Parameters:
+        y1 (array-like): Probability predictions from the first classifier.
+        y2 (array-like): Probability predictions from the second classifier.
+
+    Returns:
+        float: Jaccard index (overlap / union of probabilities).
+    """
+    y1 = np.asarray(y1)
+    y2 = np.asarray(y2)
+
+    intersection = np.sum(np.minimum(y1, y2))  # Sum of min values
+    union = np.sum(np.maximum(y1, y2))  # Sum of max values
+
+    return intersection / union if union > 0 else 0.0  # Avoid division by zero
+
 
 
 #### TDLM-style #####

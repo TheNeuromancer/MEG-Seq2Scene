@@ -149,7 +149,7 @@ def plot_correlation(correlations, out_fn, labels, vmin, vmax, vcenter=0, x_rota
 def get_labels(label):
     if "PropAll" in label:
         return shapes + colors + ["Rel"] #+ relations 
-    elif "Prop" in label:
+    elif "Prop" in label or "CrossAll" in label:
         return shapes + colors
     elif "WordPos" in label:
         return ["1", "2", "3", "4", "5"]
@@ -158,7 +158,8 @@ def get_labels(label):
 
 
 ## All possible training time (depends on the property that is decoded) (relative to relevant word onset)
-train_times = ["0.17", "0.2", "0.3", "0.4", "0.5", "0.6", "0.8"]
+# train_times = ["0.17", "0.2", "0.3", "0.4", "0.5", "0.6", "0.8"]
+train_times = ["0.18", "0.26", "0.36"]
 
 patterns_fn = f"{op.dirname(op.dirname(out_dir))}/all_patterns.p"
 all_labels = np.unique([op.basename(fn).split('-')[0] for fn in all_fns]) # Shoud be Prope and PropAll (with Relation)
@@ -166,7 +167,7 @@ if not args.already_saved:
     all_df = []
     for label in all_labels:
         if args.verbose: print(f"Doing {label}")
-        for train_cond in ["localizer_one_object_two_objects", "two_objects"]:
+        for train_cond in ["localizer_one_object_two_objects", "two_objects", "localizer"]:
             for train_time in train_times:
                 if args.verbose: print(train_time)
                 all_patterns, all_filters = [], []

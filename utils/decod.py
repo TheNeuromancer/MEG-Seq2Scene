@@ -22,7 +22,7 @@ from sklearn.model_selection import KFold, StratifiedKFold, StratifiedShuffleSpl
 from sklearn.utils.extmath import softmax
 from sklearn.decomposition import PCA
 from sklearn.multiclass import OneVsRestClassifier
-from scipy.signal import savgol_filter
+from scipy.signal import savgol_filter, find_peaks
 from scipy.stats import ttest_1samp, sem, wilcoxon, pearsonr
 from autoreject import AutoReject
 from mne.stats import permutation_cluster_1samp_test, fdr_correction
@@ -250,10 +250,16 @@ def get_class_queries(query):
         class_queries = [f"Loc_word in {colors}", f"Loc_word in {shapes}"]
     elif query == "Loc_Cat_image":
         class_queries = [f"Loc_word in {img_colors}", f"Loc_word in {img_shapes}"]
+    elif query == "Loc_Cat_All":
+        class_queries = [f"Loc_word in {img_colors + colors}", f"Loc_word in {img_shapes + shapes}"]
+    elif query == "LocWordVSImg":
+        class_queries = [f"Loc_word in {shapes + colors}", f"Loc_word in {img_shapes + img_colors}"]
     elif query == "Loc_crossColour":
         class_queries = [f"Loc_word=='{c}' or Loc_word=='img_{c}'" for c in colors]
     elif query == "Loc_crossShape":
         class_queries = [f"Loc_word=='{s}' or  Loc_word=='img_{s}'" for s in shapes]
+    elif query == "Loc_crossAll":
+        class_queries = [f"Loc_word=='{p}' or  Loc_word=='img_{p}'" for p in shapes+colors]
     elif query == "Loc_all":
         class_queries = [f"Loc_word=='{c}' or Loc_word=='img_{c}'" for c in colors] + [f"Loc_word=='{s}' or  Loc_word=='img_{s}'" for s in shapes]
     elif query == "Loc_image_shape":
@@ -1359,7 +1365,8 @@ def plot_perf(args, out_fn, data_mean, train_cond, train_tmin, train_tmax, test_
     return
 
 
-def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", contrast=False, resplock=False, version="v1", window=False, ybar=.5, smooth_plot=False):
+def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", contrast=False, resplock=False, 
+              version="v1", window=False, ybar=.5, smooth_plot=False, show_peaks=False):
     n_times_train = data_mean.shape[0]
     times_train = np.linspace(train_tmin, train_tmax, n_times_train)
     if window: # Decoding inside subwindow
@@ -1393,6 +1400,12 @@ def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=No
         ax.fill_between(times_train, data_mean_diag-data_std_diag, data_mean_diag+data_std_diag, alpha=0.2)
     plt.ylabel(ylabel)
     plt.xlabel("Time (s)")
+
+    if show_peaks:
+        peak_times, peak_vals = find_n_peaks(times_train, data_mean_diag, n_peaks=3, start_time=0.15, end_time=0.6, min_distance=5)
+        for t, v in zip(peak_times, peak_vals):
+            plt.axvline(x=t, color='red', linestyle='--', alpha=0.4)
+            plt.text(t, v+0.01, f'{t:.3f}s', color='red', ha='center', fontsize=10)
 
     smooth_str = f"_{smooth_plot}smooth" if smooth_plot else ""
     plt.savefig(f'{out_fn}_{ylabel}_diag{smooth_str}.png')
@@ -2076,6 +2089,39 @@ def get_X_y_for_correlation(args, epochs, subsample_nonmatched):
     # print(len(matched), len(nonmatched))
     return np.array(matched), np.array(nonmatched)
 
+
+def find_n_peaks(time, signal, n_peaks=3, start_time=0.15, end_time=0.6, min_distance=3):
+    """
+    Finds the top n_peaks peaks in a given time range and plots them with vertical lines and annotated times.
+    
+    Parameters:
+    - time: numpy array of time values
+    - signal: numpy array of signal values
+    - n_peaks: int, number of peaks
+    - start_time: float, start of the time range
+    - end_time: float, end of the time range
+    - min_distance: int, minimum distance (in indices) between peaks
+    """
+    # Define the time window
+    mask = (time >= start_time) & (time <= end_time)
+    filtered_time = time[mask]
+    filtered_signal = signal[mask]
+    
+    # Find peaks in the specified range with minimum distance constraint
+    peaks, _ = find_peaks(filtered_signal, distance=min_distance)
+    peak_times = filtered_time[peaks]
+    peak_values = filtered_signal[peaks]
+    
+    # Select the highest peaks
+    if len(peaks) >= n_peaks:
+        top_n_indices = np.argsort(peak_values)[-n_peaks:]
+        top_n_times = peak_times[top_n_indices]
+        top_n_values = peak_values[top_n_indices]
+    else:
+        top_n_times = peak_times
+        top_n_values = peak_values
+
+    return top_n_times, top_n_values
 
 
 class RidgeClassifierCVwithProba(RidgeClassifierCV):

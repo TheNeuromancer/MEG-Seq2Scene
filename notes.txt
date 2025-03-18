@@ -298,5 +298,67 @@ make the function polyvalent, work for one word as well?
 Removing '23' '27' '11_rb210035' that have super weird activations (LR failed to converge probably)
 
 v44: mean5 to get smoother reactivations. Removed bad subs. Filter Perf=1.
-Smooth is good. 
-Correlation between position and property? 
+Smooth is good. Added null_prop =0.25 to v44.
+
+v45: null_ptop = 0 for props, 0.5 for wordPos. Filter. 
+Overlap duration seems bigger for S1C1 and for S2C2.
+
+Correlation between position and property? (for cmplex2 trials)
+
+
+Reactivations are always dominated by Relation, so better not show it. 
+
+v46: null_prop=0.25 for wordPos, back to best classifier from optim. still filter. 
+added the correlation, but works only for complexity=2 trials because of the shape thing.
+
+v47: null_prop=0.25 for props (to get orthogonal reactivations) and 0.1 for wordPos to get less correlation between adjacent words. 
+-> to high a correlation between props? Shapes are very anticorelated. So,add MORE null trials??
+
+
+v48: null_prop=0.5 for props
+done on v47... redoing.
+Whatever I do, the corelation between shapes is -0.5. I think its by design.
+
+best = complex2 - min4length - 10lag
+
+v49: same with C=100
+Try without filter to correlate with performance ! 
+
+
+chercher forme et couleur ensemble, pour NP1 et NP2
+prop(triangle rouge) > prop(paires pas presentes)
+Pour les compexite 2 : triangle bleu a gauche de carre rouge
+une paire pas presente du tout : cercle vert
+2 paires presente mais pas ensemble : triangle rouge et carre bleu
+4 paires a moitie presente: triangle vert et carre vert; cercle bleu, cercle rouge
+
+
+comportement: regarder les probas specifiques a la relation pour les essais qui s'attaque a la relation. (mismatch 2)
+relatifs a la propriété qui est changée sur les property mismatch. Sur les NP pour les relations mismatch. 
+Maybe filter, keep only subjects that have below 80% perf. 
+
+Is the relation reactivated along with their corresponding object? Even for the relation that was not presented in this trial? 
+eg: Triangle bleu a G de carré rouge. Triangle bleu et G devrait etre coactivés, mais aussi carré rouge et D.
+Relation: left relation followed by the right object? 
+
+less property reactivation -> more errors on mismatch 1 
+less co-activation for bound items -> more errors on binding mismatches
+less coactivation of objects with their corresponding relation -> more relation mistakes. 
+
+Look at trials where an event was found! timelock onit?
+PAC for different complexity! 
+
+
+v44 trained on obej with timegen. No better performance when the color is presented than when the shape is. Is it a true object decoder? 
+
+v45: train many stuff on Loc. 
+Loc_cat to get a shape or color decoder. What for?
+Loc_cross to get a general decoder. Compare to Loc_word et Loc_img. For both shapes, colors, and both together. 
+train on words vs images to see whether the reactivations are more word-like or image-like! But there might be a confound due to the alternation of words and imags..
+Peak is often earlier for images than words. often there are 2 peaks, .2s and .4s for images. partial generalization between the two. 
+get the peak for each instead of hardcoding 400ms ? 
+
+More reactivation for word or image decoders? Or train with both? 
+
+All is better and cleaner than shape or color separately for images and all, but not for words. Train on images is better. Train on both is good, especially with All (both shapes and colors). Category is similar but a little bit better.
+But needs to split for each categroy to check that the performance is not biased towards images or shapes for ex.
