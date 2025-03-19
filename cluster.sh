@@ -43,9 +43,9 @@ do
 cat <<EOT >> $file_sbatch
 #!/bin/bash
 #SBATCH --job-name=$i
-#SBATCH --time=12:00:00
+#SBATCH --time=09:14:00
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=32G
+#SBATCH --mem=90G
 #SBATCH --partition=shared-cpu
 #SBATCH --output=$out_file
 #SBATCH --error=$err_file
@@ -54,10 +54,10 @@ conda activate mne
 cd ~/Documents/s2s/MEG-Seq2Scene/
 ${job_array[i]}
 EOT
-# public-cpu (very long jobs) or shared-cpu (for < 24h jobs)
+# public-cpu (very long jobs) or shared-cpu (for <= 12h jobs)
 
 sbatch $file_sbatch
 
-sleep .1 # time to let the job start, with margin
+sleep .2 # time to let the job start, with margin
 
 done

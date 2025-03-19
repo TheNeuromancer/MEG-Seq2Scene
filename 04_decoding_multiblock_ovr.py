@@ -34,6 +34,7 @@ parser.add_argument('-r', '--response_lock', action='store_true',  default=None,
 parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
 # parser.add_argument('--add_null', action='store_true',  default=False, help='Whether to add fixation period "null" trials')
 parser.add_argument('--null_prop', type=float,  default=0, help='Proportion of fixation period "null" trials')
+parser.add_argument('--crossval', type=str,  default=None, help='Which crossvalidation scheme to use (kfold, groupedkfold, shufflesplit)')
 
 parser.add_argument('--train-cond', default='localizer', help='NOT USED HERE, Changing it will have no effect')
 parser.add_argument('--train-conds', default=[], action='append', help='localizer, one_object or two_objects, any subset of the three')
@@ -76,6 +77,8 @@ if args.null_prop > 0 and args.equalize_events:
     raise RuntimeError("Cannot add null trials AND equalize events.")
 if args.null_prop > 0 and not (len(args.windows) == 0 or args.windows[0][0] != args.windows[0][1]):
     raise RuntimeError("Cannot add null trials for multiple timepoints decoding. Only for a single decoder. Then you would have to add these trials inside the decoding loop.")
+if len(args.test_cond) and not (args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]):
+    raise RuntimeError("Script made for either single timepoint decoding or multi timepoint but no generalization.")
 
 np.random.seed(args.seed)
 start_time = time.time()
@@ -115,16 +118,19 @@ for cond in args.train_conds:
     args.train_cond = cond  # Set current condition
     train_fn, _, _, _ = get_paths(args, out_dir_name)  # Get file paths
     
-    epochs = load_data(args, train_fn)[0]
+    epochs = load_data(args, train_fn, preload=True)[0]
+    # from ipdb import set_trace; set_trace()
     epochs_orig = None
     # Complement the md to get query-compatibility
     if cond == "localizer":
         epochs.metadata["Property"] = epochs.metadata["Loc_word"].str.replace(r"^img_", "", regex=True)
+        epochs.metadata["run_type"] = "loc"
         block_epo = [epochs]
     elif cond == "one_object": # get separate epochs for shape and colors, we'll use both
         epoS1, epoC1 = epochs.copy(), epochs.copy()
         epoS1.metadata["Property"] = epoS1.metadata["Shape1"]
         epoC1.metadata["Property"] = epoC1.metadata["Colour1"]
+        epoS1.metadata["run_type"], epoC1.metadata["run_type"] = "1obj", "1obj"
         epoC1 = epoC1.shift_time(-0.6, relative=True) # Need to roll the times so that t0 is the color onset.
         block_epo = [epoS1, epoC1]
     elif cond == "two_objects":
@@ -132,13 +138,16 @@ for cond in args.train_conds:
         epoS1, epoC1 = epochs.copy(), epochs.copy()
         epoS1.metadata["Property"] = epoS1.metadata["Shape1"]
         epoC1.metadata["Property"] = epoC1.metadata["Colour1"]
+        epoS1.metadata["run_type"], epoC1.metadata["run_type"] = "2obj1st", "2obj1st"
         epoC1 = epoC1.shift_time(-0.6, relative=True) # Need to roll the times so that t0 is the color onset.
         epoR = epochs.copy()
         epoR.metadata["Property"] = epoR.metadata["Relation"]
+        epoR.metadata["run_type"] = "2objR"
         epoR = epoR.shift_time(-1.2, relative=True)
         epoS2, epoC2 = epochs.copy(), epochs.copy()
         epoS2.metadata["Property"] = epoS2.metadata["Shape2"]
         epoC2.metadata["Property"] = epoC2.metadata["Colour2"]
+        epoS2.metadata["run_type"], epoC2.metadata["run_type"] = "2obj2nd", "2obj2nd"
         epoS2 = epoS2.shift_time(-1.8, relative=True)
         epoC2 = epoC2.shift_time(-2.4, relative=True)
         if "WordPos" in args.label: # add word position
@@ -173,6 +182,7 @@ epochs = mne.concatenate_epochs(all_epochs)  # Merge all epochs
 del all_epochs  # Free up memory
 train_tmin, train_tmax = epochs.tmin, epochs.tmax
 print(train_tmin, train_tmax)
+print(epochs.info)
 
 # all_class_queries = [get_class_queries(query) for query in args.train_query]
 class_queries = get_class_queries(args.train_query)
@@ -210,30 +220,49 @@ else:
 clf = OneVsRestClassifier(clf, n_jobs=1)
 
 print(f'\nStarting training. Elapsed time since the script began: {(time.time()-start_time)/60:.2f}min')
-if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
-    if args.split_props: # train a separte OVR for each property
-        all_props_models, patterns, filters = [], [], []
-        for props in [shapes, colors, relations]:
-            epo_prop = epochs[f"Property in {props}"]
-            query_prop = [q for q in class_queries if any([prop in q for prop in props])]
-            if not query_prop: continue # If we don't train a relation decoder, this will be empty
+if args.split_props: # train a separte OVR for each property
+    all_props_models, patterns, filters = [], [], []
+    all_props_AUC, all_props_confusions, all_props_AUC_query = [], [], []
+    for props in [shapes, colors, relations]:
+        epo_prop = epochs[f"Property in {props}"]
+        query_prop = [q for q in class_queries if any([prop in q for prop in props])]
+        if not query_prop: continue # If we don't train a relation decoder, this will be empty
+        if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
             prop_models, prop_patterns, prop_filters, prop_mds = decode_ovr_single_tp(args, clf, epo_prop, query_prop, dat_null)
             all_props_models.append(deepcopy(prop_models))
             patterns.append(prop_patterns)
             filters.append(prop_filters)
+        else: # multi timepoint decoding
+            AUC_prop, _, preds_prop, confusions_prop, all_models_prop, AUC_query_prop = decode_ovr(args, clf, epo_prop, query_prop)
+            all_props_AUC.append(AUC_prop)
+            all_props_confusions.append(confusions_prop)
+            all_props_AUC_query.append(AUC_query_prop)
+    if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding:
         patterns = np.concatenate([np.atleast_2d(p) for p in patterns]) # Relation is not a true OVR, so single set of weights ... 
         filters = np.concatenate([np.atleast_2d(f) for f in filters])
 
-    else: # OVR with all properties
+else: # OVR with all properties
+    if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding
         all_models, patterns, filters, mds = decode_ovr_single_tp(args, clf, epochs, class_queries, dat_null)
+    else: # multi time points
+        AUC, _, preds, confusions, all_models, AUC_query = decode_ovr(args, clf, epochs, class_queries)
+
+if args.windows and args.windows[0].split(',')[0] == args.windows[0].split(',')[1]: # single time point decoding, save only the patterns
     save_results(out_fn, patterns, fn_end="patterns", time=False) # , mds=mds
     save_results(out_fn, filters, fn_end="filters", time=False)
-else:
-    print("This script was only made for single timepoint decoding. Use the args.windows argument")
-    raise RuntimeError
+else: # multi tp, save performance
+    if args.split_props:
+        for AUC, AUC_query, confusions, prop in zip(all_props_AUC, all_props_AUC_query, all_props_confusions, ["shapes", "colors", "relations"]):
+            save_results(out_fn, AUC, fn_end=f"split_AUC_{prop}")
+            save_results(out_fn, AUC_query, fn_end=f"split_AUC_query_{prop}")
+            save_results(out_fn, confusions, fn_end=f"split_confusions_{prop}")
+    else: # single file, all props together 
+        save_results(out_fn, AUC) #, all_models)
+        save_results(out_fn, AUC_query, fn_end="AUC_split") #, all_models)
+        save_results(out_fn, confusions, fn_end="confusions", all_models=all_models)
+        # save_best_pattern(out_fn, AUC, all_models) ## Save best model's pattern
 
 print(f'Done with training. Elasped time since the script began: {(time.time()-start_time)/60:.2f}min')
-
 
 ###########################
 ######### TESTING #########

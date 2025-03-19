@@ -39,7 +39,8 @@ parser.add_argument('--equalize_split_events', action='store_true', default=None
 parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
 parser.add_argument('--micro_ave', default=None, type=int, help='Trial micro-averaging to boost decoding performance')
 # parser.add_argument('--add_null', action='store_true',  default=False, help='Whether to add fixation period "null" trials')
-parser.add_argument('--null_prop', type=float,  default=0, help='Proportion of fixation period "null" trials')
+parser.add_argument('--null_prop', type=float,  default=None, help='Proportion of fixation period "null" trials')
+parser.add_argument('--crossval', type=str,  default=None, help='Which crossvalidation scheme to use (kfold, groupedkfold, shufflesplit)')
 
 # optionals, overwrite the config if passed
 parser.add_argument('--sfreq', type=int, help='sampling frequency')

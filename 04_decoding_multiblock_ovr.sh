@@ -5,6 +5,24 @@ do
 ## addition function
 add() { n="$@"; bc <<< "${n// /+}"; }
 
+echo "python 04_decoding_multiblock_ovr.py -w -s $sub --label PropAll \
+--train-conds 'two_objects' --train-conds 'localizer' --train-conds 'one_object' \
+--train-query 'PropertyAll' --windows '-0.2, 1.' --timegen --crossval groupedkfold \
+--split-queries \"run_type=='loc'\" \
+--split-queries \"run_type=='1obj'\" \
+--split-queries \"run_type=='2obj1st'\" \
+--split-queries \"run_type=='2objR'\" \
+--split-queries \"run_type=='2obj2nd'\" "
+
+echo "python 04_decoding_multiblock_ovr.py -w -s $sub --split_props --label PropAllSplit \
+--train-conds 'two_objects' --train-conds 'localizer' --train-conds 'one_object' \
+--train-query 'PropertyAll' --windows '-0.2, 1.' --timegen --crossval groupedkfold \
+--split-queries \"run_type=='loc'\" \
+--split-queries \"run_type=='1obj'\" \
+--split-queries \"run_type=='2obj1st'\" \
+--split-queries \"run_type=='2objR'\" \
+--split-queries \"run_type=='2obj2nd'\" "
+
 # for t in 0.17 0.2 0.3 0.4 0.5 0.6 0.8
 # for t in 0.2 0.4 0.6 0.8
 for t in 0.18 0.26 0.36
@@ -14,11 +32,11 @@ do
 	s2t=$(add $t 1.8)
 	c2t=$(add $t 2.4)
 
-echo "python 04_decoding_multiblock_ovr.py -w -s $sub --label CrossAll$t \
---train-conds 'localizer' \
---train-query 'Loc_crossAll' --windows '$t,$t' \
---test-cond 'two_objects' \
---test-query 'Property' --windows '3, 5' "
+# echo "python 04_decoding_multiblock_ovr.py -w -s $sub --label CrossAll$t \
+# --train-conds 'localizer' \
+# --train-query 'Loc_crossAll' --windows '$t,$t' \
+# --test-cond 'two_objects' \
+# --test-query 'Property' --windows '3, 5' "
 
 # echo "python 04_decoding_multiblock_ovr.py -w -s $sub --null_prop 0.5 --split_props --label Prop$t \
 # --train-conds 'two_objects' \

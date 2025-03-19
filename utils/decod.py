@@ -62,9 +62,9 @@ Called in the main scripts """
 ################## PATHS AND DATA LOADING ###################
 # ///////////////////////////////////////////////////////// #
 
-def load_data(args, fn, query_1='', query_2='', crop_final=True):
+def load_data(args, fn, query_1='', query_2='', crop_final=True, preload=True):
     print(fn)
-    epochs = mne.read_epochs(fn, preload=True, verbose=False)
+    epochs = mne.read_epochs(fn, preload=preload, verbose=0)
     if "two_objects-epo.fif" in fn:
         epochs.metadata = complement_md(epochs.metadata)
         epochs.metadata['Complexity'] = epochs.metadata.apply(add_complexity_to_md, axis=1)
@@ -1297,7 +1297,7 @@ def save_results(out_fn, results, time=True, all_models=None, mds=None, fn_end="
         np.save(f"{out_fn}_{fn_end}.npy", results)
     else:
         np.save(f"{out_fn}_{fn_end}_diag.npy", results)
-    if all_models:
+    if all_models is not None:
         pickle.dump(all_models, open(out_fn + '_all_models.p', 'wb'))
     if mds is not None:
         mds.to_csv(out_fn + '_metadata.csv')
@@ -1412,7 +1412,7 @@ def plot_diag(data_mean, out_fn, train_cond, train_tmin, train_tmax, data_std=No
     plt.close()
 
 
-def plot_multi_diag(data, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", contrast=False, version="v1", cmap_name='hsv', cmap_groups=[], labels=[]):
+def plot_multi_diag(data, out_fn, train_cond, train_tmin, train_tmax, data_std=None, ylabel="AUC", xlabel="TIme (s)", contrast=False, version="v1", cmap_name='hsv', cmap_groups=[], labels=[], plot_mean=True):
     word_onsets, image_onset = get_onsets(train_cond, version=version)
     n_plots = data.shape[0]
     n_times_train = data.shape[1]
@@ -1450,10 +1450,11 @@ def plot_multi_diag(data, out_fn, train_cond, train_tmin, train_tmax, data_std=N
             ax.fill_between(times_train, data_diag[i_plot]-data_std_diag[i_plot], data_diag[i_plot]+data_std_diag[i_plot], alpha=0.2, color=cmap(i_plot))
 
     # plot mean
-    ax.plot(times_train, np.mean(data_diag, 0), c='k', alpha=0.8, lw=1, label="Mean")
+    if plot_mean:
+        ax.plot(times_train, np.mean(data_diag, 0), c='k', alpha=0.8, lw=1, label="Mean")
 
     plt.ylabel(ylabel)
-    plt.xlabel("Time (s)")
+    plt.xlabel(xlabel)
     if len(labels): plt.legend()
     plt.tight_layout()
     
@@ -1954,11 +1955,12 @@ def get_cv(train_cond, crossval, n_folds):
     #     elif crossval == 'kfold':
     #         print("Using StratifiedKFold instead of StratifiedGroupKFold")
     #         cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)    
-    #         # cv = StratifiedGroupKFold(n_splits=n_folds)
     if crossval == 'shufflesplit':
         cv = StratifiedShuffleSplit(n_splits=n_folds, test_size=0.1, random_state=42)
     elif crossval == 'kfold':
         cv = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=42)
+    elif crossval == 'groupedkfold':
+        cv = StratifiedGroupKFold(n_splits=n_folds, shuffle=False)
     else:
         print('unknown specified cross-validation scheme ... exiting')
         raise

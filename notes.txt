@@ -346,7 +346,6 @@ less co-activation for bound items -> more errors on binding mismatches
 less coactivation of objects with their corresponding relation -> more relation mistakes. 
 
 Look at trials where an event was found! timelock onit?
-PAC for different complexity! 
 
 
 v44 trained on obej with timegen. No better performance when the color is presented than when the shape is. Is it a true object decoder? 
@@ -358,7 +357,34 @@ train on words vs images to see whether the reactivations are more word-like or 
 Peak is often earlier for images than words. often there are 2 peaks, .2s and .4s for images. partial generalization between the two. 
 get the peak for each instead of hardcoding 400ms ? 
 
-More reactivation for word or image decoders? Or train with both? 
+More reactivation for word or image decoders? Or train with both? Seems like training on all is best.
 
 All is better and cleaner than shape or color separately for images and all, but not for words. Train on images is better. Train on both is good, especially with All (both shapes and colors). Category is similar but a little bit better.
 But needs to split for each categroy to check that the performance is not biased towards images or shapes for ex.
+
+
+RSA 
+Object coactivé avec ses propriétés et avec la relation associée.
+
+v51: timegen for multiblock props, all together. 
+v52: timegen for multiblock, split_props.
+Do we really want to split props ? check perf on v51 and 52
+
+does it changes anything to have less filtering? You have 100hz sfreq and smooth 5 consecutive timepoints ... fast oscillations will just not be visible. 
+
+
+
+Correlation seems to be the same for matched and mismatched (complex2, all properties must be different for it to be a mismatch). This means that the response is overall quite similar for each word, you need a classifier to get the subtle pattern differences. 
+Weirdly enough, there is a time just after 4s where the correlation is higher for matched than mismatched (more so when NOT looking at reverse image trials). Could this be the actual image? But then it is dependent on the direction of the relation. 
+Also, there is a rise in each condition just after 5s. But the flash is at 5.5s, isn't it? 
+
+v53: correlation without filtering with compleity=2, but filtering with Flash0, to see what it does. 
+kinda weird. Seems like there might be some sustained increased correlation, but only in the mirror case (the non-mirror should be stronger, if anything. But there are more trials with mirror so smaller sem)
+v54: same for flash=1. Strong correlation at the flash, similar to the image. small increase corelation for matched, but it is smaller when including mirror images. 
+v55: filter Perf==1
+
+v55_bis: no filter
+
+True RSA ? 
+
+PAC for different complexity! 4-5s ou 3.5-5 ? 

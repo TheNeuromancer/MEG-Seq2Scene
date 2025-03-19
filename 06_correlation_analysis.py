@@ -18,7 +18,7 @@ parser.add_argument('-w', '--overwrite', action='store_true',  default=False, he
 parser.add_argument('--seed', default=42, type=int, help='random seed')
 parser.add_argument('--shuffle', action='store_true', default=False, help='Whether to shuffle sentence labels before training')
 parser.add_argument('--freq-band', default='', help='name of frequency band to use for filtering (theta, alpha, beta, gamma)')
-parser.add_argument('--filter', default='Complexity==2', help='md query to filter trials before anything else (eg to use only matching trials')
+parser.add_argument('--filter', default='', help='md query to filter trials before anything else (eg to use only matching trials')
 parser.add_argument('--train-cond', default='two_objects', help='localizer, one_object or two_objects')
 parser.add_argument('--train-queries', help='Metadata query for training classes')
 parser.add_argument('--test-cond', default=[], action='append', help='localizer, one_object or two_objects, should have the same length as test-queries')
@@ -32,6 +32,8 @@ parser.add_argument('-a', '--autoreject', action='store_true',  default=False, h
 parser.add_argument('-r', '--response_lock', action='store_true',  default=None, help='Whether to Use response locked epochs or classical stim-locked')
 parser.add_argument('--windows', default=[], action='append', help='tmin and tmax to crop the epochs, one for each train and test cond')
 parser.add_argument('--mirror_img', action='store_true',  default=False, help='Whether to consider mirror images as the same or not')
+parser.add_argument('--window_length',  default=100, help='Window length for the correlation, is ms')
+parser.add_argument('--window_overlap',  default=10, help='Window overlap for the correlation, is ms')
 
 # parser.add_argument('--n_comp', default=100, type=int, help='Number of PCA components to use for reconstruction')
 
@@ -71,6 +73,7 @@ start_time = time.time()
 print('\nStarting loading data')
 train_fn, _, out_fn, _ = get_paths(args, "Correlation")
 if args.mirror_img: out_fn += "_mirror"
+out_fn += f"_winlength{args.window_length}_overlap{args.window_overlap}"
 if args.windows:
     args.windows = [w.replace(" ", "") for w in args.windows] # remove spaces
     wins = [f"#{'#'.join([args.windows[0], w])}#" for w in args.windows] # string to add to the out fns
@@ -82,27 +85,58 @@ if windows: epochs = epochs.crop(*windows[0])
 train_tmin, train_tmax = epochs[0].tmin, epochs[0].tmax
 ### GET DATA AND CONSTRUCT LABELS ###
 matched, nonmatched = get_X_y_for_correlation(args, epochs, subsample_nonmatched=10)
+times = epochs.times
 ## shape (n_trials, 2, nch, n_times)
 nchan = epochs.info['nchan']
 del epochs
 
-# we are left with n_trials * n_times, which we can safely flatten to get the correlation for a single channel
-r_matched, p_matched = np.zeros(nchan), np.zeros(nchan)
-for ch in tqdm(range(nchan)):
-    r, p = pearsonr(matched[:,0, ch].flatten(), matched[:,1, ch].flatten())
-    r_matched[ch] = r
-    p_matched[ch] = p
+window_length = int(args.window_length * args.sfreq / 1000)
+window_overlap = int(args.window_overlap * args.sfreq / 1000)
+print(f"window_length (in samples): {window_length}, window_overlap (in samples): {window_overlap}")
 
-r_nonmatched, p_nonmatched = np.zeros(nchan), np.zeros(nchan)
-for ch in tqdm(range(nchan)):
-    r, p = pearsonr(nonmatched[:,0, ch].flatten(), nonmatched[:,1, ch].flatten())
-    r_nonmatched[ch] = r
-    p_nonmatched[ch] = p
+all_r_matched = []
+all_r_nonmatched = []
+for i in range(0, len(times) - window_length, window_overlap):
+    print(f"window {i} to {i+window_length}")
+    dat_matched1 = matched[:,0,:,i:i+window_length].reshape(-1)
+    dat_matched2 = matched[:,1,:,i:i+window_length].reshape(-1)
+    r_matched, p_matched = pearsonr(dat_matched1, dat_matched2)
+    # print(f"matched: r: {r_matched:.5f}, {p_matched:.5f}")
+
+    dat_mismatched1 = nonmatched[:,0,:,i:i+window_length].reshape(-1)
+    dat_mismatched2 = nonmatched[:,1,:,i:i+window_length].reshape(-1)
+    r_nonmatched, p_nonmatched = pearsonr(dat_mismatched1, dat_mismatched2)
+    # print(f"nonmatched: r: {r_nonmatched:.5f}, {p_nonmatched:.5f}")
+
+    all_r_matched.append(r_matched)
+    all_r_nonmatched.append(r_nonmatched)
+
+save_results(out_fn, np.c_[all_r_matched, all_r_nonmatched], time=True, all_models=None, fn_end=f"R")
 
 
-print(np.mean(r_matched), np.mean(r_nonmatched))
+## OLD WAY -- whole epochs or windowed, not moving window. 
+# # we are left with n_trials * n_sensors * n_times, then reshape to get the correlation across all sensors*time
+# # dat_matched1 = matched[:,0].reshape(len(matched), -1)
+# # dat_matched2 = matched[:,1].reshape(len(matched), -1)
+# dat_matched1 = matched[:,0].reshape(-1)
+# dat_matched2 = matched[:,1].reshape(-1)
+# r, p = pearsonr(dat_matched1, dat_matched2)
+# r_matched = r
+# p_matched = p
+# print(f"matched: r: {r:.5f}, {p:.5f}")
 
-save_results(out_fn, np.c_[r_matched, r_nonmatched], time=False, all_models=None, fn_end="R")
+# # dat_mismatched1 = nonmatched[:,0].reshape(len(mismatched), -1)
+# # dat_mismatched2 = nonmatched[:,1].reshape(len(mismatched), -1)
+# dat_mismatched1 = nonmatched[:,0].reshape(-1)
+# dat_mismatched2 = nonmatched[:,1].reshape(-1)
+# r, p = pearsonr(dat_mismatched1, dat_mismatched2)
+# r_nonmatched = r
+# p_nonmatched = p
+# print(f"nonmatched: r: {r:.5f}, {p:.5f}")
+
+# print(np.mean(r_matched), np.mean(r_nonmatched))
+
+# save_results(out_fn, np.c_[r_matched, r_nonmatched], time=False, all_models=None, fn_end="R")
 
 print("ALL DONE")
 # from ipdb import set_trace; set_trace()

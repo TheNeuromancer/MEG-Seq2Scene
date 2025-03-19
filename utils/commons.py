@@ -209,7 +209,9 @@ def back2fullname(name):
 def get_onsets(cond, version="v1"):
     """ get the word and image onsets depending on the condition
     """
-    if cond == "response_locked":
+    if cond == "Null":
+        return [], []
+    if cond == "response_locked": 
         return [0], []
     if version == "v1": # first version, longger SOA
         SOA_dict = {"localizer": .9, "one_object": .65, "two_objects": .65, "obj": .65, "scenes": .65}
